@@ -3,9 +3,11 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { emergencyStop } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'EmergencyStopButton',
+	components: { NcPrintIcon },
 	data() {
 		return {
 			confirmOpen: false,
@@ -52,6 +54,7 @@ export default {
 			class="nc-print-estop"
 			:disabled="disabled"
 			@click="openConfirm">
+			<NcPrintIcon name="bolt" :size="18" />
 			E-STOP
 		</button>
 
@@ -78,15 +81,19 @@ export default {
 }
 
 .nc-print-estop {
+	align-items: center;
 	appearance: none;
 	background: var(--nc-gcs-danger);
 	border: 2px solid color-mix(in srgb, var(--nc-gcs-danger) 70%, #000);
 	border-radius: var(--nc-gcs-radius-sm);
 	color: #fff;
 	cursor: pointer;
+	display: inline-flex;
 	font-family: inherit;
 	font-size: var(--nc-gcs-text-base);
 	font-weight: 700;
+	gap: 8px;
+	justify-content: center;
 	letter-spacing: 0.08em;
 	padding: 10px 18px;
 	width: 100%;

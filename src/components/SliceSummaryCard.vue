@@ -1,9 +1,11 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'SliceSummaryCard',
+	components: { NcPrintIcon },
 	computed: {
 		...mapStores(usePrintStore),
 		sliceFilename() {
@@ -31,11 +33,11 @@ export default {
 		},
 		fitsBedClass() {
 			if (!this.printStore.modelMeta.bbox) {
-				return ''
+				return 'nc-print-badge--info'
 			}
 			return this.printStore.modelMeta.fitsBed
-				? 'nc-print-slice-summary__badge--ok'
-				: 'nc-print-slice-summary__badge--warn'
+				? 'nc-print-badge--ok'
+				: 'nc-print-badge--warn'
 		},
 		profileSummary() {
 			const n = this.printStore.selectedProfileNames
@@ -61,7 +63,12 @@ export default {
 
 <template>
 	<div v-if="printStore.hasModel" class="nc-print-card nc-print-slice-summary">
-		<h2 class="nc-print-card__title">Slice input</h2>
+		<h2 class="nc-print-card__title">
+			<span class="nc-print-card__title-row">
+				<NcPrintIcon name="layers" :size="18" />
+				Slice input
+			</span>
+		</h2>
 		<dl class="nc-print-slice-summary__list">
 			<div>
 				<dt>File</dt>
@@ -74,13 +81,13 @@ export default {
 			<div>
 				<dt>Bed</dt>
 				<dd>
-					<span class="nc-print-slice-summary__badge" :class="fitsBedClass">{{ fitsBedLabel }}</span>
+					<span class="nc-print-badge" :class="fitsBedClass">{{ fitsBedLabel }}</span>
 				</dd>
 			</div>
 			<div v-if="showDirtyBadge">
 				<dt>Mesh</dt>
 				<dd>
-					<span class="nc-print-slice-summary__badge nc-print-slice-summary__badge--dirty">Transform pending</span>
+					<span class="nc-print-badge nc-print-badge--warn">Transform pending</span>
 				</dd>
 			</div>
 			<div>
@@ -88,7 +95,9 @@ export default {
 				<dd class="nc-print-slice-summary__profiles">{{ profileSummary }}</dd>
 			</div>
 		</dl>
-		<p v-if="appliedLabel && !showDirtyBadge" class="nc-print-slice-summary__applied">{{ appliedLabel }}</p>
+		<p v-if="appliedLabel && !showDirtyBadge" class="nc-print-slice-summary__applied">
+			<span class="nc-print-badge nc-print-badge--ok">{{ appliedLabel }}</span>
+		</p>
 	</div>
 </template>
 
@@ -120,31 +129,7 @@ export default {
 	color: var(--nc-gcs-text-secondary);
 }
 
-.nc-print-slice-summary__badge {
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 500;
-	padding: 2px 8px;
-}
-
-.nc-print-slice-summary__badge--ok {
-	background: color-mix(in srgb, var(--nc-app-accent) 18%, transparent);
-	color: var(--nc-app-accent);
-}
-
-.nc-print-slice-summary__badge--warn {
-	background: color-mix(in srgb, var(--nc-gcs-danger) 20%, transparent);
-	color: var(--nc-gcs-danger-soft);
-}
-
-.nc-print-slice-summary__badge--dirty {
-	background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 22%, transparent);
-	color: var(--nc-gcs-text-primary);
-}
-
 .nc-print-slice-summary__applied {
-	color: var(--nc-gcs-text-muted);
-	font-size: 11px;
 	margin: var(--nc-gcs-space-sm) 0 0;
 }
 </style>

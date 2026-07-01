@@ -29,7 +29,7 @@ export default {
 			TABS,
 			version: typeof __NC_PRINT_FRONTEND_VERSION__ !== 'undefined'
 				? __NC_PRINT_FRONTEND_VERSION__
-				: '1.8.0',
+				: '1.8.1',
 		}
 	},
 	computed: {
@@ -133,6 +133,10 @@ export default {
 			<span
 				class="nc-print-status-chip"
 				:class="'nc-print-status-chip--' + printStore.printerStatusClass">
+				<span
+					class="nc-print-dot"
+					:class="'nc-print-dot--' + printStore.printerStatusClass"
+					aria-hidden="true" />
 				{{ printStore.printerStatusLabel }}
 			</span>
 			<button

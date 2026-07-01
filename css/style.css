@@ -27,40 +27,50 @@
   gap: 6px;
   padding: 4px 10px;
 }
-.nc-print-status-chip::before {
-  border-radius: 50%;
-  content: "";
-  height: 8px;
-  width: 8px;
-}
 .nc-print-status-chip--idle {
   background: color-mix(in srgb, var(--nc-gcs-text-muted) 18%, transparent);
   color: var(--nc-gcs-text-secondary);
-}
-.nc-print-status-chip--idle::before {
-  background: var(--nc-gcs-text-muted);
 }
 .nc-print-status-chip--ready {
   background: color-mix(in srgb, var(--nc-app-accent) 20%, transparent);
   color: var(--nc-app-accent);
 }
-.nc-print-status-chip--ready::before {
-  background: var(--nc-app-accent);
-}
 .nc-print-status-chip--printing {
   background: color-mix(in srgb, var(--nc-gcs-info) 20%, transparent);
   color: var(--nc-gcs-info-soft);
-}
-.nc-print-status-chip--printing::before {
-  animation: nc-print-pulse 1.2s ease-in-out infinite;
-  background: var(--nc-gcs-info-soft);
 }
 .nc-print-status-chip--error {
   background: color-mix(in srgb, var(--nc-gcs-danger) 20%, transparent);
   color: var(--nc-gcs-danger-soft);
 }
-.nc-print-status-chip--error::before {
+
+/* ─── Status dot ────────────────────────────────────────────────── */
+.nc-print-dot {
+  border-radius: 50%;
+  flex-shrink: 0;
+  height: 8px;
+  width: 8px;
+}
+.nc-print-dot--idle {
+  background: var(--nc-gcs-text-muted);
+}
+.nc-print-dot--ready {
+  background: var(--nc-app-accent);
+  box-shadow: 0 0 6px var(--nc-app-accent);
+}
+.nc-print-dot--printing {
+  animation: nc-print-pulse 1.2s ease-in-out infinite;
+  background: var(--nc-gcs-info-soft);
+  box-shadow: 0 0 6px var(--nc-gcs-info-soft);
+}
+.nc-print-dot--error {
   background: var(--nc-gcs-danger-soft);
+  box-shadow: 0 0 6px var(--nc-gcs-danger-soft);
+}
+.nc-print-dot--heating {
+  animation: nc-print-pulse 1.2s ease-in-out infinite;
+  background: var(--nc-gcs-warning, #eab308);
+  box-shadow: 0 0 6px var(--nc-gcs-warning, #eab308);
 }
 
 @keyframes nc-print-pulse {
@@ -73,16 +83,166 @@
 }
 /* ─── Cards / panels ────────────────────────────────────────────── */
 .nc-print-card {
-  background: var(--nc-gcs-bg-surface);
+  backdrop-filter: blur(12px);
+  background: var(--nc-gcs-bg-card);
   border: 1px solid var(--nc-gcs-border);
   border-radius: var(--nc-gcs-radius);
+  box-shadow: var(--nc-gcs-shadow);
   padding: var(--nc-gcs-space-lg);
 }
 
+.nc-print-card--inset {
+  backdrop-filter: none;
+  background: var(--nc-gcs-bg-elevated);
+  border-radius: var(--nc-gcs-radius-sm);
+  box-shadow: none;
+  padding: var(--nc-gcs-space-md);
+}
+
+.nc-print-card--interactive {
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.nc-print-card--interactive:hover {
+  border-color: var(--nc-gcs-border-strong);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--nc-app-accent) 20%, transparent);
+}
+
+.nc-print-card__header {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--nc-gcs-space-sm);
+  justify-content: space-between;
+  margin-bottom: var(--nc-gcs-space-md);
+}
+
+.nc-print-card__header .nc-print-card__title {
+  margin: 0;
+}
+
 .nc-print-card__title {
+  align-items: center;
+  display: flex;
   font-size: var(--nc-gcs-text-base);
   font-weight: 600;
+  gap: 8px;
   margin: 0 0 var(--nc-gcs-space-md);
+}
+
+.nc-print-card__title-row {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+}
+
+.nc-print-section-label {
+  border-bottom: 1px solid var(--nc-gcs-border);
+  color: var(--nc-gcs-text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  margin: 0 0 var(--nc-gcs-space-sm);
+  padding-bottom: 6px;
+  text-transform: uppercase;
+}
+
+/* ─── Stat tiles ────────────────────────────────────────────────── */
+.nc-print-stat-grid {
+  display: grid;
+  gap: var(--nc-gcs-space-md);
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  margin-bottom: var(--nc-gcs-space-md);
+}
+
+.nc-print-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nc-print-stat__value {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.nc-print-stat__label {
+  color: var(--nc-gcs-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.nc-print-stat__sub {
+  color: var(--nc-gcs-text-secondary);
+  font-size: var(--nc-gcs-text-sm);
+}
+
+/* ─── Badges ────────────────────────────────────────────────────── */
+.nc-print-badge {
+  border-radius: 10px;
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 2px 8px;
+}
+.nc-print-badge--ok {
+  background: color-mix(in srgb, var(--nc-app-accent) 15%, transparent);
+  color: var(--nc-app-accent);
+}
+.nc-print-badge--warn {
+  background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 15%, transparent);
+  color: var(--nc-gcs-warning, #eab308);
+}
+.nc-print-badge--danger {
+  background: color-mix(in srgb, var(--nc-gcs-danger) 15%, transparent);
+  color: var(--nc-gcs-danger-soft);
+}
+.nc-print-badge--info {
+  background: color-mix(in srgb, var(--nc-gcs-info) 15%, transparent);
+  color: var(--nc-gcs-info-soft);
+}
+
+/* ─── Banners / alerts ──────────────────────────────────────────── */
+.nc-print-banner {
+  border-left: 3px solid var(--nc-gcs-border);
+  border-radius: var(--nc-gcs-radius-sm);
+  font-size: var(--nc-gcs-text-sm);
+  margin-bottom: var(--nc-gcs-space-md);
+  padding: var(--nc-gcs-space-md) var(--nc-gcs-space-lg);
+}
+.nc-print-banner__title {
+  font-size: var(--nc-gcs-text-base);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.nc-print-banner__body {
+  color: var(--nc-gcs-text-secondary);
+  margin: 0 0 var(--nc-gcs-space-sm);
+}
+.nc-print-banner__error {
+  color: var(--nc-gcs-danger-soft);
+  font-size: var(--nc-gcs-text-sm);
+  margin: 0;
+}
+.nc-print-banner--info {
+  background: color-mix(in srgb, var(--nc-gcs-info) 8%, transparent);
+  border-left-color: var(--nc-gcs-info-soft);
+}
+.nc-print-banner--ok {
+  background: color-mix(in srgb, var(--nc-app-accent) 8%, transparent);
+  border-left-color: var(--nc-app-accent);
+}
+.nc-print-banner--warn {
+  background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 10%, transparent);
+  border-left-color: var(--nc-gcs-warning, #eab308);
+}
+.nc-print-banner--danger {
+  background: color-mix(in srgb, var(--nc-gcs-danger) 8%, transparent);
+  border-left-color: var(--nc-gcs-danger-soft);
 }
 
 .nc-print-row {
@@ -191,7 +351,8 @@
 }
 .nc-print-field select,
 .nc-print-field input[type=number],
-.nc-print-field input[type=text] {
+.nc-print-field input[type=text],
+.nc-print-field input[type=search] {
   background: var(--nc-gcs-bg-elevated);
   border: 1px solid var(--nc-gcs-border);
   border-radius: var(--nc-gcs-radius-sm);
@@ -199,6 +360,15 @@
   font-family: inherit;
   font-size: var(--nc-gcs-text-base);
   padding: 6px 10px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.nc-print-field select:focus,
+.nc-print-field input[type=number]:focus,
+.nc-print-field input[type=text]:focus,
+.nc-print-field input[type=search]:focus {
+  border-color: var(--nc-app-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc-app-accent) 25%, transparent);
+  outline: none;
 }
 
 .nc-print-actions {
@@ -209,16 +379,21 @@
 }
 
 .nc-print-btn {
+  align-items: center;
   appearance: none;
   background: var(--nc-gcs-bg-elevated);
   border: 1px solid var(--nc-gcs-border);
   border-radius: var(--nc-gcs-radius-sm);
   color: var(--nc-gcs-text-primary);
   cursor: pointer;
+  display: inline-flex;
   font-family: inherit;
   font-size: var(--nc-gcs-text-base);
+  font-weight: 500;
+  gap: 6px;
+  justify-content: center;
   padding: 8px 14px;
-  transition: background 0.15s, border-color 0.15s;
+  transition: all 0.15s ease;
 }
 .nc-print-btn:hover:not(:disabled) {
   background: var(--nc-gcs-bg-surface-hover);
@@ -241,6 +416,78 @@
   background: color-mix(in srgb, var(--nc-gcs-danger) 18%, transparent);
   border-color: var(--nc-gcs-danger-soft);
   color: var(--nc-gcs-danger-soft);
+}
+.nc-print-btn--small {
+  font-size: var(--nc-gcs-text-sm);
+  padding: 4px 10px;
+}
+.nc-print-btn--icon {
+  min-width: 0;
+  padding: 6px 8px;
+}
+.nc-print-btn--ghost {
+  background: transparent;
+  border-color: transparent;
+}
+.nc-print-btn--ghost:hover:not(:disabled) {
+  background: var(--nc-gcs-bg-elevated);
+  border-color: var(--nc-gcs-border);
+}
+
+/* ─── Pill toggle switch ────────────────────────────────────────── */
+.nc-print-switch {
+  align-items: center;
+  cursor: pointer;
+  display: inline-flex;
+  gap: 8px;
+  position: relative;
+  user-select: none;
+}
+.nc-print-switch input {
+  height: 0;
+  opacity: 0;
+  position: absolute;
+  width: 0;
+}
+.nc-print-switch__slider {
+  background: var(--nc-gcs-bg-elevated);
+  border: 1px solid var(--nc-gcs-border);
+  border-radius: 18px;
+  flex-shrink: 0;
+  height: 18px;
+  position: relative;
+  transition: background-color 0.16s ease, border-color 0.16s ease;
+  width: 34px;
+}
+.nc-print-switch__slider::before {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  content: "";
+  height: 14px;
+  left: 1px;
+  position: absolute;
+  top: 1px;
+  transition: transform 0.16s ease;
+  width: 14px;
+}
+input:checked + .nc-print-switch__slider {
+  background: var(--nc-app-accent);
+  border-color: color-mix(in srgb, var(--nc-app-accent) 70%, #000);
+}
+input:checked + .nc-print-switch__slider::before {
+  transform: translateX(16px);
+}
+.nc-print-switch__label {
+  color: var(--nc-gcs-text-secondary);
+  font-size: var(--nc-gcs-text-sm);
+}
+
+/* ─── Inline icon ───────────────────────────────────────────────── */
+.nc-print-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
 }
 
 .nc-print-progress {

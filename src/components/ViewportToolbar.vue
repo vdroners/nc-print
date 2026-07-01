@@ -124,12 +124,13 @@ export default {
 			@click="onAutoOrient">
 			Auto-orient
 		</button>
-		<label v-if="printStore.hasModel" class="nc-print-viewport-toolbar__auto">
+		<label v-if="printStore.hasModel" class="nc-print-switch nc-print-viewport-toolbar__auto">
 			<input
 				type="checkbox"
 				:checked="printStore.meshState.autoApply"
 				@change="onAutoApplyChange">
-			Auto-apply on edit
+			<span class="nc-print-switch__slider" />
+			<span class="nc-print-switch__label">Auto-apply on edit</span>
 		</label>
 		<button
 			v-if="printStore.hasModel && !printStore.meshState.autoApply"
@@ -166,11 +167,7 @@ export default {
 }
 
 .nc-print-viewport-toolbar__auto {
-	align-items: center;
-	color: var(--nc-gcs-text-secondary);
-	display: inline-flex;
-	font-size: var(--nc-gcs-text-sm);
-	gap: 6px;
+	margin-left: 4px;
 }
 
 .nc-print-viewport-toolbar__info {

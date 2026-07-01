@@ -1,9 +1,11 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'MeshHealthPanel',
+	components: { NcPrintIcon },
 	props: {
 		disabled: { type: Boolean, default: false },
 	},
@@ -15,6 +17,30 @@ export default {
 		hasAnalysis() {
 			return this.health.analyzed
 		},
+		statusBadgeClass() {
+			if (!this.hasAnalysis) {
+				return ''
+			}
+			if (this.health.watertight && this.health.overhangPct <= 30) {
+				return 'nc-print-badge--ok'
+			}
+			if (!this.health.watertight) {
+				return 'nc-print-badge--warn'
+			}
+			return 'nc-print-badge--info'
+		},
+		statusBadgeLabel() {
+			if (!this.hasAnalysis) {
+				return ''
+			}
+			if (this.health.watertight && this.health.overhangPct <= 30) {
+				return 'Healthy'
+			}
+			if (!this.health.watertight) {
+				return 'Needs repair'
+			}
+			return 'High overhang'
+		},
 		statusClass() {
 			if (!this.hasAnalysis) {
 				return ''
@@ -25,7 +51,7 @@ export default {
 			if (!this.health.watertight) {
 				return 'nc-print-mesh-health--warn'
 			}
-			return 'nc-print-mesh-health--info'
+			return ''
 		},
 	},
 	methods: {
@@ -44,7 +70,17 @@ export default {
 
 <template>
 	<div v-if="printStore.hasModel" class="nc-print-card nc-print-mesh-health" :class="statusClass">
-		<h2 class="nc-print-card__title">Mesh health</h2>
+		<div class="nc-print-card__header">
+			<h2 class="nc-print-card__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="cube" :size="18" />
+					Mesh health
+				</span>
+			</h2>
+			<span v-if="statusBadgeLabel" class="nc-print-badge" :class="statusBadgeClass">
+				{{ statusBadgeLabel }}
+			</span>
+		</div>
 		<p v-if="!hasAnalysis" class="nc-print-mesh-health__hint">
 			Analyze the loaded mesh for open edges and overhang before slicing.
 		</p>

@@ -9,6 +9,7 @@ import ProfileSummaryChip from './ProfileSummaryChip.vue'
 import PrePrintModal from './PrePrintModal.vue'
 import WorkspaceRail from './WorkspaceRail.vue'
 import ToolpathScrubber from './ToolpathScrubber.vue'
+import NcPrintIcon from './NcPrintIcon.vue'
 import { previewUrl } from '@/services/slicer-api.js'
 
 export default {
@@ -22,6 +23,7 @@ export default {
 		PrePrintModal,
 		WorkspaceRail,
 		ToolpathScrubber,
+		NcPrintIcon,
 	},
 	data() {
 		return {
@@ -56,6 +58,19 @@ export default {
 				return ''
 			}
 			return previewUrl(this.printStore.sliceJob.jobId)
+		},
+		sliceStatusBadge() {
+			const status = this.printStore.sliceJob.status
+			if (status === 'running') {
+				return { label: 'Slicing', class: 'nc-print-badge--info' }
+			}
+			if (status === 'done') {
+				return { label: 'Complete', class: 'nc-print-badge--ok' }
+			}
+			if (status === 'error') {
+				return { label: 'Failed', class: 'nc-print-badge--danger' }
+			}
+			return null
 		},
 	},
 	methods: {
@@ -129,14 +144,20 @@ export default {
 			<PrepareChecklist @action="onChecklistAction" />
 
 			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">Profiles</h2>
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="layers" :size="18" />
+						Profiles
+					</span>
+				</h2>
 				<ProfileSummaryChip />
 			</div>
 
 			<SliceReviewPanel />
 
-			<div class="nc-print-card nc-print-card--muted">
-				<p style="margin: 0; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted);">
+			<div class="nc-print-card nc-print-card--inset">
+				<p class="nc-print-section-label">Settings</p>
+				<p class="nc-print-slice-hint">
 					Layer height, speeds, and temps are set on the
 					<button type="button" class="nc-print-link-btn" @click="goPrepare">Prepare</button>
 					tab under <strong>Override settings</strong>.
@@ -144,8 +165,18 @@ export default {
 			</div>
 
 			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">Slice</h2>
-				<p style="margin: 0 0 8px; color: var(--nc-gcs-text-muted); font-size: var(--nc-gcs-text-sm);">
+				<div class="nc-print-card__header">
+					<h2 class="nc-print-card__title">
+						<span class="nc-print-card__title-row">
+							<NcPrintIcon name="cube" :size="18" />
+							Slice
+						</span>
+					</h2>
+					<span v-if="sliceStatusBadge" class="nc-print-badge" :class="sliceStatusBadge.class">
+						{{ sliceStatusBadge.label }}
+					</span>
+				</div>
+				<p class="nc-print-slice-model">
 					{{ printStore.model.name }}
 				</p>
 
@@ -165,14 +196,13 @@ export default {
 						· layer {{ printStore.sliceJob.layer }}/{{ printStore.sliceJob.totalLayers }}
 					</span>
 				</p>
-				<div v-if="printStore.sliceJob.status === 'error'" class="nc-print-slice-error">
-					<p style="color: var(--nc-gcs-danger-soft); margin: 0;">
+				<div v-if="printStore.sliceJob.status === 'error'" class="nc-print-banner nc-print-banner--danger">
+					<p class="nc-print-banner__error" style="margin-bottom: 8px;">
 						{{ printStore.sliceJob.error }}
 					</p>
 					<button
 						type="button"
 						class="nc-print-btn nc-print-btn--primary"
-						style="margin-top: 8px;"
 						:disabled="sliceActionsDisabled"
 						:title="sliceDisabledTitle"
 						@click="onSliceOnly">
@@ -180,7 +210,7 @@ export default {
 					</button>
 				</div>
 
-				<p v-if="sliceBlockReason && !slicing" style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-warning, #eab308); margin: 0 0 8px;">
+				<p v-if="sliceBlockReason && !slicing" class="nc-print-slice-warn">
 					{{ sliceBlockReason }}
 				</p>
 
@@ -224,7 +254,12 @@ export default {
 
 		<template #rail>
 			<div v-if="previewImageUrl && printStore.sliceJob.status === 'done'" class="nc-print-card">
-				<h2 class="nc-print-card__title">Preview</h2>
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="layers" :size="18" />
+						Preview
+					</span>
+				</h2>
 				<img
 					:src="previewImageUrl"
 					alt="Slice preview"
@@ -238,6 +273,24 @@ export default {
 </template>
 
 <style scoped>
+.nc-print-slice-hint {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0;
+}
+
+.nc-print-slice-model {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 8px;
+}
+
+.nc-print-slice-warn {
+	color: var(--nc-gcs-warning, #eab308);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 8px;
+}
+
 .nc-print-link-btn {
 	appearance: none;
 	background: none;

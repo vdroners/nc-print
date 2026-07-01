@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.8.1] - 2026-07-01
+
+Theme cohesion + presentation refresh aligned with NC-GCS visual language.
+
+### Changed — UI polish
+
+- Glass cards (`backdrop-filter`, shadow), inset sub-panels, accent-left banners
+- Two-tier section headers (panel title + uppercase micro-labels)
+- KPI stat tiles on Print monitor (elapsed, progress, layer, nozzle, bed)
+- Shared `.nc-print-badge` and `.nc-print-dot` status indicators
+- Pill toggle switches for auto-apply mesh and start-after-upload
+- Input focus glow; refined button hover/variants (`--small`, `--icon`, `--ghost`)
+- `NcPrintIcon` inline-SVG component (12 glyphs) on section headers and key actions
+
 ## [1.8.0] - 2026-07-01
 
 UI/UX remediation: wire flagship Prepare studio, auto-apply WYSIWYG mesh, printer control surface, slice recovery, and expanded gates (G20–G27).

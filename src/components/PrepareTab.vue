@@ -14,6 +14,7 @@ import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import PrepareEmptyState from './PrepareEmptyState.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import PreciseTransformPanel from './PreciseTransformPanel.vue'
+import NcPrintIcon from './NcPrintIcon.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { resolveFile } from '@/services/files-api.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
@@ -34,6 +35,7 @@ export default {
 		PrepareEmptyState,
 		SliceSummaryCard,
 		PreciseTransformPanel,
+		NcPrintIcon,
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -166,9 +168,11 @@ export default {
 		<template #left>
 			<div
 				v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
-				class="nc-print-health-banner nc-print-health-banner--warn"
+				class="nc-print-banner nc-print-banner--warn"
 				role="alert">
-				No slicer profiles loaded — check forge-slicer service and Admin settings.
+				<p class="nc-print-banner__body" style="margin-bottom: 8px;">
+					No slicer profiles loaded — check forge-slicer service and Admin settings.
+				</p>
 				<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
 					Retry
 				</button>
@@ -177,7 +181,12 @@ export default {
 			<RecentModelsStrip @select="onRecentSelect" />
 
 			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">Profiles</h2>
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="layers" :size="18" />
+						Profiles
+					</span>
+				</h2>
 				<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
 					Loading profiles from forge-slicer…
 				</p>

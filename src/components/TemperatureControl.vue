@@ -4,6 +4,7 @@ import { usePrintStore } from '@/store/print.js'
 import { setTemperature, cooldown } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import TemperatureSparkline from './TemperatureSparkline.vue'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 const PRESETS = {
 	PLA: { nozzle: 210, bed: 60 },
@@ -13,7 +14,7 @@ const PRESETS = {
 
 export default {
 	name: 'TemperatureControl',
-	components: { TemperatureSparkline },
+	components: { TemperatureSparkline, NcPrintIcon },
 	data() {
 		return {
 			nozzleInput: '',
@@ -132,15 +133,21 @@ export default {
 
 <template>
 	<div class="nc-print-card nc-print-temp-control">
-		<h2 class="nc-print-card__title">Temperature</h2>
+		<h2 class="nc-print-card__title">
+			<span class="nc-print-card__title-row">
+				<NcPrintIcon name="thermometer" :size="18" />
+				Temperature
+			</span>
+		</h2>
 
-		<div class="nc-print-temp-control__readouts">
+		<div class="nc-print-card--inset nc-print-temp-control__readouts">
+			<p class="nc-print-section-label">Live readouts</p>
 			<div class="nc-print-temp-control__row">
 				<span>Nozzle</span>
 				<strong>{{ nozzleLabel }}</strong>
 				<span
 					v-if="printStore.isExtruderHeating"
-					class="nc-print-temp-chip nc-print-temp-chip--heat">
+					class="nc-print-badge nc-print-badge--warn">
 					Heating
 				</span>
 			</div>
@@ -149,7 +156,7 @@ export default {
 				<strong>{{ bedLabel }}</strong>
 				<span
 					v-if="printStore.isBedHeating"
-					class="nc-print-temp-chip nc-print-temp-chip--heat">
+					class="nc-print-badge nc-print-badge--warn">
 					Heating
 				</span>
 			</div>
@@ -228,18 +235,5 @@ export default {
 	gap: 8px;
 	grid-template-columns: 1fr 1fr;
 	margin-bottom: 12px;
-}
-
-.nc-print-temp-chip {
-	border-radius: 999px;
-	font-size: 11px;
-	font-weight: 600;
-	padding: 2px 8px;
-}
-
-.nc-print-temp-chip--heat {
-	animation: nc-print-pulse 1.2s ease-in-out infinite;
-	background: color-mix(in srgb, #f97316 22%, transparent);
-	color: #ea580c;
 }
 </style>

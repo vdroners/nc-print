@@ -3,9 +3,11 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { setSpeedFactor, setFlowFactor, setFanSpeed, babystepZ } from '@/services/moonraker-api.js'
 import { toastError } from '@/services/toast.js'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'InPrintTuningPanel',
+	components: { NcPrintIcon },
 	data() {
 		return {
 			speed: 100,
@@ -88,38 +90,59 @@ export default {
 
 <template>
 	<div v-if="show" class="nc-print-card nc-print-tuning">
-		<h2 class="nc-print-card__title">Live tuning</h2>
-		<p style="margin: 0 0 12px; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted);">
+		<h2 class="nc-print-card__title">
+			<span class="nc-print-card__title-row">
+				<NcPrintIcon name="layers" :size="18" />
+				Live tuning
+			</span>
+		</h2>
+		<p class="nc-print-tuning__lead">
 			Adjust speed, flow, fan, and Z offset while printing.
 		</p>
 
-		<div class="nc-print-tuning__slider">
-			<label>Speed {{ speed }}%</label>
-			<input v-model.number="speed" type="range" min="50" max="200" step="1" :disabled="busy" @change="onSpeedInput">
+		<div class="nc-print-card--inset">
+			<p class="nc-print-section-label">Speed &amp; flow</p>
+			<div class="nc-print-tuning__slider">
+				<label>Speed {{ speed }}%</label>
+				<input v-model.number="speed" type="range" min="50" max="200" step="1" :disabled="busy" @change="onSpeedInput">
+			</div>
+			<div class="nc-print-tuning__slider">
+				<label>Flow {{ flow }}%</label>
+				<input v-model.number="flow" type="range" min="50" max="200" step="1" :disabled="busy" @change="onFlowInput">
+			</div>
 		</div>
-		<div class="nc-print-tuning__slider">
-			<label>Flow {{ flow }}%</label>
-			<input v-model.number="flow" type="range" min="50" max="200" step="1" :disabled="busy" @change="onFlowInput">
-		</div>
-		<div class="nc-print-tuning__slider">
-			<label>Fan {{ fan }}% <span v-if="fanPercent !== fan" class="nc-print-tuning__hint">(live {{ fanPercent }}%)</span></label>
-			<input v-model.number="fan" type="range" min="0" max="100" step="1" :disabled="busy" @change="onFanInput">
-		</div>
-		<div class="nc-print-tuning__babystep">
-			<span>Babystep Z</span>
-			<div class="nc-print-actions">
-				<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(-0.05)">
-					−0.05
-				</button>
-				<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(0.05)">
-					+0.05
-				</button>
+
+		<div class="nc-print-card--inset nc-print-tuning__inset-gap">
+			<p class="nc-print-section-label">Cooling &amp; Z</p>
+			<div class="nc-print-tuning__slider">
+				<label>Fan {{ fan }}% <span v-if="fanPercent !== fan" class="nc-print-tuning__hint">(live {{ fanPercent }}%)</span></label>
+				<input v-model.number="fan" type="range" min="0" max="100" step="1" :disabled="busy" @change="onFanInput">
+			</div>
+			<div class="nc-print-tuning__babystep">
+				<span>Babystep Z</span>
+				<div class="nc-print-actions">
+					<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(-0.05)">
+						−0.05
+					</button>
+					<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(0.05)">
+						+0.05
+					</button>
+				</div>
 			</div>
 		</div>
 	</div>
 </template>
 
 <style scoped>
+.nc-print-tuning__lead {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 12px;
+}
+
+.nc-print-tuning__inset-gap {
+	margin-top: var(--nc-gcs-space-md);
+}
 .nc-print-tuning__slider {
 	display: flex;
 	flex-direction: column;

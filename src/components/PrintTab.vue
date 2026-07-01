@@ -14,6 +14,7 @@ import InPrintTuningPanel from './InPrintTuningPanel.vue'
 import ManualMotionPanel from './ManualMotionPanel.vue'
 import EmergencyStopButton from './EmergencyStopButton.vue'
 import PrintCompletionBanner from './PrintCompletionBanner.vue'
+import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'PrintTab',
@@ -25,6 +26,7 @@ export default {
 		ManualMotionPanel,
 		EmergencyStopButton,
 		PrintCompletionBanner,
+		NcPrintIcon,
 	},
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
@@ -105,38 +107,51 @@ export default {
 			}
 			return `${Math.round(pct)}%`
 		},
-		layerLabel() {
+		layerStatValue() {
 			const layer = this.printStore.printerState.layer
 			const total = this.printStore.printerState.layerCount
 			if (layer == null || total == null) {
 				return null
 			}
-			return `Layer ${layer}/${total}`
+			return `${layer}/${total}`
 		},
-		tempSummary() {
-			const ps = this.printStore.printerState
-			const parts = []
-			if (ps.extruderTemp != null) {
-				let line = `Nozzle ${Math.round(ps.extruderTemp)}°C`
-				if (ps.extruderTarget != null && ps.extruderTarget > 0) {
-					line += ` → ${Math.round(ps.extruderTarget)}°C`
-				}
-				if (this.printStore.isExtruderHeating) {
-					line += ' (heating)'
-				}
-				parts.push(line)
+		nozzleStatValue() {
+			const cur = this.printStore.printerState.extruderTemp
+			if (cur == null) {
+				return '—'
 			}
-			if (ps.bedTemp != null) {
-				let line = `Bed ${Math.round(ps.bedTemp)}°C`
-				if (ps.bedTarget != null && ps.bedTarget > 0) {
-					line += ` → ${Math.round(ps.bedTarget)}°C`
-				}
-				if (this.printStore.isBedHeating) {
-					line += ' (heating)'
-				}
-				parts.push(line)
+			return `${Math.round(cur)}°`
+		},
+		nozzleStatSub() {
+			const tgt = this.printStore.printerState.extruderTarget
+			if (tgt != null && tgt > 0) {
+				return `→ ${Math.round(tgt)}°C`
 			}
-			return parts.join(' · ')
+			return null
+		},
+		bedStatValue() {
+			const cur = this.printStore.printerState.bedTemp
+			if (cur == null) {
+				return '—'
+			}
+			return `${Math.round(cur)}°`
+		},
+		bedStatSub() {
+			const tgt = this.printStore.printerState.bedTarget
+			if (tgt != null && tgt > 0) {
+				return `→ ${Math.round(tgt)}°C`
+			}
+			return null
+		},
+		showPrintStats() {
+			return this.showPrintControl && (
+				this.elapsedLabel
+				|| this.remainingLabel
+				|| this.printStore.printerState.progress > 0
+				|| this.layerStatValue
+				|| this.nozzleStatValue !== '—'
+				|| this.bedStatValue !== '—'
+			)
 		},
 		cameraPlaceholderText() {
 			if (!this.streamUrl) {
@@ -254,24 +269,34 @@ export default {
 	<WorkspaceRail class="nc-print-print-tab">
 		<MultiPrinterPicker />
 
-		<div v-if="isOffline" class="nc-print-card nc-print-offline-banner" role="alert">
-			<h2 class="nc-print-card__title">Printer offline</h2>
-			<p style="margin: 0 0 8px; color: var(--nc-gcs-text-secondary); font-size: var(--nc-gcs-text-sm);">
+		<div v-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
+			<h2 class="nc-print-banner__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="alert" :size="18" />
+					Printer offline
+				</span>
+			</h2>
+			<p class="nc-print-banner__body">
 				Cannot reach Moonraker for the selected printer. Check power, network, and Admin settings.
 			</p>
-			<p v-if="printStore.printerState.lastError" style="margin: 0; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-danger-soft);">
+			<p v-if="printStore.printerState.lastError" class="nc-print-banner__error">
 				{{ printStore.printerState.lastError }}
 			</p>
 		</div>
 
 		<PrintCompletionBanner @upload-last="onPrintAgainUpload" />
 
-		<div v-if="showIdleGuide" class="nc-print-card nc-print-idle-guide">
-			<h2 class="nc-print-card__title">No active print</h2>
-			<p style="margin: 0 0 12px; color: var(--nc-gcs-text-secondary); font-size: var(--nc-gcs-text-sm);">
+		<div v-if="showIdleGuide" class="nc-print-banner nc-print-banner--info">
+			<h2 class="nc-print-banner__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="home" :size="18" />
+					No active print
+				</span>
+			</h2>
+			<p class="nc-print-banner__body">
 				Slice a model and send G-code from the <strong>Slice</strong> tab, or upload G-code below.
 			</p>
-			<div class="nc-print-actions">
+			<div class="nc-print-actions" style="margin-top: 0;">
 				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goSlice">
 					Go to Slice
 				</button>
@@ -282,31 +307,64 @@ export default {
 		</div>
 
 		<div v-if="showPrintControl" class="nc-print-card">
-			<h2 class="nc-print-card__title">Print control</h2>
-			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 8px;">
-				State: <strong>{{ printStore.printerStatusLabel }}</strong>
-				<span v-if="printStore.printerState.progress > 0">
-					· {{ progressPercentLabel }}
-				</span>
-				<span v-if="layerLabel"> · {{ layerLabel }}</span>
-				<span class="nc-print-progress-source"> · {{ progressSourceLabel }}</span>
+			<div class="nc-print-card__header">
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="printer" :size="18" />
+						Print control
+					</span>
+				</h2>
+				<span class="nc-print-badge nc-print-badge--info">{{ printStore.printerStatusLabel }}</span>
+			</div>
+
+			<p v-if="printStore.printerState.filename" class="nc-print-print-meta">
+				<strong>{{ printStore.printerState.filename }}</strong>
 			</p>
-			<p v-if="printStore.printerState.filename" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
-				File: <strong>{{ printStore.printerState.filename }}</strong>
-			</p>
-			<p v-if="printStore.printerState.message" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+			<p v-if="printStore.printerState.message" class="nc-print-print-meta nc-print-print-meta--muted">
 				{{ printStore.printerState.message }}
 			</p>
-			<p v-if="elapsedLabel" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
-				Elapsed: {{ elapsedLabel }}
-				<span v-if="etaLabel"> · {{ etaLabel }}</span>
-			</p>
-			<p v-if="estimateActualLabel" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+			<p v-if="estimateActualLabel" class="nc-print-print-meta nc-print-print-meta--muted">
 				{{ estimateActualLabel }}
 			</p>
-			<p v-if="tempSummary" style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 12px;">
-				{{ tempSummary }}
-			</p>
+
+			<div v-if="showPrintStats" class="nc-print-stat-grid">
+				<div v-if="elapsedLabel" class="nc-print-stat">
+					<span class="nc-print-stat__label">Elapsed</span>
+					<span class="nc-print-stat__value">{{ elapsedLabel }}</span>
+					<span v-if="etaLabel" class="nc-print-stat__sub">{{ etaLabel }}</span>
+				</div>
+				<div v-if="printStore.printerState.progress > 0" class="nc-print-stat">
+					<span class="nc-print-stat__label">Progress</span>
+					<span class="nc-print-stat__value">{{ progressPercentLabel }}</span>
+					<span class="nc-print-stat__sub">{{ progressSourceLabel }}</span>
+				</div>
+				<div v-if="layerStatValue" class="nc-print-stat">
+					<span class="nc-print-stat__label">Layer</span>
+					<span class="nc-print-stat__value">{{ layerStatValue }}</span>
+				</div>
+				<div v-if="nozzleStatValue !== '—'" class="nc-print-stat">
+					<span class="nc-print-stat__label">
+						Nozzle
+						<span
+							v-if="printStore.isExtruderHeating"
+							class="nc-print-dot nc-print-dot--heating"
+							title="Heating" />
+					</span>
+					<span class="nc-print-stat__value">{{ nozzleStatValue }}</span>
+					<span v-if="nozzleStatSub" class="nc-print-stat__sub">{{ nozzleStatSub }}</span>
+				</div>
+				<div v-if="bedStatValue !== '—'" class="nc-print-stat">
+					<span class="nc-print-stat__label">
+						Bed
+						<span
+							v-if="printStore.isBedHeating"
+							class="nc-print-dot nc-print-dot--heating"
+							title="Heating" />
+					</span>
+					<span class="nc-print-stat__value">{{ bedStatValue }}</span>
+					<span v-if="bedStatSub" class="nc-print-stat__sub">{{ bedStatSub }}</span>
+				</div>
+			</div>
 
 			<div v-if="controls.isActive" class="nc-print-progress">
 				<div
@@ -320,6 +378,7 @@ export default {
 					class="nc-print-btn"
 					:disabled="busy || !controls.canPause"
 					@click="onPause">
+					<NcPrintIcon name="pause" :size="14" />
 					Pause
 				</button>
 				<button
@@ -327,6 +386,7 @@ export default {
 					class="nc-print-btn nc-print-btn--primary"
 					:disabled="busy || !controls.canResume"
 					@click="onResume">
+					<NcPrintIcon name="play" :size="14" />
 					Resume
 				</button>
 				<button
@@ -334,6 +394,7 @@ export default {
 					class="nc-print-btn nc-print-btn--danger"
 					:disabled="busy || !controls.canCancel"
 					@click="openCancelConfirm">
+					<NcPrintIcon name="stop" :size="14" />
 					Cancel
 				</button>
 			</div>
@@ -346,10 +407,16 @@ export default {
 		<ManualMotionPanel />
 
 		<div class="nc-print-card">
-			<h2 class="nc-print-card__title">Send G-code</h2>
-			<label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: var(--nc-gcs-text-sm);">
+			<h2 class="nc-print-card__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="upload" :size="18" />
+					Send G-code
+				</span>
+			</h2>
+			<label class="nc-print-switch" style="margin-bottom: 12px;">
 				<input v-model="startAfterUpload" type="checkbox">
-				Start print after upload
+				<span class="nc-print-switch__slider" />
+				<span class="nc-print-switch__label">Start print after upload</span>
 			</label>
 			<div class="nc-print-actions">
 				<label class="nc-print-btn">
@@ -385,7 +452,12 @@ export default {
 
 		<template #rail>
 			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">Camera</h2>
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="camera" :size="18" />
+						Camera
+					</span>
+				</h2>
 				<div class="nc-print-camera-panel">
 					<img
 						v-if="cameraFrameUrl && !cameraError"
@@ -405,14 +477,19 @@ export default {
 </template>
 
 <style scoped>
-.nc-print-progress-source {
-	color: var(--nc-gcs-text-muted);
-	font-size: 11px;
+.nc-print-print-meta {
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 8px;
 }
 
-.nc-print-offline-banner {
-	background: color-mix(in srgb, var(--nc-gcs-danger) 10%, var(--nc-gcs-bg-surface));
-	border-color: color-mix(in srgb, var(--nc-gcs-danger) 30%, var(--nc-gcs-border));
+.nc-print-print-meta--muted {
+	color: var(--nc-gcs-text-muted);
+}
+
+.nc-print-stat__label {
+	align-items: center;
+	display: inline-flex;
+	gap: 6px;
 }
 
 .nc-print-dialog-backdrop {
