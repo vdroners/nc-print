@@ -1,6 +1,8 @@
-# Verify — NC Print v1.0.0
+# Verify — NC Print v1.2.0
 
-Signed off: **2026-07-01T01:15:00Z** (UTC) — lab server 10.0.0.84, `cloud_app` + forge-slicer + K1 Moonraker.
+Signed off: **2026-06-30** (UTC) — lab server 10.0.0.84, `cloud_app` + forge-slicer + K1 Moonraker.
+
+**v1.2 UX overhaul:** Three.js viewport, profiles on Prepare, Files fetch API, G-code upload, wizard stepper, health banner, toasts. Re-run NS3/NS4/NS12 in browser after deploy.
 
 ## Quick commands
 

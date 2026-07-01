@@ -1,5 +1,6 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { fetchAppStatus } from './status-api.js'
 
 const base = () => generateUrl('/apps/nc_print/api/config')
 
@@ -12,18 +13,14 @@ export async function fetchConfig() {
 	return data
 }
 
-/**
- * @returns {Promise<object>} Slicer service health / probe.
- */
+/** @deprecated Use fetchAppStatus from status-api.js */
 export async function fetchSlicerStatus() {
-	const { data } = await axios.get(generateUrl('/apps/nc_print/api/slicer/status'))
-	return data
+	return fetchAppStatus()
 }
 
-/**
- * @returns {Promise<object>} Moonraker connection probe.
- */
+/** @deprecated Use fetchAppStatus from status-api.js */
 export async function fetchPrinterStatus() {
-	const { data } = await axios.get(generateUrl('/apps/nc_print/api/printer/status'))
-	return data
+	return fetchAppStatus()
 }
+
+export { fetchAppStatus }

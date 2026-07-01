@@ -1,14 +1,20 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
-import { pausePrint, resumePrint, cancelPrint } from '@/services/moonraker-api.js'
+import { pausePrint, resumePrint, cancelPrint, uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
+import { useCameraFrame } from '@/composables/useCameraFrame.js'
+import { fetchModelBlob } from '@/services/files-api.js'
+import { toastError, toastSuccess } from '@/services/toast.js'
 
 export default {
 	name: 'PrintTab',
+	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
 			busy: false,
+			uploadBusy: false,
+			startAfterUpload: true,
 		}
 	},
 	computed: {
@@ -16,11 +22,17 @@ export default {
 		streamUrl() {
 			return cameraStreamUrl(this.printStore.config)
 		},
-		isPaused() {
-			return (this.printStore.printerState.state || '').toLowerCase().includes('pause')
+		controls() {
+			return this.printStore.printerControls
 		},
-		isPrinting() {
-			return (this.printStore.printerState.state || '').toLowerCase().includes('print')
+		elapsedLabel() {
+			const d = this.printStore.printerState.printDuration
+			if (d == null || Number.isNaN(d)) {
+				return null
+			}
+			const mins = Math.floor(d / 60)
+			const secs = Math.floor(d % 60)
+			return `${mins}m ${secs}s elapsed`
 		},
 	},
 	methods: {
@@ -30,7 +42,7 @@ export default {
 				await fn()
 				await this.printStore.refreshPrinterState()
 			} catch (e) {
-				console.warn('[nc_print] print control failed:', e?.message || e)
+				toastError('Print control failed', e)
 			} finally {
 				this.busy = false
 			}
@@ -44,6 +56,56 @@ export default {
 		onCancel() {
 			return this.withBusy(() => cancelPrint())
 		},
+		onGcodeInput(e) {
+			const file = e.target.files?.[0]
+			if (file) {
+				void this.uploadGcodeFile(file)
+			}
+			e.target.value = ''
+		},
+		async uploadGcodeFile(file) {
+			if (!file?.name?.toLowerCase().endsWith('.gcode')) {
+				toastError('Select a .gcode file')
+				return
+			}
+			this.uploadBusy = true
+			try {
+				await uploadAndStart(file, file.name, this.startAfterUpload)
+				toastSuccess(this.startAfterUpload ? 'Print started' : 'G-code uploaded')
+				await this.printStore.refreshPrinterState()
+			} catch (e) {
+				toastError('Upload failed', e)
+			} finally {
+				this.uploadBusy = false
+			}
+		},
+		async pickGcodeFromFiles() {
+			try {
+				const dialogs = await import('@nextcloud/dialogs')
+				const { getFilePickerBuilder, FilePickerClosed } = dialogs
+				const builder = getFilePickerBuilder('Select G-code')
+				builder.setMultiSelect(false)
+				builder.setFilter(node => /\.gcode$/i.test(node?.basename || node?.displayname || ''))
+				builder.setCanPick(node => /\.gcode$/i.test(node?.basename || node?.displayname || ''))
+				const picker = builder.build()
+				const result = await picker.pick()
+				if (!result) {
+					return
+				}
+				let path = typeof result === 'string' ? result : (Array.isArray(result) ? result[0]?.path : result?.path)
+				if (!path) {
+					return
+				}
+				const blob = await fetchModelBlob({ dav_path: path })
+				const name = path.split('/').pop() || 'job.gcode'
+				await this.uploadGcodeFile(new File([blob], name, { type: 'text/plain' }))
+			} catch (e) {
+				if (e?.constructor?.name === 'FilePickerClosed') {
+					return
+				}
+				toastError('File pick failed', e)
+			}
+		},
 	},
 }
 </script>
@@ -52,20 +114,31 @@ export default {
 	<div class="nc-print-print-tab">
 		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">Print control</h2>
-			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 12px;">
+			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 8px;">
 				State: <strong>{{ printStore.printerStatusLabel }}</strong>
 				<span v-if="printStore.printerState.progress">
 					· {{ Math.round(printStore.printerState.progress * 100) }}%
 				</span>
+			</p>
+			<p v-if="printStore.printerState.filename" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+				File: <strong>{{ printStore.printerState.filename }}</strong>
+			</p>
+			<p v-if="printStore.printerState.message" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+				{{ printStore.printerState.message }}
+			</p>
+			<p v-if="elapsedLabel" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+				{{ elapsedLabel }}
+			</p>
+			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 12px;">
 				<span v-if="printStore.printerState.extruderTemp != null">
-					· Nozzle {{ Math.round(printStore.printerState.extruderTemp) }}°C
+					Nozzle {{ Math.round(printStore.printerState.extruderTemp) }}°C
 				</span>
 				<span v-if="printStore.printerState.bedTemp != null">
 					· Bed {{ Math.round(printStore.printerState.bedTemp) }}°C
 				</span>
 			</p>
 
-			<div v-if="isPrinting || isPaused" class="nc-print-progress">
+			<div v-if="controls.isActive" class="nc-print-progress">
 				<div
 					class="nc-print-progress__bar"
 					:style="{ width: (printStore.printerState.progress * 100) + '%' }" />
@@ -75,21 +148,21 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn"
-					:disabled="busy || !isPrinting || isPaused"
+					:disabled="busy || !controls.canPause"
 					@click="onPause">
 					Pause
 				</button>
 				<button
 					type="button"
 					class="nc-print-btn nc-print-btn--primary"
-					:disabled="busy || !isPaused"
+					:disabled="busy || !controls.canResume"
 					@click="onResume">
 					Resume
 				</button>
 				<button
 					type="button"
 					class="nc-print-btn nc-print-btn--danger"
-					:disabled="busy || (!isPrinting && !isPaused)"
+					:disabled="busy || !controls.canCancel"
 					@click="onCancel">
 					Cancel
 				</button>
@@ -97,11 +170,36 @@ export default {
 		</div>
 
 		<div class="nc-print-card">
+			<h2 class="nc-print-card__title">Send G-code</h2>
+			<label style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px; font-size: var(--nc-gcs-text-sm);">
+				<input v-model="startAfterUpload" type="checkbox">
+				Start print after upload
+			</label>
+			<div class="nc-print-actions">
+				<label class="nc-print-btn">
+					Upload local file
+					<input type="file" accept=".gcode" hidden @change="onGcodeInput">
+				</label>
+				<button
+					type="button"
+					class="nc-print-btn"
+					:disabled="uploadBusy"
+					@click="pickGcodeFromFiles">
+					From Files
+				</button>
+			</div>
+		</div>
+
+		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">Camera</h2>
 			<div class="nc-print-camera-panel">
-				<img v-if="streamUrl" :src="streamUrl" alt="Printer camera stream">
+				<img
+					v-if="cameraFrameUrl && !cameraError"
+					:src="cameraFrameUrl"
+					alt="Printer camera stream"
+					@error="onCameraError">
 				<div v-else class="nc-print-camera-placeholder">
-					No camera URL configured — set webcam URL in NC Print settings.
+					{{ streamUrl ? 'Camera unavailable' : 'No camera URL configured — set webcam URL in NC Print settings.' }}
 				</div>
 			</div>
 		</div>

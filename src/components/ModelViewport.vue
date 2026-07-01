@@ -1,113 +1,178 @@
 <script>
+import { mapStores } from 'pinia'
+import { usePrintStore } from '@/store/print.js'
+import { createViewport } from '@/three/viewport.js'
+
 export default {
 	name: 'ModelViewport',
 	props: {
-		modelName: { type: String, default: '' },
+		file: { type: [File, Blob], default: null },
+		buildVolume: {
+			type: Array,
+			default: () => [220, 220, 220],
+		},
 	},
 	data() {
 		return {
-			rotation: 0,
+			dragOver: false,
+			viewport: null,
+			hasMesh: false,
+			loading: false,
 		}
 	},
-	mounted() {
-		this._draw()
-		this._anim = requestAnimationFrame(this._tick)
+	computed: {
+		...mapStores(usePrintStore),
+	},
+	watch: {
+		file: {
+			immediate: true,
+			handler(f) {
+				void this.loadFile(f)
+			},
+		},
+		buildVolume: {
+			deep: true,
+			handler(vol) {
+				this.viewport?.setBedVolume(vol)
+			},
+		},
+	},
+	async mounted() {
+		const wrap = this.$refs.wrap
+		const canvas = this.$refs.canvas
+		if (!wrap || !canvas) {
+			return
+		}
+		this.viewport = await createViewport(canvas, wrap)
+		this.viewport.setBedVolume(this.buildVolume)
+		if (this.file) {
+			await this.loadFile(this.file)
+		}
 	},
 	beforeDestroy() {
-		if (this._anim) {
-			cancelAnimationFrame(this._anim)
-		}
+		this.viewport?.dispose()
 	},
 	methods: {
-		_tick() {
-			this.rotation += 0.003
-			this._draw()
-			this._anim = requestAnimationFrame(this._tick)
-		},
-		_draw() {
-			const canvas = this.$refs.canvas
-			if (!canvas) {
+		async loadFile(file) {
+			if (!this.viewport || !file) {
+				this.hasMesh = false
 				return
 			}
-			const ctx = canvas.getContext('2d')
-			const dpr = window.devicePixelRatio || 1
-			const w = canvas.clientWidth
-			const h = canvas.clientHeight
-			canvas.width = w * dpr
-			canvas.height = h * dpr
-			ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-
-			ctx.fillStyle = '#161b22'
-			ctx.fillRect(0, 0, w, h)
-
-			// Bed grid
-			const gridStep = 20
-			ctx.strokeStyle = 'rgba(34, 197, 94, 0.15)'
-			ctx.lineWidth = 1
-			for (let x = 0; x <= w; x += gridStep) {
-				ctx.beginPath()
-				ctx.moveTo(x, 0)
-				ctx.lineTo(x, h)
-				ctx.stroke()
+			this.loading = true
+			try {
+				const meta = await this.viewport.loadModel(file)
+				this.hasMesh = !!meta && !meta.previewSkipped
+				this.printStore.setModelMeta(meta)
+			} catch (e) {
+				console.warn('[nc_print] viewport load failed:', e?.message || e)
+			} finally {
+				this.loading = false
 			}
-			for (let y = 0; y <= h; y += gridStep) {
-				ctx.beginPath()
-				ctx.moveTo(0, y)
-				ctx.lineTo(w, y)
-				ctx.stroke()
+		},
+		recenter() {
+			this.viewport?.recenter()
+		},
+		onDrop(e) {
+			e.preventDefault()
+			this.dragOver = false
+			const file = e.dataTransfer?.files?.[0]
+			if (file && this.printStore.setModel(file, 'drop')) {
+				this.$emit('file', file)
 			}
-
-			// Placeholder model block (isometric-ish)
-			const cx = w / 2
-			const cy = h * 0.55
-			const size = Math.min(w, h) * 0.18
-			const tilt = Math.sin(this.rotation) * 0.08
-
-			ctx.save()
-			ctx.translate(cx, cy)
-			ctx.transform(1, tilt, -tilt * 0.5, 1, 0, 0)
-
-			ctx.fillStyle = 'rgba(34, 197, 94, 0.55)'
-			ctx.strokeStyle = '#22c55e'
-			ctx.lineWidth = 2
-			ctx.fillRect(-size / 2, -size, size, size)
-			ctx.strokeRect(-size / 2, -size, size, size)
-
-			ctx.fillStyle = 'rgba(34, 197, 94, 0.35)'
-			ctx.beginPath()
-			ctx.moveTo(-size / 2, -size)
-			ctx.lineTo(0, -size - size * 0.35)
-			ctx.lineTo(size / 2, -size)
-			ctx.closePath()
-			ctx.fill()
-			ctx.stroke()
-
-			ctx.restore()
-
-			if (this.modelName) {
-				ctx.fillStyle = '#8b949e'
-				ctx.font = '12px Inter, sans-serif'
-				ctx.textAlign = 'center'
-				ctx.fillText(this.modelName, cx, h - 16)
-			} else {
-				ctx.fillStyle = '#8b949e'
-				ctx.font = '13px Inter, sans-serif'
-				ctx.textAlign = 'center'
-				ctx.fillText('Import a model to preview', cx, cy + size + 24)
-			}
+		},
+		onDragOver(e) {
+			e.preventDefault()
+			this.dragOver = true
+		},
+		onDragLeave() {
+			this.dragOver = false
 		},
 	},
 }
 </script>
 
 <template>
-	<div class="nc-print-viewport-wrap">
-		<canvas ref="canvas" aria-label="3D model viewport placeholder" />
+	<div
+		ref="wrap"
+		class="nc-print-viewport-inner"
+		:class="{ 'nc-print-viewport-inner--drag': dragOver }"
+		@drop="onDrop"
+		@dragover="onDragOver"
+		@dragleave="onDragLeave">
+		<canvas ref="canvas" aria-label="3D model viewport" />
+		<div v-if="!file && !loading" class="nc-print-viewport-empty">
+			<div class="nc-print-viewport-empty__icon" aria-hidden="true">📐</div>
+			Drop or import a model file<br>
+			<small>STL · 3MF · OBJ</small>
+		</div>
+		<div v-if="file && !hasMesh && !loading" class="nc-print-viewport-empty nc-print-viewport-empty--hint">
+			Preview STL only; other formats still slice on the server.
+		</div>
+		<div
+			v-if="printStore.modelMeta.bbox && !printStore.modelMeta.fitsBed"
+			class="nc-print-viewport-warn">
+			Model may exceed build volume
+		</div>
+		<div v-if="printStore.modelMeta.bbox" class="nc-print-viewport-meta">
+			{{ Math.round(printStore.modelMeta.bbox.x) }}×{{ Math.round(printStore.modelMeta.bbox.y) }}×{{ Math.round(printStore.modelMeta.bbox.z) }} mm
+			<span v-if="printStore.modelMeta.triangleCount"> · {{ printStore.modelMeta.triangleCount }} tris</span>
+		</div>
 	</div>
 </template>
 
 <style scoped>
-canvas {
-	min-height: 320px;
+.nc-print-viewport-inner {
+	min-height: 360px;
+	position: relative;
+}
+
+.nc-print-viewport-inner--drag {
+	outline: 2px solid var(--nc-app-accent);
+}
+
+.nc-print-viewport-empty {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	left: 50%;
+	position: absolute;
+	text-align: center;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	z-index: 1;
+	pointer-events: none;
+}
+
+.nc-print-viewport-empty__icon {
+	font-size: 2rem;
+	margin-bottom: 4px;
+}
+
+.nc-print-viewport-empty--hint {
+	font-size: 12px;
+	top: 70%;
+}
+
+.nc-print-viewport-warn {
+	background: color-mix(in srgb, var(--nc-gcs-danger) 25%, transparent);
+	border-radius: var(--nc-gcs-radius-sm);
+	color: var(--nc-gcs-danger-soft);
+	font-size: var(--nc-gcs-text-sm);
+	left: 8px;
+	padding: 4px 8px;
+	position: absolute;
+	top: 8px;
+	z-index: 2;
+}
+
+.nc-print-viewport-meta {
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: var(--nc-gcs-radius-sm);
+	bottom: 8px;
+	color: #e6edf3;
+	font-size: 11px;
+	left: 8px;
+	padding: 4px 8px;
+	position: absolute;
+	z-index: 2;
 }
 </style>

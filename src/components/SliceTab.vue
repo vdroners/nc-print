@@ -1,10 +1,13 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore } from '@/store/print.js'
+import { usePrintStore, TABS } from '@/store/print.js'
 import { previewUrl } from '@/services/slicer-api.js'
+import SliceResultPanel from './SliceResultPanel.vue'
+import GcodePreview from './GcodePreview.vue'
 
 export default {
 	name: 'SliceTab',
+	components: { SliceResultPanel, GcodePreview },
 	data() {
 		return {
 			abortController: null,
@@ -21,37 +24,45 @@ export default {
 		slicing() {
 			return this.printStore.sliceJob.status === 'running'
 		},
+		slicerDisabled() {
+			return !this.printStore.slicerReady
+		},
+		profileSummary() {
+			const n = this.printStore.selectedProfileNames
+			return `${n.printer} · ${n.filament} · ${n.process}`
+		},
 	},
 	methods: {
-		async onSlice() {
+		goPrepare() {
+			this.printStore.setActiveTab(TABS.PREPARE)
+		},
+		async onSliceOnly() {
 			this.abortController = new AbortController()
 			try {
-				await this.printStore.runSlice({ signal: this.abortController.signal })
+				await this.printStore.sliceOnly({ signal: this.abortController.signal })
 			} catch (e) {
 				if (e?.name !== 'AbortError') {
-					console.warn('[nc_print] slice failed:', e?.message || e)
+					// toast in store
+				}
+			} finally {
+				this.abortController = null
+			}
+		},
+		async onSliceAndSend() {
+			this.abortController = new AbortController()
+			try {
+				await this.printStore.sliceAndSend({ signal: this.abortController.signal })
+			} catch (e) {
+				if (e?.name !== 'AbortError') {
+					// toast in store
 				}
 			} finally {
 				this.abortController = null
 			}
 		},
 		cancelSlice() {
-			this.abortController?.abort()
-		},
-		async onSliceAndStart() {
-			this.abortController = new AbortController()
-			try {
-				await this.printStore.sliceAndMaybeStart({ signal: this.abortController.signal })
-			} catch (e) {
-				if (e?.name !== 'AbortError') {
-					console.warn('[nc_print] slice+start failed:', e?.message || e)
-				}
-			} finally {
-				this.abortController = null
-			}
-		},
-		downloadGcode() {
-			this.printStore.downloadGcodeLocal()
+			this.printStore.cancelSlice(this.abortController)
+			this.abortController = null
 		},
 	},
 }
@@ -60,41 +71,30 @@ export default {
 <template>
 	<div class="nc-print-slice">
 		<div v-if="!printStore.hasModel" class="nc-print-card">
-			<p>No model loaded — go to <strong>Prepare</strong> first.</p>
+			<p>No model loaded.</p>
+			<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrepare">
+				Go to Prepare
+			</button>
 		</div>
 
 		<template v-else>
-			<div class="nc-print-row">
-				<div class="nc-print-card" style="flex: 1 1 280px;">
-					<h2 class="nc-print-card__title">Profiles</h2>
-					<div class="nc-print-field">
-						<label for="nc-print-printer">Printer</label>
-						<select id="nc-print-printer" v-model="printStore.selection.printerId">
-							<option v-for="p in printStore.profiles.printers" :key="p.id" :value="p.id">
-								{{ p.name || p.id }}
-							</option>
-						</select>
-					</div>
-					<div class="nc-print-field">
-						<label for="nc-print-filament">Filament</label>
-						<select id="nc-print-filament" v-model="printStore.selection.filamentId">
-							<option v-for="f in printStore.profiles.filaments" :key="f.id" :value="f.id">
-								{{ f.name || f.id }}
-							</option>
-						</select>
-					</div>
-					<div class="nc-print-field">
-						<label for="nc-print-process">Process / quality</label>
-						<select id="nc-print-process" v-model="printStore.selection.processId">
-							<option v-for="p in printStore.profiles.processes" :key="p.id" :value="p.id">
-								{{ p.name || p.id }}
-							</option>
-						</select>
-					</div>
-				</div>
+			<div class="nc-print-card">
+				<h2 class="nc-print-card__title">Profiles</h2>
+				<p style="margin: 0; color: var(--nc-gcs-text-muted); font-size: var(--nc-gcs-text-sm);">
+					{{ profileSummary }}
+					<button type="button" class="nc-print-link-btn" @click="goPrepare">Edit on Prepare</button>
+				</p>
+			</div>
 
-				<div class="nc-print-card" style="flex: 1 1 280px;">
-					<h2 class="nc-print-card__title">Overrides</h2>
+			<div class="nc-print-card">
+				<button
+					type="button"
+					class="nc-print-overrides-toggle"
+					@click="printStore.toggleOverridesCollapsed()">
+					Customize (advanced)
+					<span>{{ printStore.overridesCollapsed ? '▸' : '▾' }}</span>
+				</button>
+				<div v-show="!printStore.overridesCollapsed" class="nc-print-overrides-grid">
 					<div class="nc-print-field">
 						<label>Layer height (mm)</label>
 						<input v-model="printStore.overrides.layerHeight" type="number" step="0.01" min="0">
@@ -148,32 +148,22 @@ export default {
 				<p v-if="printStore.sliceJob.status === 'error'" style="color: var(--nc-gcs-danger-soft);">
 					{{ printStore.sliceJob.error }}
 				</p>
-				<p v-if="printStore.sliceJob.status === 'done'" style="color: var(--nc-app-accent);">
-					Slice complete
-					<span v-if="printStore.sliceJob.estimatedTimeS">
-						· ~{{ Math.round(printStore.sliceJob.estimatedTimeS / 60) }} min
-					</span>
-				</p>
-
-				<label style="display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: var(--nc-gcs-text-sm);">
-					<input v-model="printStore.uploadAndStart" type="checkbox">
-					Upload to printer and start after slice
-				</label>
 
 				<div class="nc-print-actions">
 					<button
 						type="button"
 						class="nc-print-btn nc-print-btn--primary"
-						:disabled="slicing"
-						@click="onSlice">
-						Slice
+						:disabled="slicing || slicerDisabled"
+						:title="slicerDisabled ? 'Slicer offline' : ''"
+						@click="onSliceAndSend">
+						Slice and send to printer
 					</button>
 					<button
 						type="button"
-						class="nc-print-btn nc-print-btn--primary"
-						:disabled="slicing"
-						@click="onSliceAndStart">
-						Slice &amp; start
+						class="nc-print-btn"
+						:disabled="slicing || slicerDisabled"
+						@click="onSliceOnly">
+						Slice only
 					</button>
 					<button
 						v-if="slicing"
@@ -182,15 +172,10 @@ export default {
 						@click="cancelSlice">
 						Cancel
 					</button>
-					<button
-						v-if="printStore.sliceJob.gcodeBlob"
-						type="button"
-						class="nc-print-btn"
-						@click="downloadGcode">
-						Download G-code
-					</button>
 				</div>
 			</div>
+
+			<SliceResultPanel />
 
 			<div v-if="previewImageUrl && printStore.sliceJob.status === 'done'" class="nc-print-card">
 				<h2 class="nc-print-card__title">Preview</h2>
@@ -199,6 +184,42 @@ export default {
 					alt="Slice preview"
 					style="max-width: 100%; border-radius: var(--nc-gcs-radius-sm);">
 			</div>
+
+			<GcodePreview :gcode-blob="printStore.sliceJob.gcodeBlob" />
 		</template>
 	</div>
 </template>
+
+<style scoped>
+.nc-print-overrides-toggle {
+	appearance: none;
+	background: transparent;
+	border: none;
+	color: var(--nc-gcs-text-primary);
+	cursor: pointer;
+	font-family: inherit;
+	font-size: var(--nc-gcs-text-base);
+	font-weight: 600;
+	padding: 0;
+	width: 100%;
+	text-align: left;
+}
+
+.nc-print-overrides-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+	gap: var(--nc-gcs-space-sm);
+	margin-top: var(--nc-gcs-space-md);
+}
+
+.nc-print-link-btn {
+	appearance: none;
+	background: none;
+	border: none;
+	color: var(--nc-app-accent);
+	cursor: pointer;
+	font: inherit;
+	margin-left: 8px;
+	text-decoration: underline;
+}
+</style>

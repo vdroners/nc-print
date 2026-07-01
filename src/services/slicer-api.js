@@ -119,4 +119,19 @@ export function previewUrl(jobId) {
 	return `${apiBase()}/jobs/${encodeURIComponent(jobId)}/preview.png`
 }
 
+/**
+ * Ask forge-slicer to cancel an in-progress job (best-effort).
+ * @param {string} jobId
+ */
+export async function cancelSliceJob(jobId) {
+	if (!jobId) {
+		return
+	}
+	try {
+		await axios.post(`${apiBase()}/jobs/${encodeURIComponent(jobId)}/cancel`)
+	} catch {
+		// upstream may already be finished
+	}
+}
+
 export { uploadAndStart }

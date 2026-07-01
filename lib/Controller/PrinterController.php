@@ -190,6 +190,7 @@ class PrinterController extends Controller
 		$display = is_array($status['display_status'] ?? null) ? $status['display_status'] : [];
 		$extruder = is_array($status['extruder'] ?? null) ? $status['extruder'] : [];
 		$bed = is_array($status['heater_bed'] ?? null) ? $status['heater_bed'] : [];
+		$info = is_array($printStats['info'] ?? null) ? $printStats['info'] : [];
 
 		$state = (string) ($printStats['state'] ?? 'unknown');
 		$progress = $display['progress'] ?? $printStats['print_duration'] ?? 0;
@@ -210,6 +211,8 @@ class PrinterController extends Controller
 			'bed_temp' => isset($bed['temperature']) ? (float) $bed['temperature'] : null,
 			'message' => (string) ($display['message'] ?? ''),
 			'filename' => $printStats['filename'] ?? null,
+			'print_duration' => isset($info['print_duration']) ? (float) $info['print_duration'] : null,
+			'total_duration' => isset($info['total_duration']) ? (float) $info['total_duration'] : null,
 		];
 	}
 

@@ -1,6 +1,6 @@
 {
   "name": "nc_print",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "private": true,
   "description": "NC Print — Nextcloud 3D print workflow (prepare, slice, print)",
   "license": "AGPL-3.0-or-later",
@@ -15,6 +15,7 @@
     "@nextcloud/router": "^3.0.1",
     "@nextcloud/vue": "^8.0.0",
     "pinia": "^2.1.7",
+    "three": "^0.170.0",
     "vue": "^2.7.16"
   },
   "devDependencies": {

@@ -288,3 +288,130 @@
 .nc-print-help-btn {
   margin-left: auto;
 }
+
+/* ─── Health banner ─────────────────────────────────────────────── */
+.nc-print-health-banner {
+  border-radius: var(--nc-gcs-radius-sm);
+  font-size: var(--nc-gcs-text-sm);
+  margin-bottom: var(--nc-gcs-space-md);
+  padding: 8px 12px;
+}
+.nc-print-health-banner--ok {
+  background: color-mix(in srgb, var(--nc-app-accent) 15%, transparent);
+  color: var(--nc-app-accent);
+}
+.nc-print-health-banner--warn {
+  background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 18%, transparent);
+  color: var(--nc-gcs-text-primary);
+}
+.nc-print-health-banner--danger {
+  background: color-mix(in srgb, var(--nc-gcs-danger) 18%, transparent);
+  color: var(--nc-gcs-danger-soft);
+}
+
+/* ─── Job summary strip ───────────────────────────────────────── */
+.nc-print-job-strip {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--nc-gcs-text-sm);
+  gap: 4px;
+  margin-bottom: var(--nc-gcs-space-md);
+}
+
+.nc-print-job-strip__seg {
+  appearance: none;
+  background: none;
+  border: none;
+  color: var(--nc-gcs-text-secondary);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.nc-print-job-strip__seg:hover {
+  color: var(--nc-app-accent);
+}
+
+.nc-print-job-strip__dot {
+  color: var(--nc-gcs-text-muted);
+}
+
+/* ─── Wizard stepper ────────────────────────────────────────────── */
+.nc-print-wizard {
+  display: flex;
+  gap: var(--nc-gcs-space-sm);
+  list-style: none;
+  margin: 0 0 var(--nc-gcs-space-md);
+  padding: 0;
+}
+
+.nc-print-wizard__step {
+  flex: 1 1 0;
+}
+
+.nc-print-wizard__btn {
+  align-items: center;
+  appearance: none;
+  background: var(--nc-gcs-bg-elevated);
+  border: 1px solid var(--nc-gcs-border);
+  border-radius: var(--nc-gcs-radius-sm);
+  color: var(--nc-gcs-text-secondary);
+  cursor: pointer;
+  display: flex;
+  font-family: inherit;
+  font-size: var(--nc-gcs-text-sm);
+  gap: 8px;
+  padding: 8px 10px;
+  width: 100%;
+}
+
+.nc-print-wizard__step--active .nc-print-wizard__btn {
+  border-color: var(--nc-app-accent);
+  color: var(--nc-app-accent);
+}
+
+.nc-print-wizard__step--done .nc-print-wizard__num {
+  background: var(--nc-app-accent);
+  color: #052e16;
+}
+
+.nc-print-wizard__num {
+  align-items: center;
+  background: var(--nc-gcs-border);
+  border-radius: 50%;
+  display: inline-flex;
+  font-size: 11px;
+  height: 22px;
+  justify-content: center;
+  width: 22px;
+}
+
+/* ─── Slice result ──────────────────────────────────────────────── */
+.nc-print-slice-result__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+.nc-print-slice-result__list div {
+  display: flex;
+  font-size: var(--nc-gcs-text-sm);
+  gap: 8px;
+}
+.nc-print-slice-result__list dt {
+  color: var(--nc-gcs-text-muted);
+  min-width: 88px;
+}
+.nc-print-slice-result__list dd {
+  margin: 0;
+}
+
+@media (max-width: 720px) {
+  .nc-print-viewport-wrap {
+    min-height: 240px;
+  }
+  .nc-print-camera-panel {
+    order: -1;
+  }
+}

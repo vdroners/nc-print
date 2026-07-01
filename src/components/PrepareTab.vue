@@ -1,70 +1,74 @@
 <script>
-import { getFilePickerBuilder } from '@nextcloud/dialogs'
-import { generateUrl } from '@nextcloud/router'
 import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import ModelViewport from './ModelViewport.vue'
 import CameraPip from './CameraPip.vue'
+import ProfilePicker from './ProfilePicker.vue'
+import ViewportToolbar from './ViewportToolbar.vue'
+import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
+import { fetchModelBlob } from '@/services/files-api.js'
+import { toastError } from '@/services/toast.js'
 
 export default {
 	name: 'PrepareTab',
-	components: { ModelViewport, CameraPip },
-	data() {
-		return {
-			dragOver: false,
-		}
-	},
+	components: { ModelViewport, CameraPip, ProfilePicker, ViewportToolbar },
 	computed: {
 		...mapStores(usePrintStore),
+		buildVolume() {
+			return this.printStore.buildVolume
+		},
 	},
 	methods: {
-		onFileInput(e) {
-			const file = e.target.files?.[0]
-			if (file) {
-				this.printStore.setModel(file, 'import')
+		onImportFile(file) {
+			if (this.printStore.setModel(file, 'import')) {
+				// viewport watches file prop
 			}
 		},
+		onToolbarImport(file) {
+			this.onImportFile(file)
+		},
+		onViewportFile() {
+			// model already set via drop handler
+		},
+		onCenter() {
+			this.$refs.viewport?.recenter()
+		},
+		onClear() {
+			// store cleared in toolbar
+		},
 		async pickFromFiles() {
-			const picker = getFilePickerBuilder('Select STL or 3MF')
-				.setMultiSelect(false)
-				.addMimeTypeFilter('model/stl')
-				.addMimeTypeFilter('application/sla')
-				.addMimeTypeFilter('model/3mf')
-				.allowDirectories(false)
-				.build()
-			const paths = await picker.pick()
-			const path = Array.isArray(paths) ? paths[0] : paths
-			if (!path) {
-				return
-			}
 			try {
-				const res = await fetch(generateUrl(`/apps/files/ajax/download.php?files=${encodeURIComponent(path)}`), {
-					credentials: 'same-origin',
-				})
-				if (!res.ok) {
-					throw new Error('Download failed')
+				const dialogs = await import('@nextcloud/dialogs')
+				const { getFilePickerBuilder, FilePickerClosed } = dialogs
+				const builder = getFilePickerBuilder('Select STL, 3MF, or OBJ')
+				builder.setMultiSelect(false)
+				builder.setFilter(modelFilePickerFilter)
+				builder.setCanPick(modelFilePickerCanPick)
+				const picker = builder.build()
+				const result = await picker.pick()
+				if (!result) {
+					return
 				}
-				const blob = await res.blob()
+				let path = ''
+				if (typeof result === 'string') {
+					path = result
+				} else if (Array.isArray(result)) {
+					path = result[0]?.path || ''
+				} else {
+					path = result?.path || ''
+				}
+				if (!path) {
+					return
+				}
+				const blob = await fetchModelBlob({ dav_path: path })
 				const name = path.split('/').pop() || 'model.stl'
 				this.printStore.setModel(new File([blob], name, { type: blob.type }), 'files')
 			} catch (e) {
-				console.warn('[nc_print] file pick failed:', e?.message || e)
+				if (e?.constructor?.name === 'FilePickerClosed') {
+					return
+				}
+				toastError('File pick failed', e)
 			}
-		},
-		onDrop(e) {
-			e.preventDefault()
-			this.dragOver = false
-			const file = e.dataTransfer?.files?.[0]
-			if (file) {
-				this.printStore.setModel(file, 'drop')
-			}
-		},
-		onDragOver(e) {
-			e.preventDefault()
-			this.dragOver = true
-		},
-		onDragLeave() {
-			this.dragOver = false
 		},
 		goToSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
@@ -75,42 +79,37 @@ export default {
 
 <template>
 	<div class="nc-print-prepare">
+		<div
+			v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
+			class="nc-print-health-banner nc-print-health-banner--warn"
+			role="alert">
+			No slicer profiles loaded — check forge-slicer service and Admin settings.
+		</div>
+
+		<div class="nc-print-card">
+			<h2 class="nc-print-card__title">Profiles</h2>
+			<ProfilePicker v-if="printStore.profiles.loaded" />
+		</div>
+
 		<div class="nc-print-row nc-print-row--equal">
-			<label class="nc-print-card nc-print-dropzone">
-				<input
-					type="file"
-					accept=".stl,.3mf,.obj"
-					hidden
-					@change="onFileInput">
-				<strong>Import</strong>
-				<span>Browse local STL / 3MF</span>
-			</label>
 			<button type="button" class="nc-print-card nc-print-dropzone" @click="pickFromFiles">
 				<strong>From Files</strong>
 				<span>Pick from Nextcloud</span>
 			</button>
-			<div
-				class="nc-print-card nc-print-dropzone"
-				:class="{ 'nc-print-dropzone--active': dragOver }"
-				@drop="onDrop"
-				@dragover="onDragOver"
-				@dragleave="onDragLeave">
-				<strong>Drag &amp; drop</strong>
-				<span>Drop a model file here</span>
-			</div>
 		</div>
 
-		<div v-if="printStore.hasModel" class="nc-print-card">
-			<p class="nc-print-card__title">
-				{{ printStore.model.name }}
-				<span style="color: var(--nc-gcs-text-muted); font-weight: 400;">
-					({{ Math.round(printStore.model.size / 1024) }} KB)
-				</span>
-			</p>
-		</div>
+		<ViewportToolbar
+			:can-center="printStore.hasModel"
+			@import="onToolbarImport"
+			@center="onCenter"
+			@clear="onClear" />
 
 		<div class="nc-print-viewport-wrap">
-			<ModelViewport :model-name="printStore.model.name" />
+			<ModelViewport
+				ref="viewport"
+				:file="printStore.model.file"
+				:build-volume="buildVolume"
+				@file="onViewportFile" />
 			<CameraPip :config="printStore.config" />
 		</div>
 
@@ -118,7 +117,7 @@ export default {
 			<button
 				type="button"
 				class="nc-print-btn nc-print-btn--primary"
-				:disabled="!printStore.hasModel"
+				:disabled="!printStore.prepareComplete"
 				@click="goToSlice">
 				Next to Slice →
 			</button>

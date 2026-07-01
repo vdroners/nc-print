@@ -7,6 +7,8 @@ return [
 		['name' => 'page#index', 'url' => '/', 'verb' => 'GET'],
 		['name' => 'api#config', 'url' => '/api/config', 'verb' => 'GET'],
 		['name' => 'api#status', 'url' => '/api/status', 'verb' => 'GET'],
+		['name' => 'files#resolve', 'url' => '/api/files/resolve', 'verb' => 'POST'],
+		['name' => 'files#fetch', 'url' => '/api/files/fetch', 'verb' => 'POST'],
 		['name' => 'camera#frame', 'url' => '/api/camera/frame.jpeg', 'verb' => 'GET'],
 		['name' => 'ws_ticket#issue', 'url' => '/api/ws-ticket', 'verb' => 'GET'],
 		['name' => 'admin#saveSettings', 'url' => '/api/admin/settings', 'verb' => 'PUT'],
