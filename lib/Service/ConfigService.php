@@ -17,7 +17,8 @@ class ConfigService
 	public const KEY_PRINTER_DISPLAY_NAME = 'printer_display_name';
 	public const KEY_ALLOWED_GROUPS = 'allowed_groups';
 
-	public const DEFAULT_SLICER_INTERNAL_URL = 'http://127.0.0.1:8766';
+	/** Reachable from cloud_app via host.docker.internal or bridge gateway. */
+	public const DEFAULT_SLICER_INTERNAL_URL = 'http://host.docker.internal:8766';
 	public const DEFAULT_MOONRAKER_INTERNAL_URL = 'http://10.0.0.210:7125';
 	public const DEFAULT_MOONRAKER_CAMERA_URL = 'http://10.0.0.210:8080/?action=snapshot';
 	public const DEFAULT_PRINTER_DISPLAY_NAME = 'K1 Max';
@@ -25,22 +26,27 @@ class ConfigService
 
 	public function __construct(
 		private IConfig $config,
+		private InternalUrlResolver $internalUrlResolver,
 	) {
 	}
 
 	public function getSlicerInternalUrl(): string
 	{
-		return $this->getUrl(
-			self::KEY_SLICER_INTERNAL_URL,
-			self::DEFAULT_SLICER_INTERNAL_URL,
+		return $this->internalUrlResolver->resolveSlicerUrl(
+			$this->getUrl(
+				self::KEY_SLICER_INTERNAL_URL,
+				self::DEFAULT_SLICER_INTERNAL_URL,
+			),
 		);
 	}
 
 	public function getMoonrakerInternalUrl(): string
 	{
-		return $this->getUrl(
-			self::KEY_MOONRAKER_INTERNAL_URL,
-			self::DEFAULT_MOONRAKER_INTERNAL_URL,
+		return $this->internalUrlResolver->resolveUrl(
+			$this->getUrl(
+				self::KEY_MOONRAKER_INTERNAL_URL,
+				self::DEFAULT_MOONRAKER_INTERNAL_URL,
+			),
 		);
 	}
 
