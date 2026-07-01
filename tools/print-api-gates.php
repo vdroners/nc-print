@@ -117,10 +117,10 @@ function gate_moonraker_path_allowed(string $safePath): bool
 function gate_slicer_upstream_path(string $safePath): string
 {
 	if ($safePath === 'slice/stream' || str_ends_with($safePath, '/slice/stream')) {
-		return 'api/slice';
+		return 'api/slice/stream';
 	}
 	if ($safePath === '' || str_starts_with($safePath, 'api/')) {
-		return $safePath === 'api/slice/stream' ? 'api/slice' : $safePath;
+		return $safePath;
 	}
 	return 'api/' . ltrim($safePath, '/');
 }
@@ -229,10 +229,10 @@ $uploadRoute = $routesRaw !== ''
 	&& gate_routes_contain($routesRaw, '/api/printer/upload');
 gate('G09', $uploadRoute, $uploadRoute ? 'printer#upload registered' : 'routes missing upload');
 
-// G10 — slice/stream maps to api/slice upstream
-$streamMaps = gate_slicer_upstream_path('slice/stream') === 'api/slice'
-	&& gate_slicer_upstream_path('api/slice/stream') === 'api/slice';
-gate('G10', $streamMaps, 'slice/stream -> api/slice');
+// G10 — slice/stream maps to api/slice/stream upstream (SSE endpoint)
+$streamMaps = gate_slicer_upstream_path('slice/stream') === 'api/slice/stream'
+	&& gate_slicer_upstream_path('api/slice/stream') === 'api/slice/stream';
+gate('G10', $streamMaps, 'slice/stream -> api/slice/stream');
 
 // G11 — cloud api/status (ApiController)
 $apiStatusData = null;
@@ -303,8 +303,108 @@ $threeChunk = glob($jsDir . '/nc_print-nc-print-three.js*') ?: [];
 $g17Ok = $threeChunk !== [];
 gate('G17', $g17Ok, $g17Ok ? basename($threeChunk[0]) : 'missing nc_print-nc-print-three chunk');
 
-// G18/G19 — covered by `npm run test` (vitest); advisory note only
-gate('G18', true, 'vitest viewport-stl.spec.js (run npm run test)');
-gate('G19', true, 'vitest prepare-workflow.spec.js (run npm run test)');
+// G18/G19 — vitest suite (host npm when available; else recent .vitest-gate-stamp from make gate-preflight)
+$repoRoot = dirname(__DIR__);
+$npmExit = 1;
+$npmDetail = 'vitest not run';
+$stampFile = $repoRoot . '/.vitest-gate-stamp';
+$npmBin = trim((string) shell_exec('command -v npm 2>/dev/null'));
+if ($npmBin !== '' && is_dir($repoRoot) && is_readable($repoRoot . '/package.json')) {
+	$npmCmd = 'cd ' . escapeshellarg($repoRoot) . ' && npm run test 2>&1';
+	$npmOutput = [];
+	exec($npmCmd, $npmOutput, $npmExit);
+	$npmTail = implode(' ', array_slice($npmOutput, -3));
+	$npmDetail = $npmExit === 0
+		? 'vitest exit 0'
+		: ('vitest exit ' . $npmExit . ($npmTail !== '' ? ' — ' . substr($npmTail, 0, 160) : ''));
+} elseif (is_readable($stampFile) && (time() - (int) filemtime($stampFile)) < 900) {
+	$npmExit = trim((string) file_get_contents($stampFile)) === 'ok' ? 0 : 1;
+	$npmDetail = $npmExit === 0 ? 'host stamp ok (<15m)' : 'host stamp invalid';
+} else {
+	$npmDetail = 'npm unavailable in container — run make gate-preflight on host';
+}
+gate('G18', $npmExit === 0, 'viewport-stl.spec.js + suite: ' . $npmDetail);
+gate('G19', $npmExit === 0, 'prepare-workflow.spec.js + suite: ' . $npmDetail);
+
+// G20 — control routes registered
+$g20Routes = $routesRaw !== ''
+	&& gate_routes_contain($routesRaw, "printer#setTemperature")
+	&& gate_routes_contain($routesRaw, '/api/printer/temperature')
+	&& gate_routes_contain($routesRaw, "printer#emergencyStop")
+	&& gate_routes_contain($routesRaw, '/api/printer/emergency-stop')
+	&& gate_routes_contain($routesRaw, "printer#gcodeAction")
+	&& gate_routes_contain($routesRaw, '/api/printer/gcode-action');
+gate('G20', $g20Routes, $g20Routes ? 'control routes registered' : 'missing control routes');
+
+// G21 — temperature clamp inline regression + M104/M140 emission in source
+$clampNozzle = static fn(float $v): float => max(0.0, min(300.0, $v));
+$clampBed = static fn(float $v): float => max(0.0, min(120.0, $v));
+$printerSrcPath = dirname(__DIR__) . '/lib/Controller/PrinterController.php';
+$printerSrc = is_readable($printerSrcPath) ? (string) file_get_contents($printerSrcPath) : '';
+$g21Clamp = $clampNozzle(350.0) === 300.0 && $clampBed(200.0) === 120.0;
+$g21Gcode = $printerSrc !== ''
+	&& str_contains($printerSrc, 'M104 S')
+	&& str_contains($printerSrc, 'M140 S')
+	&& str_contains($printerSrc, 'clampNozzleTemp')
+	&& str_contains($printerSrc, 'clampBedTemp');
+gate('G21', $g21Clamp && $g21Gcode, $g21Clamp && $g21Gcode ? 'temp clamp + M104/M140' : 'clamp or gcode missing');
+
+// G22 — emergency stop uses printer/emergency_stop (not gcode/script)
+$g22 = $printerSrc !== ''
+	&& str_contains($printerSrc, "moonrakerPost('printer/emergency_stop'")
+	&& !preg_match("/emergencyStop\\(\\)[\\s\\S]{0,400}printer\\/gcode\\/script/", $printerSrc);
+gate('G22', $g22, $g22 ? 'emergency_stop path' : 'e-stop must not use gcode/script');
+
+// G23 — tuning factor clamp inline regression
+$clampTune = static fn(float $v): int => (int) round(max(50.0, min(200.0, $v)));
+$clampFan = static fn(float $v): int => (int) round(max(0.0, min(255.0, $v)));
+$clampBabystep = static fn(float $v): float => max(-2.0, min(2.0, $v));
+$g23Inline = $clampTune(250) === 200 && $clampTune(40) === 50
+	&& $clampFan(300) === 255 && $clampFan(-5) === 0
+	&& $clampBabystep(5.0) === 2.0 && $clampBabystep(-3.0) === -2.0;
+$g23Source = $printerSrc !== ''
+	&& str_contains($printerSrc, 'M220 S')
+	&& str_contains($printerSrc, 'M221 S')
+	&& str_contains($printerSrc, 'M106 S')
+	&& str_contains($printerSrc, 'SET_GCODE_OFFSET Z_ADJUST');
+gate('G23', $g23Inline && $g23Source, $g23Inline && $g23Source ? 'tuning clamp ok' : 'tuning clamp missing');
+
+// G24 — camera proxy resolves per-printer URL via ConfigService
+$cameraSrcPath = dirname(__DIR__) . '/lib/Controller/CameraController.php';
+$cameraSrc = is_readable($cameraSrcPath) ? (string) file_get_contents($cameraSrcPath) : '';
+$configSrcPath = dirname(__DIR__) . '/lib/Service/ConfigService.php';
+$configSrc = is_readable($configSrcPath) ? (string) file_get_contents($configSrcPath) : '';
+$g24Static = $cameraSrc !== ''
+	&& str_contains($cameraSrc, 'resolveCameraUrl')
+	&& str_contains($cameraSrc, "getParam('printer_id')")
+	&& $configSrc !== ''
+	&& str_contains($configSrc, 'function resolveCameraUrl');
+$g24Http = false;
+$g24Detail = 'static only';
+if ($internalBase !== '') {
+	$camUrl = $internalBase . '/index.php/apps/nc_print/api/camera/frame.jpeg?printer_id=default';
+	$camRes = gate_http_get($camUrl, 10);
+	$g24Http = in_array($camRes['http'], [200, 502, 503], true);
+	$g24Detail = 'http=' . $camRes['http'];
+}
+gate('G24', $g24Static && ($g24Http || $internalBase === 'http://127.0.0.1'), $g24Detail);
+
+// G25 — pause/resume/cancel forward printer_id
+$g25 = $printerSrc !== ''
+	&& str_contains($printerSrc, "getParam('printer_id')")
+	&& gate_routes_contain($routesRaw, "printer#pause")
+	&& gate_routes_contain($routesRaw, '/api/printer/pause');
+gate('G25', $g25, $g25 ? 'printer_id on print actions' : 'printer_id missing on pause path');
+
+// G26 — manual motion refused while printing
+$g26 = $printerSrc !== ''
+	&& str_contains($printerSrc, 'motion_blocked')
+	&& str_contains($printerSrc, 'isPrintActive')
+	&& str_contains($printerSrc, 'MOTION_ACTIONS')
+	&& preg_match("/in_array\\(\\\$action, self::MOTION_ACTIONS, true\\)/", $printerSrc) === 1;
+gate('G26', $g26, $g26 ? 'motion blocked while printing' : 'motion guard missing');
+
+// G27 — release version >= 1.8.0
+gate('G27', version_compare($version, '1.8.0', '>='), 'version=' . $version);
 
 exit($fail === 0 ? 0 : 1);

@@ -1,15 +1,54 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import MultiToolFilamentPicker from './MultiToolFilamentPicker.vue'
 
 export default {
 	name: 'ProfilePicker',
+	components: { MultiToolFilamentPicker },
+	data() {
+		return {
+			printerFilter: '',
+			filamentFilter: '',
+			processFilter: '',
+		}
+	},
 	computed: {
 		...mapStores(usePrintStore),
+		filteredPrinters() {
+			return this.filterList(this.printStore.profiles.printers, this.printerFilter)
+		},
+		filteredFilaments() {
+			return this.filterList(this.printStore.profiles.filaments, this.filamentFilter)
+		},
+		filteredProcesses() {
+			return this.filterList(this.printStore.profiles.processes, this.processFilter)
+		},
 	},
 	methods: {
+		filterList(list, query) {
+			const q = String(query || '').trim().toLowerCase()
+			if (!q) {
+				return list
+			}
+			return list.filter(p => {
+				const label = `${p.name || ''} ${p.id || ''} ${p.vendor || ''}`.toLowerCase()
+				return label.includes(q)
+			})
+		},
+		optionLabel(p) {
+			return `${p.name || p.id}${p.vendor ? ` — ${p.vendor}` : ''}`
+		},
 		onChange() {
 			this.printStore.onProfileChange()
+		},
+		focusField(kind) {
+			const ids = {
+				printer: 'nc-print-printer',
+				filament: 'nc-print-filament',
+				process: 'nc-print-process',
+			}
+			document.getElementById(ids[kind] || '')?.focus()
 		},
 	},
 }
@@ -18,35 +57,63 @@ export default {
 <template>
 	<div class="nc-print-profile-picker">
 		<div class="nc-print-field">
-			<label for="nc-print-printer">Printer</label>
+			<label for="nc-print-printer-filter">Printer</label>
+			<input
+				id="nc-print-printer-filter"
+				v-model="printerFilter"
+				type="search"
+				placeholder="Search printers…"
+				autocomplete="off">
 			<select
 				id="nc-print-printer"
 				v-model="printStore.selection.printerId"
 				@change="onChange">
-				<option v-for="p in printStore.profiles.printers" :key="p.id" :value="p.id">
-					{{ p.name || p.id }}{{ p.vendor ? ` — ${p.vendor}` : '' }}
+				<option v-if="filteredPrinters.length === 0" disabled value="">
+					No matching printers
+				</option>
+				<option v-for="p in filteredPrinters" :key="p.id" :value="p.id">
+					{{ optionLabel(p) }}
 				</option>
 			</select>
 		</div>
 		<div class="nc-print-field">
-			<label for="nc-print-filament">Filament</label>
+			<label for="nc-print-filament-filter">Filament</label>
+			<input
+				id="nc-print-filament-filter"
+				v-model="filamentFilter"
+				type="search"
+				placeholder="Search filaments…"
+				autocomplete="off">
 			<select
 				id="nc-print-filament"
 				v-model="printStore.selection.filamentId"
 				@change="onChange">
-				<option v-for="f in printStore.profiles.filaments" :key="f.id" :value="f.id">
-					{{ f.name || f.id }}{{ f.vendor ? ` — ${f.vendor}` : '' }}
+				<option v-if="filteredFilaments.length === 0" disabled value="">
+					No matching filaments
+				</option>
+				<option v-for="f in filteredFilaments" :key="f.id" :value="f.id">
+					{{ optionLabel(f) }}
 				</option>
 			</select>
 		</div>
+		<MultiToolFilamentPicker />
 		<div class="nc-print-field">
-			<label for="nc-print-process">Process / quality</label>
+			<label for="nc-print-process-filter">Process / quality</label>
+			<input
+				id="nc-print-process-filter"
+				v-model="processFilter"
+				type="search"
+				placeholder="Search processes…"
+				autocomplete="off">
 			<select
 				id="nc-print-process"
 				v-model="printStore.selection.processId"
 				@change="onChange">
-				<option v-for="p in printStore.profiles.processes" :key="p.id" :value="p.id">
-					{{ p.name || p.id }}{{ p.vendor ? ` — ${p.vendor}` : '' }}
+				<option v-if="filteredProcesses.length === 0" disabled value="">
+					No matching processes
+				</option>
+				<option v-for="p in filteredProcesses" :key="p.id" :value="p.id">
+					{{ optionLabel(p) }}
 				</option>
 			</select>
 		</div>
@@ -58,5 +125,9 @@ export default {
 	display: grid;
 	grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 	gap: var(--nc-gcs-space-md);
+}
+
+.nc-print-field input[type='search'] {
+	margin-bottom: 4px;
 }
 </style>

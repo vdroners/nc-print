@@ -16,6 +16,7 @@ class ConfigService
 	public const KEY_MOONRAKER_ENABLED = 'moonraker_enabled';
 	public const KEY_PRINTER_DISPLAY_NAME = 'printer_display_name';
 	public const KEY_ALLOWED_GROUPS = 'allowed_groups';
+	public const KEY_MULTI_PRINTERS = 'multi_printers';
 
 	/** Reachable from cloud_app via host.docker.internal or bridge gateway. */
 	public const DEFAULT_SLICER_INTERNAL_URL = 'http://host.docker.internal:8766';
@@ -84,6 +85,91 @@ class ConfigService
 		return $v !== '' ? $v : self::DEFAULT_PRINTER_DISPLAY_NAME;
 	}
 
+	/**
+	 * @return list<array<string, mixed>>
+	 */
+	public function getMultiPrinters(): array
+	{
+		$raw = trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_MULTI_PRINTERS,
+			'',
+		));
+		if ($raw === '') {
+			return [[
+				'id' => 'default',
+				'name' => $this->getPrinterDisplayName(),
+				'moonraker_url' => $this->getMoonrakerInternalUrl(),
+				'camera_url' => $this->getMoonrakerCameraUrl(),
+				'default' => true,
+			]];
+		}
+		$decoded = json_decode($raw, true);
+		if (!is_array($decoded)) {
+			return [[
+				'id' => 'default',
+				'name' => $this->getPrinterDisplayName(),
+				'moonraker_url' => $this->getMoonrakerInternalUrl(),
+				'camera_url' => $this->getMoonrakerCameraUrl(),
+				'default' => true,
+			]];
+		}
+		$out = [];
+		foreach ($decoded as $row) {
+			if (!is_array($row) || !isset($row['id']) || !is_string($row['id']) || $row['id'] === '') {
+				continue;
+			}
+			$out[] = $row;
+		}
+		return $out !== [] ? $out : [[
+			'id' => 'default',
+			'name' => $this->getPrinterDisplayName(),
+			'moonraker_url' => $this->getMoonrakerInternalUrl(),
+			'camera_url' => $this->getMoonrakerCameraUrl(),
+			'default' => true,
+		]];
+	}
+
+	/**
+	 * @return array<string, mixed>|null
+	 */
+	public function getMultiPrinterById(?string $id): ?array
+	{
+		if ($id === null || $id === '') {
+			foreach ($this->getMultiPrinters() as $row) {
+				if (!empty($row['default'])) {
+					return $row;
+				}
+			}
+			$all = $this->getMultiPrinters();
+			return $all[0] ?? null;
+		}
+		foreach ($this->getMultiPrinters() as $row) {
+			if (($row['id'] ?? '') === $id) {
+				return $row;
+			}
+		}
+		return null;
+	}
+
+	public function resolveMoonrakerUrl(?string $printerId = null): string
+	{
+		$row = $this->getMultiPrinterById($printerId);
+		if ($row !== null && isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
+			return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+		}
+		return $this->getMoonrakerInternalUrl();
+	}
+
+	public function resolveCameraUrl(?string $printerId = null): string
+	{
+		$row = $this->getMultiPrinterById($printerId);
+		if ($row !== null && isset($row['camera_url']) && is_string($row['camera_url']) && trim($row['camera_url']) !== '') {
+			return trim($row['camera_url']);
+		}
+		return $this->getMoonrakerCameraUrl();
+	}
+
 	/** @return list<string> */
 	public function getAllowedGroups(): array
 	{
@@ -113,6 +199,7 @@ class ConfigService
 			'slicer_enabled' => $this->isSlicerEnabled(),
 			'moonraker_enabled' => $this->isMoonrakerEnabled(),
 			'printer_display_name' => $this->getPrinterDisplayName(),
+			'multi_printers' => $this->getMultiPrinters(),
 			'slicer_proxy_base' => '/apps/' . Application::APP_ID . '/api/slicer',
 			'moonraker_proxy_base' => '/apps/' . Application::APP_ID . '/api/moonraker',
 			'camera_url' => '/apps/' . Application::APP_ID . '/api/camera/frame.jpeg',

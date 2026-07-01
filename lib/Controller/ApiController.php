@@ -57,6 +57,13 @@ class ApiController extends Controller
 	#[NoCSRFRequired]
 	public function status(): JSONResponse
 	{
+		if (!$this->access->canUseApp()) {
+			return new JSONResponse(
+				$this->access->forbiddenJsonPayload(),
+				Http::STATUS_FORBIDDEN,
+			);
+		}
+
 		$slicerProbe = $this->probeUrl(
 			$this->configService->getSlicerInternalUrl() . '/api/health',
 			$this->configService->isSlicerEnabled(),
@@ -85,6 +92,7 @@ class ApiController extends Controller
 			'moonraker_latency_ms' => $moonrakerProbe['latency_ms'],
 			'moonraker_error' => $moonrakerProbe['error'],
 			'printer_display_name' => $this->configService->getPrinterDisplayName(),
+			'multi_printers' => $this->configService->getMultiPrinters(),
 		]);
 	}
 

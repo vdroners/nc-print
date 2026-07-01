@@ -5,13 +5,36 @@ import ModelViewport from './ModelViewport.vue'
 import CameraPip from './CameraPip.vue'
 import ProfilePicker from './ProfilePicker.vue'
 import PrepareChecklist from './PrepareChecklist.vue'
+import PrepareOverrides from './PrepareOverrides.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
+import MeshHealthPanel from './MeshHealthPanel.vue'
+import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
+import RecentModelsStrip from './RecentModelsStrip.vue'
+import PrepareStudioLayout from './PrepareStudioLayout.vue'
+import PrepareEmptyState from './PrepareEmptyState.vue'
+import SliceSummaryCard from './SliceSummaryCard.vue'
+import PreciseTransformPanel from './PreciseTransformPanel.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
+import { resolveFile } from '@/services/files-api.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
 
 export default {
 	name: 'PrepareTab',
-	components: { ModelViewport, CameraPip, ProfilePicker, PrepareChecklist, ViewportToolbar },
+	components: {
+		ModelViewport,
+		CameraPip,
+		ProfilePicker,
+		PrepareChecklist,
+		PrepareOverrides,
+		ViewportToolbar,
+		MeshHealthPanel,
+		ThreeMfObjectPicker,
+		RecentModelsStrip,
+		PrepareStudioLayout,
+		PrepareEmptyState,
+		SliceSummaryCard,
+		PreciseTransformPanel,
+	},
 	computed: {
 		...mapStores(usePrintStore),
 		buildVolume() {
@@ -20,31 +43,77 @@ export default {
 		nextSliceTitle() {
 			return this.printStore.firstPrepareBlocker || 'Continue to Slice'
 		},
+		canTransform() {
+			return this.printStore.hasModel && !this.printStore.modelMeta.previewSkipped
+		},
+	},
+	async mounted() {
+		this._onRecenter = () => this.onCenter()
+		this._onChecklistAction = (e) => this.onChecklistAction(e.detail?.action)
+		window.addEventListener('nc-print-recenter', this._onRecenter)
+		window.addEventListener('nc-print-checklist-action', this._onChecklistAction)
+	},
+	beforeDestroy() {
+		window.removeEventListener('nc-print-recenter', this._onRecenter)
+		window.removeEventListener('nc-print-checklist-action', this._onChecklistAction)
 	},
 	methods: {
-		onImportFile(file) {
-			this.printStore.setModel(file, 'import')
-		},
 		onToolbarImport(file) {
-			this.onImportFile(file)
-		},
-		onViewportFile() {
-			// model already set via drop handler
+			this.printStore.setModel(file, 'import')
 		},
 		onCenter() {
 			this.$refs.viewport?.recenter()
 		},
-		onClear() {
-			// store cleared in toolbar
+		onRotate(axis) {
+			this.$refs.viewport?.rotateModel(axis, 90)
+		},
+		onLayFlat() {
+			void this.$refs.viewport?.layFlatMesh()
+		},
+		onScaleToFit() {
+			void this.$refs.viewport?.scaleToFitMesh()
+		},
+		onAutoOrient() {
+			void this.$refs.viewport?.autoOrientMesh()
+		},
+		onAnalyzeMesh() {
+			void this.$refs.viewport?.analyzeCurrentMesh()
+		},
+		onRepairMesh() {
+			void this.$refs.viewport?.repairCurrentMesh()
+		},
+		onApplyMesh() {
+			void this.$refs.viewport?.applyToSlice()
+		},
+		onScalePercent(factor) {
+			this.$refs.viewport?.applyScalePercent(factor)
+		},
+		onRotateDegrees(deg) {
+			this.$refs.viewport?.applyRotationDegrees(deg)
+		},
+		async on3mfSelectionChange() {
+			await this.$refs.viewport?.reloadModelPreview()
+		},
+		onRecentSelect(entry) {
+			void this.printStore.loadRecentModel(entry)
 		},
 		async pickFromFiles() {
-			const file = await pickFileFromNextcloud({
+			const picked = await pickFileFromNextcloud({
 				title: 'Select STL, 3MF, or OBJ',
 				filter: modelFilePickerFilter,
 				canPick: modelFilePickerCanPick,
 			})
-			if (file) {
-				this.printStore.setModel(file, 'files')
+			if (!picked?.file) {
+				return
+			}
+			try {
+				const meta = await resolveFile({ dav_path: picked.davPath })
+				this.printStore.setModel(picked.file, 'files', {
+					file_id: meta?.file_id,
+					dav_path: meta?.dav_path ?? picked.davPath,
+				})
+			} catch {
+				this.printStore.setModel(picked.file, 'files', { dav_path: picked.davPath })
 			}
 		},
 		async reloadProfiles() {
@@ -53,63 +122,145 @@ export default {
 		goToSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
 		},
+		triggerImport() {
+			this.$refs.toolbar?.onImportClick?.()
+		},
+		onChecklistAction(action) {
+			const scrollTo = (refName) => {
+				const el = this.$refs[refName]
+				const node = el?.$el || el
+				node?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+			}
+			if (action === 'model') {
+				scrollTo('importCluster')
+				this.triggerImport()
+				return
+			}
+			if (action === 'mesh') {
+				if (this.printStore.meshState.autoApply) {
+					void this.$refs.viewport?.applyToSlice()
+				} else {
+					this.onApplyMesh()
+				}
+				return
+			}
+			if (action === 'watertight') {
+				scrollTo('meshHealth')
+				return
+			}
+			if (action === 'printer' || action === 'filament' || action === 'process') {
+				scrollTo('profilePicker')
+				this.$refs.profilePicker?.focusField?.(action)
+				return
+			}
+			if (action === 'slicer') {
+				void this.reloadProfiles()
+			}
+		},
 	},
 }
 </script>
 
 <template>
-	<div class="nc-print-prepare">
-		<div
-			v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
-			class="nc-print-health-banner nc-print-health-banner--warn"
-			role="alert">
-			No slicer profiles loaded — check forge-slicer service and Admin settings.
-			<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
-				Retry
-			</button>
-		</div>
+	<PrepareStudioLayout class="nc-print-prepare">
+		<template #left>
+			<div
+				v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
+				class="nc-print-health-banner nc-print-health-banner--warn"
+				role="alert">
+				No slicer profiles loaded — check forge-slicer service and Admin settings.
+				<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
+					Retry
+				</button>
+			</div>
 
-		<PrepareChecklist />
+			<RecentModelsStrip @select="onRecentSelect" />
 
-		<div class="nc-print-card">
-			<h2 class="nc-print-card__title">Profiles</h2>
-			<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
-				Loading profiles from forge-slicer…
-			</p>
-			<ProfilePicker v-else />
-		</div>
+			<div class="nc-print-card">
+				<h2 class="nc-print-card__title">Profiles</h2>
+				<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
+					Loading profiles from forge-slicer…
+				</p>
+				<ProfilePicker v-else ref="profilePicker" />
+			</div>
 
-		<div class="nc-print-import-cluster">
-			<ViewportToolbar
-				:can-center="printStore.hasModel"
-				@import="onToolbarImport"
-				@center="onCenter"
-				@clear="onClear" />
-			<button type="button" class="nc-print-btn" @click="pickFromFiles">
-				From Files
-			</button>
-		</div>
+			<PrepareOverrides v-if="printStore.profiles.loaded" />
 
-		<div class="nc-print-viewport-wrap">
-			<ModelViewport
-				ref="viewport"
-				:file="printStore.model.file"
-				:build-volume="buildVolume"
-				@file="onViewportFile" />
-			<CameraPip v-if="printStore.activeTab === 'prepare'" :config="printStore.config" />
-		</div>
+			<ThreeMfObjectPicker @selection-change="on3mfSelectionChange" />
 
-		<div class="nc-print-prepare-footer">
-			<button
-				type="button"
-				class="nc-print-btn nc-print-btn--primary"
-				:disabled="!printStore.prepareComplete"
-				:title="nextSliceTitle"
-				@click="goToSlice">
-				Next to Slice →
-			</button>
-		</div>
-	</div>
+			<div ref="meshHealth">
+				<MeshHealthPanel
+					:disabled="!canTransform"
+					@analyze="onAnalyzeMesh"
+					@repair="onRepairMesh"
+					@auto-orient="onAutoOrient" />
+			</div>
+
+			<PreciseTransformPanel
+				:disabled="!canTransform"
+				@scale-percent="onScalePercent"
+				@rotate-degrees="onRotateDegrees" />
+		</template>
+
+		<template #center>
+			<PrepareEmptyState v-if="!printStore.hasModel">
+				<template #actions>
+					<button type="button" class="nc-print-btn nc-print-btn--primary" @click="triggerImport">
+						Import model
+					</button>
+					<button type="button" class="nc-print-btn" @click="pickFromFiles">
+						From Files
+					</button>
+				</template>
+			</PrepareEmptyState>
+
+			<div ref="importCluster" class="nc-print-import-cluster">
+				<ViewportToolbar
+					ref="toolbar"
+					:can-center="printStore.hasModel"
+					:can-transform="canTransform"
+					@import="onToolbarImport"
+					@center="onCenter"
+					@rotate="onRotate"
+					@lay-flat="onLayFlat"
+					@scale-to-fit="onScaleToFit"
+					@auto-orient="onAutoOrient"
+					@apply="onApplyMesh" />
+				<button type="button" class="nc-print-btn" @click="pickFromFiles">
+					From Files
+				</button>
+			</div>
+
+			<div class="nc-print-viewport-wrap nc-print-viewport-wrap--studio">
+				<ModelViewport
+					ref="viewport"
+					:file="printStore.model.file"
+					:build-volume="buildVolume" />
+				<CameraPip
+					v-if="printStore.activeTab === 'prepare'"
+					:config="printStore.config"
+					:printer-id="printStore.selectedPrinterId"
+					draggable />
+			</div>
+		</template>
+
+		<template #right>
+			<PrepareChecklist @action="onChecklistAction" />
+
+			<SliceSummaryCard />
+
+			<div class="nc-print-prepare-footer">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:disabled="!printStore.prepareComplete"
+					:title="nextSliceTitle"
+					@click="goToSlice">
+					Next to Slice →
+				</button>
+			</div>
+		</template>
+	</PrepareStudioLayout>
 </template>
 
 <style scoped>
@@ -132,14 +283,18 @@ export default {
 	margin-bottom: 0;
 }
 
+.nc-print-viewport-wrap--studio {
+	min-height: 420px;
+}
+
+.nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {
+	height: 420px;
+	min-height: 420px;
+}
+
 .nc-print-prepare-footer {
-	background: color-mix(in srgb, var(--nc-gcs-bg-app) 92%, transparent);
-	border-top: 1px solid var(--nc-gcs-border);
-	bottom: 0;
 	margin-top: auto;
-	padding: var(--nc-gcs-space-md) 0 var(--nc-gcs-space-sm);
-	position: sticky;
-	z-index: 2;
+	padding-top: var(--nc-gcs-space-md);
 }
 
 .nc-print-link-btn {

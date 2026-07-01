@@ -1,5 +1,6 @@
 /node_modules/
 /vendor/
 .phpunit.result.cache
+.vitest-gate-stamp
 *.map
 .DS_Store

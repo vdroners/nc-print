@@ -99,4 +99,12 @@ class FilesController extends Controller
 			return new JSONResponse(['error' => 'fetch_failed'], Http::STATUS_INTERNAL_SERVER_ERROR);
 		}
 	}
+
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function saveGcode(): Http\Response
+	{
+		$controller = new GcodeSaveController($this->request, $this->access, $this->files);
+		return $controller->saveGcode();
+	}
 }

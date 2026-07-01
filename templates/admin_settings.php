@@ -8,6 +8,7 @@ $keys = [
 	ConfigService::KEY_MOONRAKER_CAMERA_URL,
 	ConfigService::KEY_PRINTER_DISPLAY_NAME,
 	ConfigService::KEY_ALLOWED_GROUPS,
+	ConfigService::KEY_MULTI_PRINTERS,
 	ConfigService::KEY_SLICER_ENABLED,
 	ConfigService::KEY_MOONRAKER_ENABLED,
 ];
@@ -49,6 +50,13 @@ $saveUrl = htmlspecialchars((string)($_['save_url'] ?? ''), ENT_QUOTES, 'UTF-8')
 			<span>Allowed groups (comma-separated)</span>
 			<input type="text" name="<?php echo ConfigService::KEY_ALLOWED_GROUPS; ?>" value="<?php echo htmlspecialchars((string)$_['allowed_groups'], ENT_QUOTES, 'UTF-8'); ?>">
 		</label>
+		<label>
+			<span>Multi-printer config (JSON array)</span>
+			<textarea name="<?php echo ConfigService::KEY_MULTI_PRINTERS; ?>" rows="6" placeholder='[{"id":"k1","name":"K1 Max","moonraker_url":"http://10.0.0.210:7125","camera_url":"http://10.0.0.210:8080/?action=snapshot","default":true}]'><?php echo htmlspecialchars((string)($_['multi_printers'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+		</label>
+		<p class="settings-hint">
+			Each entry: <code>id</code>, <code>name</code>, <code>moonraker_url</code>, optional <code>moonraker_ws_url</code>, <code>camera_url</code>, <code>default</code>.
+		</p>
 		<label class="checkbox">
 			<input type="checkbox" name="<?php echo ConfigService::KEY_SLICER_ENABLED; ?>" value="yes" <?php echo !empty($_['slicer_enabled']) ? 'checked' : ''; ?>>
 			<span>Slicer enabled</span>

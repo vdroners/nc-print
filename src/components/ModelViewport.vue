@@ -2,8 +2,16 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { createViewport } from '@/three/viewport.js'
-import { toastError } from '@/services/toast.js'
+import { toastError, toastInfo, toastSuccess } from '@/services/toast.js'
 import { isModelFilename } from '@/shared/modelFileNode.js'
+import {
+	analyzeMesh,
+	autoOrient,
+	autoRepair,
+	layFlat,
+	scaleToFitBed,
+	applyUniformScale,
+} from '@/services/mesh-analyze.js'
 
 export default {
 	name: 'ModelViewport',
@@ -25,6 +33,7 @@ export default {
 			previewSkipped: false,
 			loadError: '',
 			loading: false,
+			_transformSyncTimer: null,
 		}
 	},
 	computed: {
@@ -70,6 +79,7 @@ export default {
 			this.viewport.setBedVolume(this.buildVolume)
 			this.viewportReady = true
 			this.viewportError = ''
+			this._restoreSavedTransform()
 			await this.flushPendingLoad()
 		} catch (e) {
 			this.viewportError = e?.message || 'WebGL viewport unavailable'
@@ -77,9 +87,47 @@ export default {
 		}
 	},
 	beforeDestroy() {
+		if (this._transformSyncTimer) {
+			clearTimeout(this._transformSyncTimer)
+		}
 		this.viewport?.dispose()
 	},
 	methods: {
+		_restoreSavedTransform() {
+			const mt = this.printStore.meshState
+			if (!this.viewport?.setTransform || !this.file) {
+				return
+			}
+			if (mt.position || mt.rotation || mt.scale) {
+				this.viewport.setTransform({
+					position: mt.position,
+					rotation: mt.rotation,
+					scale: mt.scale,
+				})
+			}
+		},
+		_scheduleTransformSync() {
+			if (this._transformSyncTimer) {
+				clearTimeout(this._transformSyncTimer)
+			}
+			this._transformSyncTimer = setTimeout(() => {
+				this._syncTransformFromViewport()
+			}, 150)
+		},
+		_syncTransformFromViewport() {
+			if (!this.viewport?.getTransform) {
+				return
+			}
+			const transform = this.viewport.getTransform()
+			if (!transform) {
+				return
+			}
+			this.printStore.setMeshTransform(transform)
+			this.printStore.markMeshDirty()
+			if (this.printStore.meshState.autoApply) {
+				void this.applyToSlice({ silent: true })
+			}
+		},
 		queueLoad(file) {
 			this.pendingFile = file || null
 			this.loadError = ''
@@ -103,14 +151,20 @@ export default {
 			this.previewSkipped = false
 			this.hasMesh = false
 			try {
-				const meta = await this.viewport.loadModel(file)
+				const loadOptions = this.loadOptionsForFile(file)
+				const meta = await this.viewport.loadModel(file, loadOptions)
 				if (meta?.previewSkipped) {
 					this.previewSkipped = true
 					this.hasMesh = false
 				} else {
 					this.hasMesh = true
+					this._restoreSavedTransform()
 				}
 				this.printStore.setModelMeta(meta)
+				if (this.hasMesh) {
+					void this.analyzeCurrentMesh()
+					await this._applyAfterLoad()
+				}
 			} catch (e) {
 				this.loadError = e?.message || 'Could not load model preview'
 				this.hasMesh = false
@@ -124,6 +178,145 @@ export default {
 		},
 		recenter() {
 			this.viewport?.recenter()
+			this._scheduleTransformSync()
+		},
+		rotateModel(axis, degrees = 90) {
+			this.viewport?.rotateModel(axis, degrees)
+			this._scheduleTransformSync()
+		},
+		applyScalePercent(factor) {
+			if (!this.viewport?.scaleModelUniform || !Number.isFinite(factor) || factor <= 0) {
+				return
+			}
+			this.viewport.scaleModelUniform(factor)
+			this._scheduleTransformSync()
+		},
+		applyRotationDegrees({ x = 0, y = 0, z = 0 } = {}) {
+			if (x) {
+				this.rotateModel('x', x)
+			}
+			if (y) {
+				this.rotateModel('y', y)
+			}
+			if (z) {
+				this.rotateModel('z', z)
+			}
+		},
+		async layFlatMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const flat = layFlat(mesh.positions, mesh.indices)
+			await this.applyMeshSnapshot({ positions: flat.positions, indices: mesh.indices })
+			const result = analyzeMesh(flat.positions, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess('Largest face placed on bed')
+			return true
+		},
+		async applyToSlice(options = {}) {
+			return this.printStore.applyMeshToSlice(this.viewport, options)
+		},
+		async _applyAfterLoad() {
+			if (!this.viewport?.recenter) {
+				return
+			}
+			this.viewport.recenter()
+			this._syncTransformFromViewportImmediate()
+			if (this.printStore.meshState.autoApply) {
+				await this.applyToSlice({ silent: true })
+			} else {
+				this.printStore.markMeshDirty()
+			}
+		},
+		_syncTransformFromViewportImmediate() {
+			if (!this.viewport?.getTransform) {
+				return
+			}
+			const transform = this.viewport.getTransform()
+			if (transform) {
+				this.printStore.setMeshTransform(transform)
+			}
+		},
+		loadOptionsForFile(file) {
+			if (!file?.name?.toLowerCase().endsWith('.3mf')) {
+				return {}
+			}
+			const ids = this.printStore.threeMfSelectedIds
+			return ids?.length ? { selectedIds: ids } : {}
+		},
+		async reloadModelPreview() {
+			if (!this.file || !this.viewportReady) {
+				return
+			}
+			await this.flushPendingLoad()
+		},
+		async getMeshSnapshot() {
+			return this.viewport?.exportTransformedMesh?.() || null
+		},
+		async applyMeshSnapshot(mesh) {
+			if (!mesh?.positions || !mesh?.indices) {
+				return false
+			}
+			const meta = this.viewport?.setMeshData(mesh)
+			if (meta) {
+				this.printStore.setModelMeta(meta)
+			}
+			this._scheduleTransformSync()
+			return true
+		},
+		async analyzeCurrentMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return null
+			}
+			const result = analyzeMesh(mesh.positions, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			return result
+		},
+		async repairCurrentMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const repaired = autoRepair(mesh.positions, mesh.indices)
+			await this.applyMeshSnapshot(repaired)
+			const result = analyzeMesh(repaired.positions, repaired.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess(`Repair welded ${repaired.stats.weldedVertices} verts, removed ${repaired.stats.removedDegenerate} tris`)
+			return true
+		},
+		async autoOrientMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const before = this.printStore.meshHealth.analyzed
+				? this.printStore.meshHealth.overhangPct
+				: analyzeMesh(mesh.positions, mesh.indices).overhangPct
+			const oriented = autoOrient(mesh.positions, mesh.indices)
+			await this.applyMeshSnapshot({ positions: oriented.positions, indices: mesh.indices })
+			const result = analyzeMesh(oriented.positions, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess(`Auto-orient (${oriented.label}): overhang ${before}% → ${result.overhangPct}%`)
+			return true
+		},
+		async scaleToFitMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const factor = scaleToFitBed(mesh.bbox, this.buildVolume)
+			if (factor >= 0.999) {
+				toastInfo('Model already fits the build volume')
+				return false
+			}
+			const scaled = applyUniformScale(mesh.positions, factor)
+			await this.applyMeshSnapshot({ positions: scaled, indices: mesh.indices })
+			const result = analyzeMesh(scaled, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess(`Scaled to ${Math.round(factor * 100)}% to fit bed`)
+			return true
 		},
 		onDrop(e) {
 			e.preventDefault()
@@ -165,7 +358,7 @@ export default {
 			Loading preview…
 		</div>
 		<div v-if="showPreviewSkipped" class="nc-print-viewport-info">
-			<strong>{{ file.name }}</strong> loaded — bed preview is STL-only; slicing still works on the server.
+			<strong>{{ file.name }}</strong> loaded — preview unavailable for this format.
 		</div>
 		<div v-if="showLoadError" class="nc-print-viewport-error nc-print-viewport-error--inline">
 			Preview failed: {{ loadError }}. You can still slice on the Slice tab.
@@ -174,6 +367,20 @@ export default {
 			v-if="printStore.modelMeta.bbox && !printStore.modelMeta.fitsBed"
 			class="nc-print-viewport-warn">
 			Model may exceed build volume
+		</div>
+		<div v-if="printStore.meshState.dirty && !printStore.meshState.autoApply" class="nc-print-viewport-warn nc-print-viewport-warn--dirty">
+			Transform not applied to slice mesh
+			<button type="button" class="nc-print-link-btn" @click="applyToSlice">Apply to slice</button>
+		</div>
+		<div
+			v-else-if="printStore.meshState.applying"
+			class="nc-print-viewport-applied nc-print-viewport-applied--pending">
+			Applying…
+		</div>
+		<div
+			v-else-if="printStore.meshState.appliedAt && !printStore.meshState.dirty"
+			class="nc-print-viewport-applied">
+			Applied
 		</div>
 		<div v-if="printStore.modelMeta.bbox" class="nc-print-viewport-meta">
 			{{ Math.round(printStore.modelMeta.bbox.x) }}×{{ Math.round(printStore.modelMeta.bbox.y) }}×{{ Math.round(printStore.modelMeta.bbox.z) }} mm
@@ -259,6 +466,33 @@ export default {
 	position: absolute;
 	top: 8px;
 	z-index: 2;
+}
+
+.nc-print-viewport-warn--dirty {
+	background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 22%, transparent);
+	color: var(--nc-gcs-text-primary);
+	top: 36px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.nc-print-viewport-applied {
+	background: color-mix(in srgb, var(--nc-app-accent) 22%, transparent);
+	border-radius: var(--nc-gcs-radius-sm);
+	color: var(--nc-app-accent);
+	font-size: var(--nc-gcs-text-sm);
+	font-weight: 600;
+	left: 8px;
+	padding: 4px 10px;
+	position: absolute;
+	top: 36px;
+	z-index: 2;
+}
+
+.nc-print-viewport-applied--pending {
+	opacity: 0.85;
 }
 
 .nc-print-viewport-meta {

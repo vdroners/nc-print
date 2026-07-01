@@ -196,10 +196,10 @@ class SlicerProxyController extends Controller
 	private function resolveUpstreamPath(string $safePath): string
 	{
 		if ($safePath === 'slice/stream' || str_ends_with($safePath, '/slice/stream')) {
-			return 'api/slice';
+			return 'api/slice/stream';
 		}
 		if ($safePath === '' || str_starts_with($safePath, 'api/')) {
-			return $safePath === 'api/slice/stream' ? 'api/slice' : $safePath;
+			return $safePath;
 		}
 		return 'api/' . ltrim($safePath, '/');
 	}
@@ -211,7 +211,7 @@ class SlicerProxyController extends Controller
 
 	private function shouldStreamSse(string $upstreamPath, string $safePath, string $method): bool
 	{
-		if ($upstreamPath === 'api/slice' && strtoupper($method) === 'POST') {
+		if ($upstreamPath === 'api/slice/stream' && strtoupper($method) === 'POST') {
 			return true;
 		}
 		if ($safePath === 'slice/stream' || $upstreamPath === 'api/slice/stream') {
@@ -261,8 +261,11 @@ class SlicerProxyController extends Controller
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, false);
 		curl_setopt($ch, CURLOPT_TIMEOUT, 0);
 		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
-		curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 1);
-		curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 120);
+		// Orca can go quiet for several minutes during heavy meshes; do not
+		// abort the upstream SSE when bytes stall (default 120 s was cutting
+		// off the final `done` event mid-slice).
+		curl_setopt($ch, CURLOPT_LOW_SPEED_LIMIT, 0);
+		curl_setopt($ch, CURLOPT_LOW_SPEED_TIME, 0);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, $forwardHeaders);
 		if ($body !== null && $body !== '') {
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
@@ -279,7 +282,23 @@ class SlicerProxyController extends Controller
 			return strlen($data);
 		});
 
-		curl_exec($ch);
+		$ok = curl_exec($ch);
+		if ($ok === false) {
+			$curlError = curl_error($ch);
+			$this->logger->error('Slicer SSE proxy cURL error', [
+				'error' => $curlError,
+				'url' => $url,
+			]);
+			echo "event: error\n";
+			echo 'data: ' . json_encode([
+				'message' => $curlError ?: 'upstream stream closed',
+				'code' => 'proxy_stream_error',
+			], JSON_THROW_ON_ERROR) . "\n\n";
+			if (ob_get_level()) {
+				ob_flush();
+			}
+			flush();
+		}
 		curl_close($ch);
 		exit(0);
 	}
@@ -307,7 +326,7 @@ class SlicerProxyController extends Controller
 
 	private function shouldConvertOctetStreamSlice(string $safePath, string $upstreamPath, string $method): bool
 	{
-		if (strtoupper($method) !== 'POST' || $upstreamPath !== 'api/slice') {
+		if (strtoupper($method) !== 'POST' || $upstreamPath !== 'api/slice/stream') {
 			return false;
 		}
 		if ($safePath !== 'slice/stream' && !str_ends_with($safePath, '/slice/stream') && $safePath !== 'api/slice/stream') {

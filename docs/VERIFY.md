@@ -1,6 +1,8 @@
-# Verify — NC Print v1.3.1
+# Verify — NC Print v1.3.3
 
 Signed off: **2026-06-30** (UTC) — lab server 10.0.0.84, `cloud_app` + forge-slicer + K1 Moonraker.
+
+**v1.3.3:** SSE smoke validation (`print-smoke-slice.sh`), G18/G19 run vitest in gates, ASCII STL metadata guard, G-code preview 5 MB cap. **NS12 still NOT RUN** (manual viewport + E2E).
 
 **v1.3.1:** Viewport load fix, PrepareChecklist, workflow gates, sticky CTAs, Help Services tab, G17–G19. Re-run **NS12.15–NS12.18** (viewport + E2E workflow).
 
@@ -48,7 +50,7 @@ From Docker, slicer health uses `InternalUrlResolver` → `http://10.0.0.84:8082
 | **NS7** | Build + unit tests | **PASS** | 2026-07-01T01:15Z | See NS7.x |
 | NS7.1 | `make build` | **PASS** | 2026-07-01T01:15Z | Webpack exit 0 |
 | NS7.2 | PHPUnit | **PASS** | 2026-07-01T01:15Z | 10/10 via `make run-phpunit` (Docker php:8.2-cli) |
-| NS7.3 | `npm run test` | **PASS** | 2026-07-01T01:15Z | Vitest 9/9 |
+| NS7.3 | `npm run test` | **PASS** | 2026-07-01T01:15Z | Vitest (see v1.3.3 gate run) |
 | NS7.4 | `make gate-preflight` | **PASS** | 2026-07-01T01:15Z | preflight + phpunit + vitest + build exit 0 |
 | NS7.5 | CI green | **PENDING** | — | Push commit; verify GitHub Actions |
 | **NS8** | Security | **PARTIAL** | 2026-07-01T01:15Z | G08/G13 allowlist regression PASS; full NS8.1–8.8 manual |
@@ -63,7 +65,7 @@ From Docker, slicer health uses `InternalUrlResolver` → `http://10.0.0.84:8082
 | NS11.1 | `make deploy` | **PASS** | 2026-07-01T01:15Z | |
 | NS11.2 | `print-preflight.sh` | **PASS** | 2026-07-01T01:15Z | |
 | NS11.3 | `print-api-gates.php` | **PASS** | 2026-07-01T01:15Z | G00–G15 all PASS |
-| **NS12** | UX + visual acceptance | **NOT RUN** | — | Blocked at Nextcloud login in automated browser; NS12.1–12.9 manual |
+| **NS12** | UX + visual acceptance | **NOT RUN** | — | v1.3.3: still blocked at Nextcloud login in automated browser; NS12.1–12.9 manual |
 | NS12.10 | Scroll + pinned workflow banner | **NOT RUN** | — | Slice tab with overrides expanded: banner stays visible; bottom buttons reachable via tab scroll |
 | NS12.11 | Files app Open action | **NOT RUN** | — | Right-click STL/G-code → Open in NC 3D Print; G-code opens Print tab |
 | NS12.12 | Sticky Prepare CTA | **NOT RUN** | — | "Next to Slice" visible without scrolling past viewport |
@@ -80,7 +82,7 @@ Run **2026-07-01T01:15Z** inside `cloud_app`:
 
 ```
 G00 PASS nc_print installed
-G01 PASS version=1.0.0
+G01 PASS version=1.3.3
 G02 PASS slicer_url set
 G03 PASS moonraker_url set
 G04 PASS health ok
@@ -97,8 +99,8 @@ G14 PASS http=401 fallback=ApiController
 G15 PASS admin_can_use=1 ws_ticket=yes
 G16 PASS nc_print-files-action.mjs
 G17 PASS viewport.js + three chunk
-G18 PASS vitest viewport-stl (npm run test)
-G19 PASS vitest prepare-workflow (npm run test)
+G18 PASS vitest exit 0 (viewport-stl + suite)
+G19 PASS vitest exit 0 (prepare-workflow + suite)
 ```
 
 ## Preflight static

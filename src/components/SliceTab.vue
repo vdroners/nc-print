@@ -1,15 +1,28 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
-import { previewUrl } from '@/services/slicer-api.js'
 import PrepareChecklist from './PrepareChecklist.vue'
-import SliceResultPanel from './SliceResultPanel.vue'
+import SliceReviewPanel from './SliceReviewPanel.vue'
+import SliceResultTabs from './SliceResultTabs.vue'
+import JobHistoryPanel from './JobHistoryPanel.vue'
 import ProfileSummaryChip from './ProfileSummaryChip.vue'
-import GcodePreview from './GcodePreview.vue'
+import PrePrintModal from './PrePrintModal.vue'
+import WorkspaceRail from './WorkspaceRail.vue'
+import ToolpathScrubber from './ToolpathScrubber.vue'
+import { previewUrl } from '@/services/slicer-api.js'
 
 export default {
 	name: 'SliceTab',
-	components: { PrepareChecklist, SliceResultPanel, ProfileSummaryChip, GcodePreview },
+	components: {
+		PrepareChecklist,
+		SliceReviewPanel,
+		SliceResultTabs,
+		JobHistoryPanel,
+		ProfileSummaryChip,
+		PrePrintModal,
+		WorkspaceRail,
+		ToolpathScrubber,
+	},
 	data() {
 		return {
 			abortController: null,
@@ -17,12 +30,6 @@ export default {
 	},
 	computed: {
 		...mapStores(usePrintStore),
-		previewImageUrl() {
-			if (!this.printStore.sliceJob.jobId) {
-				return ''
-			}
-			return previewUrl(this.printStore.sliceJob.jobId)
-		},
 		slicing() {
 			return this.printStore.sliceJob.status === 'running'
 		},
@@ -43,6 +50,12 @@ export default {
 				return this.printStore.sliceBlockReason
 			}
 			return ''
+		},
+		previewImageUrl() {
+			if (!this.printStore.sliceJob.jobId || this.printStore.featureFlags.forgePreview) {
+				return ''
+			}
+			return previewUrl(this.printStore.sliceJob.jobId)
 		},
 	},
 	methods: {
@@ -80,12 +93,31 @@ export default {
 		goPrint() {
 			this.printStore.setActiveTab(TABS.PRINT)
 		},
+		async reloadProfiles() {
+			await this.printStore.loadProfiles()
+		},
+		onChecklistAction(action) {
+			if (action === 'slicer') {
+				void this.reloadProfiles()
+				return
+			}
+			this.printStore.setActiveTab(TABS.PREPARE)
+			window.dispatchEvent(new CustomEvent('nc-print-checklist-action', { detail: { action } }))
+		},
+	},
+	beforeUnmount() {
+		if (this.abortController) {
+			this.printStore.cancelSlice(this.abortController)
+			this.abortController = null
+		}
 	},
 }
 </script>
 
 <template>
-	<div class="nc-print-slice">
+	<WorkspaceRail class="nc-print-slice">
+		<PrePrintModal />
+
 		<div v-if="!printStore.hasModel" class="nc-print-card">
 			<p>No model loaded.</p>
 			<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrepare">
@@ -94,55 +126,21 @@ export default {
 		</div>
 
 		<template v-else>
-			<PrepareChecklist />
+			<PrepareChecklist @action="onChecklistAction" />
 
 			<div class="nc-print-card">
 				<h2 class="nc-print-card__title">Profiles</h2>
 				<ProfileSummaryChip />
 			</div>
 
-			<div class="nc-print-card">
-				<button
-					type="button"
-					class="nc-print-overrides-toggle"
-					@click="printStore.toggleOverridesCollapsed()">
-					Customize (advanced)
-					<span>{{ printStore.overridesCollapsed ? '▸' : '▾' }}</span>
-				</button>
-				<div v-show="!printStore.overridesCollapsed" class="nc-print-overrides-grid">
-					<div class="nc-print-field">
-						<label>Layer height (mm)</label>
-						<input v-model="printStore.overrides.layerHeight" type="number" step="0.01" min="0">
-					</div>
-					<div class="nc-print-field">
-						<label>Line width (mm)</label>
-						<input v-model="printStore.overrides.lineWidth" type="number" step="0.01" min="0">
-					</div>
-					<div class="nc-print-field">
-						<label>Perimeters</label>
-						<input v-model="printStore.overrides.perimeters" type="number" step="1" min="0">
-					</div>
-					<div class="nc-print-field">
-						<label>Infill density (%)</label>
-						<input v-model="printStore.overrides.infillDensity" type="number" step="1" min="0" max="100">
-					</div>
-					<div class="nc-print-field">
-						<label>Print speed (mm/s)</label>
-						<input v-model="printStore.overrides.printSpeed" type="number" step="1" min="0">
-					</div>
-					<div class="nc-print-field">
-						<label>First layer speed (mm/s)</label>
-						<input v-model="printStore.overrides.firstLayerSpeed" type="number" step="1" min="0">
-					</div>
-					<div class="nc-print-field">
-						<label>Nozzle temp (°C)</label>
-						<input v-model="printStore.overrides.nozzleTemp" type="number" step="1">
-					</div>
-					<div class="nc-print-field">
-						<label>Bed temp (°C)</label>
-						<input v-model="printStore.overrides.bedTemp" type="number" step="1">
-					</div>
-				</div>
+			<SliceReviewPanel />
+
+			<div class="nc-print-card nc-print-card--muted">
+				<p style="margin: 0; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted);">
+					Layer height, speeds, and temps are set on the
+					<button type="button" class="nc-print-link-btn" @click="goPrepare">Prepare</button>
+					tab under <strong>Override settings</strong>.
+				</p>
 			</div>
 
 			<div class="nc-print-card">
@@ -151,18 +149,36 @@ export default {
 					{{ printStore.model.name }}
 				</p>
 
-				<div v-if="slicing" class="nc-print-progress">
+				<div
+					v-if="slicing"
+					class="nc-print-progress"
+					role="progressbar"
+					:aria-valuenow="printStore.sliceJob.pct"
+					aria-valuemin="0"
+					aria-valuemax="100"
+					:aria-label="printStore.sliceStageLabel">
 					<div class="nc-print-progress__bar" :style="{ width: printStore.sliceJob.pct + '%' }" />
 				</div>
 				<p v-if="slicing" style="font-size: var(--nc-gcs-text-sm); margin: 8px 0 0;">
-					{{ printStore.sliceJob.stage || 'slicing' }} — {{ printStore.sliceJob.pct }}%
+					{{ printStore.sliceStageLabel }} — {{ printStore.sliceJob.pct }}%
 					<span v-if="printStore.sliceJob.totalLayers">
 						· layer {{ printStore.sliceJob.layer }}/{{ printStore.sliceJob.totalLayers }}
 					</span>
 				</p>
-				<p v-if="printStore.sliceJob.status === 'error'" style="color: var(--nc-gcs-danger-soft);">
-					{{ printStore.sliceJob.error }}
-				</p>
+				<div v-if="printStore.sliceJob.status === 'error'" class="nc-print-slice-error">
+					<p style="color: var(--nc-gcs-danger-soft); margin: 0;">
+						{{ printStore.sliceJob.error }}
+					</p>
+					<button
+						type="button"
+						class="nc-print-btn nc-print-btn--primary"
+						style="margin-top: 8px;"
+						:disabled="sliceActionsDisabled"
+						:title="sliceDisabledTitle"
+						@click="onSliceOnly">
+						Retry slice
+					</button>
+				</div>
 
 				<p v-if="sliceBlockReason && !slicing" style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-warning, #eab308); margin: 0 0 8px;">
 					{{ sliceBlockReason }}
@@ -195,7 +211,7 @@ export default {
 				</div>
 			</div>
 
-			<SliceResultPanel />
+			<SliceResultTabs />
 
 			<div v-if="printStore.sliceComplete" class="nc-print-actions nc-print-slice-handoff">
 				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrint">
@@ -203,41 +219,25 @@ export default {
 				</button>
 			</div>
 
+			<JobHistoryPanel />
+		</template>
+
+		<template #rail>
 			<div v-if="previewImageUrl && printStore.sliceJob.status === 'done'" class="nc-print-card">
 				<h2 class="nc-print-card__title">Preview</h2>
 				<img
 					:src="previewImageUrl"
 					alt="Slice preview"
-					style="max-width: 100%; border-radius: var(--nc-gcs-radius-sm);">
+					class="nc-print-slice-preview-img">
 			</div>
-
-			<GcodePreview :gcode-blob="printStore.sliceJob.gcodeBlob" />
+			<div class="nc-print-card nc-print-rail-toolpath">
+				<ToolpathScrubber :gcode-blob="printStore.sliceJob.gcodeBlob" />
+			</div>
 		</template>
-	</div>
+	</WorkspaceRail>
 </template>
 
 <style scoped>
-.nc-print-overrides-toggle {
-	appearance: none;
-	background: transparent;
-	border: none;
-	color: var(--nc-gcs-text-primary);
-	cursor: pointer;
-	font-family: inherit;
-	font-size: var(--nc-gcs-text-base);
-	font-weight: 600;
-	padding: 0;
-	width: 100%;
-	text-align: left;
-}
-
-.nc-print-overrides-grid {
-	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-	gap: var(--nc-gcs-space-sm);
-	margin-top: var(--nc-gcs-space-md);
-}
-
 .nc-print-link-btn {
 	appearance: none;
 	background: none;
@@ -251,5 +251,17 @@ export default {
 
 .nc-print-slice-handoff {
 	margin-top: var(--nc-gcs-space-md);
+}
+
+.nc-print-slice-preview-img {
+	border-radius: var(--nc-gcs-radius-sm);
+	max-width: 100%;
+}
+
+.nc-print-rail-toolpath {
+	display: flex;
+	flex: 1 1 auto;
+	flex-direction: column;
+	min-height: 280px;
 }
 </style>

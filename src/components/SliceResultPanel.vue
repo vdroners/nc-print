@@ -1,10 +1,13 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
-import { formatPrintTime } from '@/services/slicer-utils.js'
+import { formatPrintTime, mergeProfileSettings, estimateFilamentCost, resolveFilamentPricePerKg } from '@/services/slicer-utils.js'
 
 export default {
 	name: 'SliceResultPanel',
+	props: {
+		embedded: { type: Boolean, default: false },
+	},
 	computed: {
 		...mapStores(usePrintStore),
 		job() {
@@ -41,18 +44,69 @@ export default {
 			}
 			return this.filamentBreakdown.reduce((sum, row) => sum + row.grams, 0)
 		},
+		materialStats() {
+			return this.job.materialStats || {}
+		},
+		hasMaterialStats() {
+			const s = this.materialStats
+			return s.supportFilamentG != null
+				|| s.supportTimeS != null
+				|| s.modelFilamentG != null
+				|| s.supportFilamentUsedG != null
+		},
+		canSaveToFiles() {
+			return !!this.job.gcodeBlob
+				&& (this.printStore.model.fileId || this.printStore.model.davPath)
+		},
+		savingGcode() {
+			return this.printStore.savingGcode
+		},
+		filamentPricePerKg() {
+			const filament = (this.printStore.profiles.filaments || [])
+				.find(f => String(f.id) === String(this.printStore.selection.filamentId))
+			const settings = filament?.settings_json
+				? (typeof filament.settings_json === 'object'
+					? filament.settings_json
+					: (() => {
+						try {
+							return JSON.parse(filament.settings_json)
+						} catch {
+							return {}
+						}
+					})())
+				: {}
+			return resolveFilamentPricePerKg(this.printStore.config, settings)
+		},
+		filamentCostEstimate() {
+			return estimateFilamentCost(this.filamentBreakdownTotal, this.filamentPricePerKg)
+		},
+		filamentCostLabel() {
+			if (this.filamentCostEstimate == null) {
+				return null
+			}
+			return `$${this.filamentCostEstimate.toFixed(2)}`
+		},
 	},
 	methods: {
+		formatPrintTime,
 		download() {
 			this.printStore.downloadGcodeLocal()
+		},
+		retryDownload() {
+			void this.printStore.retryDownloadGcode()
+		},
+		saveToFiles() {
+			void this.printStore.saveGcodeToFiles()
 		},
 	},
 }
 </script>
 
 <template>
-	<div v-if="show" class="nc-print-card nc-print-slice-result">
-		<h2 class="nc-print-card__title">Slice result</h2>
+	<div
+		v-if="show"
+		:class="embedded ? 'nc-print-slice-result--embedded' : 'nc-print-card nc-print-slice-result'">
+		<h2 v-if="!embedded" class="nc-print-card__title">Slice result</h2>
 		<dl class="nc-print-slice-result__list">
 			<div v-if="job.layers > 0">
 				<dt>Layers</dt>
@@ -66,6 +120,10 @@ export default {
 				<dt>Filament</dt>
 				<dd>{{ filamentBreakdownTotal.toFixed(2) }} g</dd>
 			</div>
+			<div v-if="filamentCostLabel">
+				<dt>Est. material cost</dt>
+				<dd>{{ filamentCostLabel }}</dd>
+			</div>
 			<template v-if="filamentBreakdown.length">
 				<div
 					v-for="row in filamentBreakdown"
@@ -73,6 +131,20 @@ export default {
 					class="nc-print-slice-result__tool-row">
 					<dt>Tool {{ row.tool }}</dt>
 					<dd>{{ row.grams.toFixed(2) }} g</dd>
+				</div>
+			</template>
+			<template v-if="hasMaterialStats">
+				<div v-if="materialStats.modelFilamentG != null">
+					<dt>Model filament</dt>
+					<dd>{{ Number(materialStats.modelFilamentG).toFixed(2) }} g</dd>
+				</div>
+				<div v-if="materialStats.supportFilamentG != null || materialStats.supportFilamentUsedG != null">
+					<dt>Support filament</dt>
+					<dd>{{ Number(materialStats.supportFilamentG ?? materialStats.supportFilamentUsedG).toFixed(2) }} g</dd>
+				</div>
+				<div v-if="materialStats.supportTimeS != null">
+					<dt>Support time</dt>
+					<dd>{{ formatPrintTime(materialStats.supportTimeS) }}</dd>
 				</div>
 			</template>
 			<div v-if="gcodeKb">
@@ -87,20 +159,71 @@ export default {
 				<dt>Sent to</dt>
 				<dd>{{ job.sentTo }}{{ job.printing ? ' (printing)' : '' }}</dd>
 			</div>
+			<div v-if="job.savedDavPath">
+				<dt>Saved to Files</dt>
+				<dd>{{ job.savedDavPath }}</dd>
+			</div>
 		</dl>
-		<button
-			v-if="job.gcodeBlob"
-			type="button"
-			class="nc-print-btn"
-			style="width: 100%; margin-top: 8px;"
-			@click="download">
-			Download G-code
-		</button>
+		<p
+			v-if="job.error && !job.gcodeBlob"
+			style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-warning, #eab308); margin: 8px 0 0;">
+			{{ job.error }}
+		</p>
+		<div class="nc-print-slice-result__actions">
+			<button
+				v-if="job.gcodeBlob"
+				type="button"
+				class="nc-print-btn"
+				@click="download">
+				Download G-code
+			</button>
+			<button
+				v-if="canSaveToFiles"
+				type="button"
+				class="nc-print-btn"
+				:disabled="savingGcode"
+				@click="saveToFiles">
+				{{ savingGcode ? 'Saving…' : 'Save to Files' }}
+			</button>
+			<button
+				v-else-if="job.jobId"
+				type="button"
+				class="nc-print-btn"
+				@click="retryDownload">
+				Retry download
+			</button>
+		</div>
+		<p
+			v-if="job.gcodeBlob && !canSaveToFiles"
+			class="nc-print-slice-result__save-hint">
+			Import the model from Nextcloud Files to enable Save to Files.
+		</p>
 	</div>
 </template>
 
 <style scoped>
 .nc-print-slice-result__tool-row dt {
 	padding-left: 12px;
+}
+
+.nc-print-slice-result__actions {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	margin-top: 8px;
+}
+
+.nc-print-slice-result__actions .nc-print-btn {
+	width: 100%;
+}
+
+.nc-print-slice-result__save-hint {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 8px 0 0;
+}
+
+.nc-print-slice-result--embedded .nc-print-slice-result__list {
+	margin: 0;
 }
 </style>

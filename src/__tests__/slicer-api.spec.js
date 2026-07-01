@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
 	parseSseBlock,
 	parseSseChunk,
+	flushSseLeftover,
 	buildSliceOverrides,
 } from '@/services/slicer-utils.js'
 
@@ -63,6 +64,29 @@ describe('parseSseChunk', () => {
 		const second = parseSseChunk('}\n\n', first.leftover)
 		expect(second.events).toHaveLength(1)
 		expect(second.events[0].parsed.message).toBe('fail')
+	})
+})
+
+describe('flushSseLeftover', () => {
+	it('parses a final event block without trailing blank line', () => {
+		const leftover = 'event: done\ndata: {"ok":true,"job_id":"job-99"}'
+		const events = flushSseLeftover(leftover)
+		expect(events).toHaveLength(1)
+		expect(events[0].event).toBe('done')
+		expect(events[0].parsed.job_id).toBe('job-99')
+	})
+
+	it('returns empty array for blank leftover', () => {
+		expect(flushSseLeftover('')).toEqual([])
+		expect(flushSseLeftover('   \n')).toEqual([])
+	})
+
+	it('recovers job_id from progress events in trailing leftover', () => {
+		const leftover = 'event: progress\ndata: {"stage":"gcode","pct":99,"job_id":"job-from-progress"}'
+		const events = flushSseLeftover(leftover)
+		expect(events).toHaveLength(1)
+		expect(events[0].event).toBe('progress')
+		expect(events[0].parsed.job_id).toBe('job-from-progress')
 	})
 })
 

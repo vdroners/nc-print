@@ -3,9 +3,10 @@ import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import PrintAppShell from './components/PrintAppShell.vue'
 import ServiceHealthBanner from './components/ServiceHealthBanner.vue'
-import JobSummaryStrip from './components/JobSummaryStrip.vue'
 import PrintWorkflowBanner from './components/PrintWorkflowBanner.vue'
 import HelpDrawer from './components/HelpDrawer.vue'
+import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
+import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
 
 const PrepareTab = () => import(/* webpackChunkName: "nc-print-prepare" */ './components/PrepareTab.vue')
 const SliceTab = () => import(/* webpackChunkName: "nc-print-slice" */ './components/SliceTab.vue')
@@ -16,7 +17,6 @@ export default {
 	components: {
 		PrintAppShell,
 		ServiceHealthBanner,
-		JobSummaryStrip,
 		PrintWorkflowBanner,
 		HelpDrawer,
 		PrepareTab,
@@ -29,7 +29,7 @@ export default {
 			TABS,
 			version: typeof __NC_PRINT_FRONTEND_VERSION__ !== 'undefined'
 				? __NC_PRINT_FRONTEND_VERSION__
-				: '1.3.1',
+				: '1.8.0',
 		}
 	},
 	computed: {
@@ -54,13 +54,70 @@ export default {
 		this.printStore.startPrinterPolling()
 		await this.printStore.bootstrapDeepLink()
 	},
+	mounted() {
+		window.addEventListener('keydown', this.onGlobalKeydown)
+	},
 	beforeDestroy() {
+		window.removeEventListener('keydown', this.onGlobalKeydown)
 		this.printStore.stopPrinterPolling()
 		this.printStore.stopStatusPolling()
 	},
 	methods: {
 		openHelp() {
 			this.helpOpen = true
+		},
+		onGlobalKeydown(e) {
+			if (e.target?.closest('input, textarea, select, [contenteditable="true"]')) {
+				return
+			}
+			const mod = e.ctrlKey || e.metaKey
+			if (mod && e.key.toLowerCase() === 'o') {
+				e.preventDefault()
+				void this.importModelShortcut()
+				return
+			}
+			if (mod && e.key === 'Enter') {
+				e.preventDefault()
+				void this.sliceShortcut()
+				return
+			}
+			if (e.key === '1') {
+				this.printStore.setActiveTab(TABS.PREPARE)
+			} else if (e.key === '2') {
+				this.printStore.setActiveTab(TABS.SLICE)
+			} else if (e.key === '3') {
+				this.printStore.setActiveTab(TABS.PRINT)
+			} else if (e.key.toLowerCase() === 'r' && !mod) {
+				this.recenterShortcut()
+			}
+		},
+		async importModelShortcut() {
+			const file = await pickFileFromNextcloud({
+				title: 'Select STL, 3MF, or OBJ',
+				filter: modelFilePickerFilter,
+				canPick: modelFilePickerCanPick,
+			})
+			if (file) {
+				this.printStore.setModel(file, 'files')
+				this.printStore.setActiveTab(TABS.PREPARE)
+			}
+		},
+		async sliceShortcut() {
+			if (this.printStore.activeTab === TABS.SLICE && this.printStore.hasModel && !this.printStore.sliceBlockReason) {
+				try {
+					await this.printStore.sliceOnly({})
+				} catch {
+					// store toasts
+				}
+			} else if (this.printStore.prepareComplete) {
+				this.printStore.setActiveTab(TABS.SLICE)
+			}
+		},
+		recenterShortcut() {
+			if (this.printStore.activeTab !== TABS.PREPARE) {
+				return
+			}
+			window.dispatchEvent(new CustomEvent('nc-print-recenter'))
 		},
 	},
 }
@@ -90,7 +147,6 @@ export default {
 		<div class="nc-print-chrome">
 			<PrintWorkflowBanner />
 			<ServiceHealthBanner />
-			<JobSummaryStrip />
 		</div>
 
 		<div

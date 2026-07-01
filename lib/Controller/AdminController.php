@@ -34,6 +34,7 @@ class AdminController extends Controller
 			ConfigService::KEY_MOONRAKER_CAMERA_URL,
 			ConfigService::KEY_PRINTER_DISPLAY_NAME,
 			ConfigService::KEY_ALLOWED_GROUPS,
+			ConfigService::KEY_MULTI_PRINTERS,
 		];
 		foreach ($stringKeys as $key) {
 			if (array_key_exists($key, $params)) {

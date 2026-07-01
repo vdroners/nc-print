@@ -6,12 +6,18 @@ import {
 	mergedToOverrideForm,
 	pickDefaultProfileId,
 	parseStlMetadata,
+	mapSliceStageLabel,
+	parseExtruderCount,
+	resolveFilamentIds,
 } from '@/services/slicer-utils.js'
 import { fetchState, uploadAndStart as moonrakerUpload } from '@/services/moonraker-api.js'
+import { MoonrakerWsClient } from '@/services/moonraker-ws.js'
 import { fetchConfig } from '@/services/config-api.js'
 import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
+import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
+import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
 
 export const TABS = {
@@ -21,6 +27,12 @@ export const TABS = {
 }
 
 const PREFS_KEY = 'nc_print_prefs_v1'
+const JOB_HISTORY_KEY = 'nc_print_job_history_v1'
+const RECENT_MODELS_KEY = 'nc_print_recent_models_v1'
+const JOB_HISTORY_MAX = 20
+const RECENT_MODELS_MAX = 5
+const PRESETS_KEY = 'nc_print_presets_v1'
+const NOTIF_PROMPT_KEY = 'nc_print_notif_prompted_v1'
 
 function loadPrefs() {
 	try {
@@ -36,6 +48,94 @@ function savePrefs(partial) {
 		localStorage.setItem(PREFS_KEY, JSON.stringify({ ...cur, ...partial }))
 	} catch {
 		// private browsing
+	}
+}
+
+function loadJobHistory() {
+	try {
+		const rows = JSON.parse(localStorage.getItem(JOB_HISTORY_KEY) || '[]')
+		return Array.isArray(rows) ? rows : []
+	} catch {
+		return []
+	}
+}
+
+function persistJobHistory(rows) {
+	try {
+		localStorage.setItem(JOB_HISTORY_KEY, JSON.stringify(rows.slice(0, JOB_HISTORY_MAX)))
+	} catch {
+		// private browsing
+	}
+}
+
+function loadRecentModels() {
+	try {
+		const rows = JSON.parse(localStorage.getItem(RECENT_MODELS_KEY) || '[]')
+		return Array.isArray(rows) ? rows : []
+	} catch {
+		return []
+	}
+}
+
+function persistRecentModels(rows) {
+	try {
+		localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(rows.slice(0, RECENT_MODELS_MAX)))
+	} catch {
+		// private browsing
+	}
+}
+
+function loadPresets() {
+	try {
+		return JSON.parse(localStorage.getItem(PRESETS_KEY) || '{}')
+	} catch {
+		return {}
+	}
+}
+
+function savePresets(all) {
+	try {
+		localStorage.setItem(PRESETS_KEY, JSON.stringify(all))
+	} catch {
+		// private browsing
+	}
+}
+
+function mapPrinterState(data = {}, lastError = '') {
+	return {
+		connected: !!data.connected,
+		state: data.state || data.status || 'unknown',
+		message: data.message || '',
+		progress: data.progress ?? 0,
+		extruderTemp: data.extruder_temp ?? data.extruderTemp ?? null,
+		extruderTarget: data.extruder_target ?? data.extruderTarget ?? null,
+		extruderPower: data.extruder_power ?? data.extruderPower ?? null,
+		bedTemp: data.bed_temp ?? data.bedTemp ?? null,
+		bedTarget: data.bed_target ?? data.bedTarget ?? null,
+		bedPower: data.bed_power ?? data.bedPower ?? null,
+		fanSpeed: data.fan_speed ?? data.fanSpeed ?? null,
+		speedFactor: data.speed_factor ?? data.speedFactor ?? null,
+		flowFactor: data.flow_factor ?? data.flowFactor ?? null,
+		zOffset: data.z_offset ?? data.zOffset ?? null,
+		filename: data.filename ?? null,
+		printDuration: data.print_duration ?? data.printDuration ?? null,
+		totalDuration: data.total_duration ?? data.totalDuration ?? null,
+		layer: data.layer ?? null,
+		layerCount: data.layer_count ?? data.layerCount ?? null,
+		lastError: data.lastError || lastError || '',
+	}
+}
+
+function defaultMeshState() {
+	return {
+		position: [0, 0, 0],
+		rotation: [0, 0, 0],
+		scale: [1, 1, 1],
+		sliceBlob: null,
+		dirty: false,
+		appliedAt: null,
+		autoApply: true,
+		applying: false,
 	}
 }
 
@@ -56,9 +156,14 @@ export const usePrintStore = defineStore('print', {
 		},
 		model: {
 			file: null,
+			sliceFile: null,
 			name: '',
 			size: 0,
 			source: null,
+			fileId: null,
+			davPath: '',
+			convertError: '',
+			convertedFrom3mf: false,
 		},
 		modelMeta: {
 			bbox: null,
@@ -66,6 +171,26 @@ export const usePrintStore = defineStore('print', {
 			triangleCount: 0,
 			parseError: '',
 			previewSkipped: false,
+		},
+		meshHealth: {
+			analyzed: false,
+			triangleCount: 0,
+			bbox: null,
+			openEdgeCount: 0,
+			overhangPct: 0,
+			watertight: false,
+		},
+		threeMfBuildItems: [],
+		threeMfSelectedIds: [],
+		meshState: {
+			position: [0, 0, 0],
+			rotation: [0, 0, 0],
+			scale: [1, 1, 1],
+			sliceBlob: null,
+			dirty: false,
+			appliedAt: null,
+			autoApply: true,
+			applying: false,
 		},
 		profiles: {
 			printers: [],
@@ -77,7 +202,14 @@ export const usePrintStore = defineStore('print', {
 		selection: {
 			printerId: '',
 			filamentId: '',
+			filamentIds: [],
 			processId: '',
+		},
+		selectedPrinterId: '',
+		savedPresets: {},
+		featureFlags: {
+			batchSlice: false,
+			forgePreview: false,
 		},
 		overrides: {
 			layerHeight: '',
@@ -88,6 +220,15 @@ export const usePrintStore = defineStore('print', {
 			firstLayerSpeed: '',
 			nozzleTemp: '',
 			bedTemp: '',
+			fanSpeed: '',
+			retractionLength: '',
+			retractionSpeed: '',
+			enableSupport: false,
+			supportType: '',
+			supportThreshold: '',
+			brimWidth: '',
+			raftLayers: '',
+			skirtLoops: '',
 		},
 		overridesCollapsed: true,
 		sliceJob: {
@@ -104,6 +245,8 @@ export const usePrintStore = defineStore('print', {
 			filamentUsedG: 0,
 			filamentBreakdown: [],
 			layers: 0,
+			materialStats: {},
+			savedDavPath: '',
 			backendLabel: 'forge-slicer',
 			sentTo: '',
 			printing: false,
@@ -115,20 +258,40 @@ export const usePrintStore = defineStore('print', {
 			message: '',
 			progress: 0,
 			extruderTemp: null,
+			extruderTarget: null,
+			extruderPower: null,
 			bedTemp: null,
+			bedTarget: null,
+			bedPower: null,
+			fanSpeed: null,
+			speedFactor: null,
+			flowFactor: null,
+			zOffset: null,
 			filename: null,
 			printDuration: null,
 			totalDuration: null,
+			layer: null,
+			layerCount: null,
+			lastError: '',
 		},
+		_lastNotifiedPrintState: '',
 		pendingPrintUpload: null,
+		prePrintModal: {
+			visible: false,
+			resolve: null,
+		},
+		jobHistory: loadJobHistory(),
+		savingGcode: false,
 		_pollTimer: null,
 		_statusTimer: null,
+		_wsClient: null,
+		printerProgressSource: 'poll',
 		_sliceAbort: null,
 	}),
 
 	getters: {
 		hasModel: (s) => !!s.model.file,
-		slicerReady: (s) => !s.appStatus.loaded || (s.appStatus.slicer_enabled && s.appStatus.slicer_ok),
+		slicerReady: (s) => s.appStatus.loaded && s.appStatus.slicer_enabled && s.appStatus.slicer_ok,
 		profilesReady: (s) => s.selection.printerId && s.selection.filamentId && s.selection.processId,
 		buildVolume(state) {
 			const p = state.profiles.printers.find(x => String(x.id) === String(state.selection.printerId))
@@ -192,14 +355,60 @@ export const usePrintStore = defineStore('print', {
 			return {
 				isPrinting: st === 'printing',
 				isPaused: st === 'paused',
+				isComplete: st === 'complete',
+				isError: st === 'error',
 				isActive: st === 'printing' || st === 'paused',
 				canPause: st === 'printing',
 				canResume: st === 'paused',
 				canCancel: st === 'printing' || st === 'paused',
 			}
 		},
+		remainingPrintSeconds(state) {
+			const total = state.printerState.totalDuration
+			const elapsed = state.printerState.printDuration
+			if (total == null || elapsed == null || !Number.isFinite(total) || !Number.isFinite(elapsed)) {
+				return null
+			}
+			return Math.max(0, total - elapsed)
+		},
+		isExtruderHeating(state) {
+			const { extruderTemp, extruderTarget, extruderPower } = state.printerState
+			if (extruderTarget == null || extruderTarget <= 0) {
+				return false
+			}
+			if (extruderTemp == null) {
+				return (extruderPower ?? 0) > 0
+			}
+			return extruderTemp < extruderTarget - 2 && (extruderPower ?? 0) > 0.01
+		},
+		isBedHeating(state) {
+			const { bedTemp, bedTarget, bedPower } = state.printerState
+			if (bedTarget == null || bedTarget <= 0) {
+				return false
+			}
+			if (bedTemp == null) {
+				return (bedPower ?? 0) > 0
+			}
+			return bedTemp < bedTarget - 2 && (bedPower ?? 0) > 0.01
+		},
 		prepareComplete(state) {
-			return !!state.model.file && !!state.selection.printerId && !!state.selection.filamentId && !!state.selection.processId
+			const slicerOk = state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok
+			const sliceReady = !state.model.file
+				? false
+				: !state.model.name?.toLowerCase().endsWith('.3mf')
+					|| !!state.model.sliceFile
+			const meshReady = !state.model.file
+				|| (
+					sliceReady
+					&& !state.model.convertError
+					&& !state.meshState.dirty
+				)
+			return !!state.model.file
+				&& meshReady
+				&& !!state.selection.printerId
+				&& !!state.selection.filamentId
+				&& !!state.selection.processId
+				&& slicerOk
 		},
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done'
@@ -211,30 +420,58 @@ export const usePrintStore = defineStore('print', {
 					label: 'Model loaded',
 					ok: !!state.model.file,
 					hint: 'Import or pick a file from Nextcloud',
+					action: 'model',
+				},
+				{
+					id: 'mesh',
+					label: 'Slice-ready mesh',
+					ok: !state.model.file
+						|| (
+							(!state.model.name?.toLowerCase().endsWith('.3mf') || !!state.model.sliceFile)
+							&& !state.model.convertError
+							&& !state.meshState.dirty
+						),
+					hint: state.model.convertError
+						|| (state.meshState.dirty ? 'Apply viewport transform to slice mesh' : 'Waiting for 3MF mesh extraction…'),
+					action: 'mesh',
+				},
+				{
+					id: 'watertight',
+					label: 'Mesh watertight',
+					ok: !state.model.file
+						|| (state.meshHealth.analyzed && state.meshHealth.watertight),
+					hint: state.meshHealth.analyzed
+						? `${state.meshHealth.openEdgeCount} open edges — try Repair`
+						: 'Run Analyze on the mesh health panel',
+					action: 'watertight',
 				},
 				{
 					id: 'printer',
 					label: 'Printer profile',
 					ok: !!state.selection.printerId,
 					hint: 'Choose a printer on Prepare (or check slicer profiles)',
+					action: 'printer',
 				},
 				{
 					id: 'filament',
 					label: 'Filament profile',
 					ok: !!state.selection.filamentId,
 					hint: 'Choose a filament profile',
+					action: 'filament',
 				},
 				{
 					id: 'process',
 					label: 'Process / quality profile',
 					ok: !!state.selection.processId,
 					hint: 'Choose a process profile',
+					action: 'process',
 				},
 				{
 					id: 'slicer',
 					label: 'Slicer service online',
 					ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok,
 					hint: 'Start forge-slicer or check Admin settings',
+					action: 'slicer',
 				},
 			]
 			return rows
@@ -242,6 +479,17 @@ export const usePrintStore = defineStore('print', {
 		firstPrepareBlocker(state) {
 			for (const row of [
 				{ ok: !!state.model.file, label: 'Model loaded', hint: 'Import or pick a file from Nextcloud' },
+				{
+					ok: !state.model.file
+						|| (
+							(!state.model.name?.toLowerCase().endsWith('.3mf') || !!state.model.sliceFile)
+							&& !state.model.convertError
+							&& !state.meshState.dirty
+						),
+					label: 'Slice-ready mesh',
+					hint: state.model.convertError
+						|| (state.meshState.dirty ? 'Apply viewport transform to slice mesh' : '3MF mesh extraction failed — export STL'),
+				},
 				{ ok: !!state.selection.printerId, label: 'Printer profile', hint: 'Choose a printer on Prepare' },
 				{ ok: !!state.selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
 				{ ok: !!state.selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
@@ -262,18 +510,40 @@ export const usePrintStore = defineStore('print', {
 		},
 		workflowStepSubtitle(state) {
 			return (stepId) => {
+				const profileNames = (() => {
+					const find = (list, id) => list.find(p => String(p.id) === String(id))
+					const printer = find(state.profiles.printers, state.selection.printerId)?.name
+					const filament = find(state.profiles.filaments, state.selection.filamentId)?.name
+					const process = find(state.profiles.processes, state.selection.processId)?.name
+					if (printer && filament && process) {
+						return `${printer} · ${filament} · ${process}`
+					}
+					return ''
+				})()
+
 				if (stepId === TABS.PREPARE) {
-					return state.model.name || 'Import a model'
+					const model = state.model.name || 'Import a model'
+					if (profileNames) {
+						return `${model} · ${profileNames}`
+					}
+					return model
 				}
 				if (stepId === TABS.SLICE) {
 					if (state.sliceJob.status === 'running') {
 						return `Slicing ${state.sliceJob.pct}%`
 					}
 					if (state.sliceJob.status === 'done') {
-						return 'Slice complete'
+						return state.sliceJob.gcodeFilename
+							? `Slice complete · ${state.sliceJob.gcodeFilename}`
+							: 'Slice complete'
 					}
 					if (state.sliceJob.status === 'error') {
-						return 'Slice failed'
+						return state.sliceJob.error
+							? `Slice failed: ${state.sliceJob.error}`
+							: 'Slice failed'
+					}
+					if (state.meshState.dirty) {
+						return 'Apply mesh transform before slice'
 					}
 					return state.model.file ? 'Ready to slice' : 'Load model first'
 				}
@@ -300,13 +570,68 @@ export const usePrintStore = defineStore('print', {
 			if (!state.model.file) {
 				return 'Load a model on Prepare first'
 			}
+			if (state.model.name?.toLowerCase().endsWith('.3mf') && !state.model.sliceFile) {
+				return state.model.convertError || '3MF mesh extraction in progress or failed'
+			}
+			if (state.meshState.dirty) {
+				return 'Apply viewport transform before slicing'
+			}
 			if (!state.selection.printerId || !state.selection.filamentId || !state.selection.processId) {
 				return 'Select printer, filament, and process on Prepare'
 			}
-			if (state.appStatus.loaded && state.appStatus.slicer_enabled && !state.appStatus.slicer_ok) {
+			if (!state.appStatus.loaded) {
+				return 'Checking slicer status…'
+			}
+			if (!state.appStatus.slicer_enabled) {
+				return 'Slicer disabled in Admin settings'
+			}
+			if (!state.appStatus.slicer_ok) {
 				return 'Slicer service offline'
 			}
 			return ''
+		},
+		configuredPrinters(state) {
+			const rows = state.config?.multi_printers
+			if (Array.isArray(rows) && rows.length) {
+				return rows
+			}
+			return [{
+				id: 'default',
+				name: state.appStatus.printer_display_name || state.config?.printer_display_name || 'Printer',
+				default: true,
+			}]
+		},
+		activeTargetPrinter(state) {
+			const id = state.selectedPrinterId || state.configuredPrinters.find(p => p.default)?.id || state.configuredPrinters[0]?.id
+			return state.configuredPrinters.find(p => String(p.id) === String(id)) || state.configuredPrinters[0] || null
+		},
+		extruderCount(state) {
+			return parseExtruderCount(state.profiles, state.selection.printerId)
+		},
+		sliceStageLabel(state) {
+			return mapSliceStageLabel(state.sliceJob.stage)
+		},
+		estimateVsActual(state) {
+			const est = state.sliceJob.estimatedTimeS
+			const act = state.printerState.printDuration
+			if (!est && act == null) {
+				return null
+			}
+			return { estimatedS: est || 0, actualS: act ?? null }
+		},
+		has3mfError(state) {
+			return !!state.model.name?.toLowerCase().endsWith('.3mf') && !!state.model.convertError
+		},
+		hasGcodeDownloadError(state) {
+			return state.sliceJob.status === 'done' && !!state.sliceJob.error && !state.sliceJob.gcodeBlob
+		},
+		recentModels(state) {
+			const prefs = loadPrefs()
+			const rows = Array.isArray(prefs.recentModels) ? prefs.recentModels : []
+			return rows.map((r, i) => ({
+				...r,
+				key: `${r.name}:${r.size}:${r.at || i}`,
+			}))
 		},
 	},
 
@@ -321,7 +646,7 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
-		setModel(file, source = 'import') {
+		setModel(file, source = 'import', meta = {}) {
 			const check = validateModelFile(file)
 			if (!check.ok) {
 				toastError(check.error)
@@ -329,12 +654,184 @@ export const usePrintStore = defineStore('print', {
 			}
 			this.model = {
 				file,
+				sliceFile: null,
 				name: file?.name || '',
 				size: file?.size || 0,
 				source,
+				fileId: meta.file_id ?? meta.fileId ?? null,
+				davPath: meta.dav_path ?? meta.davPath ?? '',
+				convertError: '',
+				convertedFrom3mf: false,
 			}
+			this.meshState = defaultMeshState()
+			this.resetMeshHealth()
+			this.threeMfBuildItems = []
+			this.threeMfSelectedIds = []
 			this._updateModelMetaFromFile(file)
+			this._rememberRecentModel(file, source, meta)
+			void this._loadThreeMfBuildItems(file)
+			void this._prepareSliceFile(file)
 			return true
+		},
+
+		resetMeshHealth() {
+			this.meshHealth = {
+				analyzed: false,
+				triangleCount: 0,
+				bbox: null,
+				openEdgeCount: 0,
+				overhangPct: 0,
+				watertight: false,
+			}
+		},
+
+		setMeshHealth(result) {
+			if (!result) {
+				this.resetMeshHealth()
+				return
+			}
+			this.meshHealth = {
+				analyzed: true,
+				triangleCount: result.triangleCount ?? 0,
+				bbox: result.bbox ?? null,
+				openEdgeCount: result.openEdgeCount ?? result.openEdges ?? 0,
+				overhangPct: result.overhangPct ?? 0,
+				watertight: !!result.watertight,
+			}
+		},
+
+		async _loadThreeMfBuildItems(file) {
+			if (!file?.name?.toLowerCase().endsWith('.3mf')) {
+				this.threeMfBuildItems = []
+				this.threeMfSelectedIds = []
+				return
+			}
+			try {
+				const items = await list3mfBuildItems(await file.arrayBuffer())
+				this.threeMfBuildItems = items
+				this.threeMfSelectedIds = items.filter(i => i.printable).map(i => String(i.id))
+			} catch {
+				this.threeMfBuildItems = []
+				this.threeMfSelectedIds = []
+			}
+		},
+
+		setThreeMfSelection(ids) {
+			this.threeMfSelectedIds = (ids || []).map(String)
+			void this._prepareSliceFile(this.model.file)
+		},
+
+		async _prepareSliceFile(file) {
+			if (!file?.name) {
+				return
+			}
+			const lower = file.name.toLowerCase()
+			if (!lower.endsWith('.3mf')) {
+				this.model.sliceFile = null
+				this.model.convertedFrom3mf = false
+				this.model.convertError = ''
+				return
+			}
+			try {
+				const options = this.threeMfSelectedIds.length
+					? { selectedIds: this.threeMfSelectedIds }
+					: {}
+				const stlBuf = await convert3mfToStlBuffer(await file.arrayBuffer(), options)
+				const stem = file.name.replace(/\.3mf$/i, '')
+				this.model.sliceFile = new File([stlBuf], `${stem}.stl`, { type: 'application/octet-stream' })
+				this.model.convertedFrom3mf = true
+				this.model.convertError = ''
+				toastInfo('3MF mesh extracted — slicing will use a converted STL (Orca project files are not sent raw).')
+			} catch (e) {
+				this.model.sliceFile = null
+				this.model.convertedFrom3mf = false
+				this.model.convertError = e?.message || '3MF conversion failed'
+				toastWarning(`3MF could not be converted: ${this.model.convertError}. Export STL from your slicer.`)
+			}
+		},
+
+		sliceModelFile() {
+			if (this.meshState.sliceBlob && !this.meshState.dirty) {
+				return this.meshState.sliceBlob
+			}
+			return this.model.sliceFile || this.model.file
+		},
+
+		markMeshDirty() {
+			if (!this.model.file) {
+				return
+			}
+			this.meshState.dirty = true
+			this._persistMeshTransform()
+		},
+
+		setMeshTransform(transform) {
+			if (!transform) {
+				return
+			}
+			if (Array.isArray(transform.position) && transform.position.length === 3) {
+				this.meshState.position = [...transform.position]
+			}
+			if (Array.isArray(transform.rotation) && transform.rotation.length === 3) {
+				this.meshState.rotation = [...transform.rotation]
+			}
+			if (Array.isArray(transform.scale) && transform.scale.length === 3) {
+				this.meshState.scale = [...transform.scale]
+			}
+			this._persistMeshTransform()
+		},
+
+		async exportMeshFromViewport(viewport) {
+			if (!viewport?.exportTransformedMesh) {
+				throw new Error('Viewport export unavailable')
+			}
+			const exported = await viewport.exportTransformedMesh()
+			if (!exported?.positions) {
+				throw new Error('No mesh to export')
+			}
+			const stlBuf = meshToStlBuffer(exported)
+			const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
+			const filename = `${stem}-prepared.stl`
+			return new File([stlBuf], filename, { type: 'application/octet-stream' })
+		},
+
+		async applyMeshToSlice(viewport, { silent = false } = {}) {
+			if (!this.model.file) {
+				if (!silent) {
+					toastError('No model loaded')
+				}
+				return false
+			}
+			if (!viewport?.getTransform) {
+				if (!silent) {
+					toastError('Viewport transform unavailable')
+				}
+				return false
+			}
+			this.meshState.applying = true
+			try {
+				const transform = viewport.getTransform()
+				this.setMeshTransform(transform)
+				const sliceFile = await this.exportMeshFromViewport(viewport)
+				this.meshState.sliceBlob = sliceFile
+				this.meshState.dirty = false
+				this.meshState.appliedAt = new Date().toISOString()
+				this._persistMeshTransform()
+				if (transform?.bbox) {
+					this.setModelMeta({ bbox: transform.bbox })
+				}
+				if (!silent) {
+					toastSuccess('Mesh applied for slicing')
+				}
+				return true
+			} catch (e) {
+				if (!silent) {
+					toastError('Could not apply mesh transform', e)
+				}
+				return false
+			} finally {
+				this.meshState.applying = false
+			}
 		},
 
 		async _updateModelMetaFromFile(file) {
@@ -374,13 +871,78 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		clearModel() {
-			this.model = { file: null, name: '', size: 0, source: null }
+			this.model = {
+				file: null,
+				sliceFile: null,
+				name: '',
+				size: 0,
+				source: null,
+				fileId: null,
+				davPath: '',
+				convertError: '',
+				convertedFrom3mf: false,
+			}
 			this.modelMeta = { bbox: null, fitsBed: true, triangleCount: 0, parseError: '', previewSkipped: false }
+			this.meshState = defaultMeshState()
+			this.resetMeshHealth()
+			this.threeMfBuildItems = []
+			this.threeMfSelectedIds = []
+			this._persistMeshTransform()
+		},
+
+		_rememberRecentModel(file, source, meta = {}) {
+			if (!file?.name) {
+				return
+			}
+			const prefs = loadPrefs()
+			const recent = Array.isArray(prefs.recentModels) ? [...prefs.recentModels] : []
+			const entry = {
+				name: file.name,
+				size: file.size || 0,
+				source: source || 'import',
+				fileId: meta.file_id ?? meta.fileId ?? null,
+				davPath: meta.dav_path ?? meta.davPath ?? '',
+				at: new Date().toISOString(),
+			}
+			const filtered = recent.filter(r => r.name !== entry.name || r.davPath !== entry.davPath)
+			filtered.unshift(entry)
+			savePrefs({ recentModels: filtered.slice(0, RECENT_MODELS_MAX) })
+
+			const withRefs = loadRecentModels().filter(r =>
+				r.fileId !== entry.fileId || r.davPath !== entry.davPath || r.name !== entry.name)
+			persistRecentModels([{
+				name: entry.name,
+				fileId: entry.fileId,
+				davPath: entry.davPath,
+				timestamp: Date.now(),
+			}, ...withRefs])
+		},
+
+		_persistMeshTransform() {
+			savePrefs({
+				meshTransform: {
+					position: this.meshState.position,
+					rotation: this.meshState.rotation,
+					scale: this.meshState.scale,
+					dirty: this.meshState.dirty,
+					autoApply: this.meshState.autoApply,
+					modelName: this.model.name || '',
+				},
+			})
+		},
+
+		_persistOverrides() {
+			savePrefs({ overrides: { ...this.overrides } })
 		},
 
 		async loadConfig() {
 			try {
 				this.config = await fetchConfig()
+				this.savedPresets = loadPresets()
+				const def = this.configuredPrinters.find(p => p.default) || this.configuredPrinters[0]
+				if (!this.selectedPrinterId && def?.id) {
+					this.selectedPrinterId = def.id
+				}
 			} catch (e) {
 				console.warn('[nc_print] config load failed:', e?.message || e)
 				this.config = {}
@@ -419,11 +981,52 @@ export const usePrintStore = defineStore('print', {
 
 		onProfileChange() {
 			this.applyProfileDefaults()
+			const count = this.extruderCount
+			if (!this.selection.filamentIds?.length) {
+				this.selection.filamentIds = resolveFilamentIds(this.selection, count)
+			}
 			savePrefs({
 				printerId: this.selection.printerId,
 				filamentId: this.selection.filamentId,
 				processId: this.selection.processId,
+				selectedPrinterId: this.selectedPrinterId,
 			})
+		},
+
+		onPrinterTargetChange() {
+			savePrefs({ selectedPrinterId: this.selectedPrinterId })
+			this.stopPrinterPolling()
+			this.startPrinterPolling()
+		},
+
+		saveOverridePreset(name) {
+			const label = (name || '').trim()
+			if (!label) {
+				toastError('Enter a preset name')
+				return false
+			}
+			const all = { ...loadPresets(), [label]: { ...this.overrides } }
+			savePresets(all)
+			this.savedPresets = all
+			toastSuccess(`Preset "${label}" saved`)
+			return true
+		},
+
+		loadOverridePreset(name) {
+			const preset = this.savedPresets[name] || loadPresets()[name]
+			if (!preset) {
+				toastError('Preset not found')
+				return false
+			}
+			this.overrides = { ...this.overrides, ...preset }
+			this._persistOverrides()
+			toastInfo(`Loaded preset "${name}"`)
+			return true
+		},
+
+		setMeshAutoApply(enabled) {
+			this.meshState.autoApply = !!enabled
+			this._persistMeshTransform()
 		},
 
 		restorePrefs() {
@@ -437,8 +1040,34 @@ export const usePrintStore = defineStore('print', {
 			if (prefs.processId) {
 				this.selection.processId = prefs.processId
 			}
+			if (prefs.selectedPrinterId) {
+				this.selectedPrinterId = prefs.selectedPrinterId
+			}
 			if (typeof prefs.overridesCollapsed === 'boolean') {
 				this.overridesCollapsed = prefs.overridesCollapsed
+			}
+			if (prefs.overrides && typeof prefs.overrides === 'object') {
+				this.overrides = { ...this.overrides, ...prefs.overrides }
+			}
+			if (prefs.meshTransform && typeof prefs.meshTransform === 'object') {
+				const mt = prefs.meshTransform
+				if (Array.isArray(mt.position)) {
+					this.meshState.position = [...mt.position]
+				}
+				if (Array.isArray(mt.rotation)) {
+					this.meshState.rotation = [...mt.rotation]
+				}
+				if (Array.isArray(mt.scale)) {
+					this.meshState.scale = [...mt.scale]
+				}
+				if (typeof mt.autoApply === 'boolean') {
+					this.meshState.autoApply = mt.autoApply
+				} else {
+					this.meshState.autoApply = true
+				}
+				if (typeof mt.dirty === 'boolean' && mt.modelName === this.model.name) {
+					this.meshState.dirty = mt.dirty
+				}
 			}
 		},
 
@@ -462,6 +1091,7 @@ export const usePrintStore = defineStore('print', {
 				}
 				this.restorePrefs()
 				this.applyProfileDefaults()
+				this.selection.filamentIds = resolveFilamentIds(this.selection, this.extruderCount)
 			} catch (e) {
 				this.profiles.error = e?.message || 'Profile load failed'
 				toastError('Could not load slicer profiles', e)
@@ -470,35 +1100,120 @@ export const usePrintStore = defineStore('print', {
 
 		async refreshPrinterState() {
 			try {
-				const data = await fetchState()
-				this.printerState = {
-					connected: !!data.connected,
-					state: data.state || data.status || 'unknown',
-					message: data.message || '',
-					progress: data.progress ?? 0,
-					extruderTemp: data.extruder_temp ?? data.extruderTemp ?? null,
-					bedTemp: data.bed_temp ?? data.bedTemp ?? null,
-					filename: data.filename ?? null,
-					printDuration: data.print_duration ?? data.printDuration ?? null,
-					totalDuration: data.total_duration ?? data.totalDuration ?? null,
-				}
-			} catch {
+				const data = await fetchState(this.selectedPrinterId || undefined)
+				this._applyPrinterState(mapPrinterState(data))
+			} catch (e) {
 				this.printerState.connected = false
 				this.printerState.state = 'offline'
+				this.printerState.lastError = e?.message || 'Printer poll failed'
+				console.debug('[nc_print] refreshPrinterState failed:', e?.message || e)
+			}
+		},
+
+		_applyPrinterState(next) {
+			const prevState = (this.printerState.state || '').toLowerCase()
+			this.printerState = { ...this.printerState, ...next }
+			this._maybeNotifyPrintTransition(prevState, (next.state || '').toLowerCase())
+		},
+
+		async requestPrintNotifications() {
+			if (typeof Notification === 'undefined') {
+				return 'unsupported'
+			}
+			if (Notification.permission === 'granted') {
+				return 'granted'
+			}
+			if (Notification.permission === 'denied') {
+				return 'denied'
+			}
+			try {
+				localStorage.setItem(NOTIF_PROMPT_KEY, '1')
+			} catch {
+				// ignore
+			}
+			const result = await Notification.requestPermission()
+			return result
+		},
+
+		notifyPrintComplete(filename) {
+			if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+				return
+			}
+			const label = filename || this.printerState.filename || 'Print job'
+			try {
+				new Notification('Print complete', {
+					body: `${label} finished successfully.`,
+					tag: 'nc-print-complete',
+				})
+			} catch {
+				// ignore
+			}
+		},
+
+		notifyPrintFailed(message) {
+			if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+				return
+			}
+			try {
+				new Notification('Print failed', {
+					body: message || this.printerState.message || 'The printer reported an error.',
+					tag: 'nc-print-failed',
+				})
+			} catch {
+				// ignore
+			}
+		},
+
+		_maybeNotifyPrintTransition(prevState, nextState) {
+			if (!nextState || prevState === nextState) {
+				return
+			}
+			const key = `${prevState}->${nextState}:${this.printerState.filename || ''}`
+			if (this._lastNotifiedPrintState === key) {
+				return
+			}
+			if (nextState === 'complete' && ['printing', 'paused'].includes(prevState)) {
+				this._lastNotifiedPrintState = key
+				this.notifyPrintComplete(this.printerState.filename)
+				toastSuccess('Print complete')
+			} else if (nextState === 'error' && ['printing', 'paused'].includes(prevState)) {
+				this._lastNotifiedPrintState = key
+				this.notifyPrintFailed(this.printerState.message)
+				toastError('Print failed', new Error(this.printerState.message || 'Printer error'))
 			}
 		},
 
 		startPrinterPolling(intervalMs = 5000) {
 			this.stopPrinterPolling()
-			void this.refreshPrinterState()
-			this._pollTimer = setInterval(() => this.refreshPrinterState(), intervalMs)
+			const printer = this.activeTargetPrinter
+			this._wsClient = new MoonrakerWsClient({
+				onState: (data) => {
+					this._applyPrinterState(mapPrinterState(data, data.lastError))
+					this.printerProgressSource = this._wsClient?.usingWebSocket ? 'ws' : 'poll'
+				},
+			})
+			void this._wsClient.start({
+				printer,
+				printerId: this.selectedPrinterId || printer?.id,
+			})
+			// Slow fallback poll when WS is active (health check)
+			this._pollTimer = setInterval(() => {
+				if (!this._wsClient?.usingWebSocket) {
+					void this.refreshPrinterState()
+				}
+			}, intervalMs)
 		},
 
 		stopPrinterPolling() {
+			if (this._wsClient) {
+				this._wsClient.stop()
+				this._wsClient = null
+			}
 			if (this._pollTimer) {
 				clearInterval(this._pollTimer)
 				this._pollTimer = null
 			}
+			this.printerProgressSource = 'poll'
 		},
 
 		resetSliceJob() {
@@ -516,11 +1231,52 @@ export const usePrintStore = defineStore('print', {
 				filamentUsedG: 0,
 				filamentBreakdown: [],
 				layers: 0,
+				materialStats: {},
+				savedDavPath: '',
 				backendLabel: 'forge-slicer',
 				sentTo: '',
 				printing: false,
 				error: '',
 			}
+		},
+
+		_applyMaterialStats(done = {}) {
+			if (done.material_stats && typeof done.material_stats === 'object') {
+				const s = done.material_stats
+				this.sliceJob.materialStats = {
+					modelFilamentG: s.model_filament_g ?? s.modelFilamentG ?? null,
+					supportFilamentG: s.support_filament_g ?? s.supportFilamentG ?? null,
+					supportFilamentUsedG: s.support_filament_used_g ?? null,
+					supportTimeS: s.support_time_s ?? s.supportTimeS ?? null,
+				}
+				return
+			}
+			this.sliceJob.materialStats = {
+				modelFilamentG: done.model_filament_g ?? null,
+				supportFilamentG: done.support_filament_g ?? null,
+				supportFilamentUsedG: done.support_filament_used_g ?? null,
+				supportTimeS: done.support_time_s ?? null,
+			}
+		},
+
+		_recordJobHistory({ andSend = false } = {}) {
+			const row = {
+				id: `${Date.now()}-${this.sliceJob.jobId || 'local'}`,
+				timestamp: Date.now(),
+				modelName: this.model.name,
+				fileId: this.model.fileId,
+				davPath: this.model.davPath,
+				printerId: this.selection.printerId,
+				filamentId: this.selection.filamentId,
+				processId: this.selection.processId,
+				jobId: this.sliceJob.jobId,
+				estimatedTimeS: this.sliceJob.estimatedTimeS,
+				gcodeFilename: this.sliceJob.gcodeFilename,
+				hasGcode: !!this.sliceJob.gcodeBlob,
+				sentToPrinter: andSend,
+			}
+			this.jobHistory = [row, ...this.jobHistory.filter(r => r.id !== row.id)].slice(0, JOB_HISTORY_MAX)
+			persistJobHistory(this.jobHistory)
 		},
 
 		async runSlice({ signal, andSend = false } = {}) {
@@ -535,13 +1291,17 @@ export const usePrintStore = defineStore('print', {
 			this.sliceJob.status = 'running'
 
 			const overrides = buildSliceOverrides(this.overrides)
-			const filamentIds = this.selection.filamentId ? [this.selection.filamentId] : []
+			const filamentIds = resolveFilamentIds(this.selection, this.extruderCount)
 			let jobIdForCancel = null
 
 			try {
+				const sliceFile = this.sliceModelFile()
+				if (!sliceFile) {
+					throw new Error(this.model.convertError || 'No slice-ready model file')
+				}
 				const done = await sliceStream({
-					model: this.model.file,
-					filename: this.model.name,
+					model: sliceFile,
+					filename: sliceFile.name || this.model.name,
 					printerId: this.selection.printerId,
 					filamentIds,
 					processId: this.selection.processId,
@@ -567,24 +1327,46 @@ export const usePrintStore = defineStore('print', {
 				})
 
 				this.sliceJob.jobId = done.job_id || done.jobId || jobIdForCancel
+				if (this.sliceJob.jobId) {
+					savePrefs({ lastJobId: this.sliceJob.jobId })
+				}
 				this.sliceJob.estimatedTimeS = done.estimated_time_s || 0
 				this.sliceJob.filamentBreakdown = done.filament_used_g || []
 				this.sliceJob.filamentUsedG = (done.filament_used_g || []).reduce((a, b) => a + b, 0)
 				this.sliceJob.layers = done.total_layers || this.sliceJob.totalLayers || 0
+				this._applyMaterialStats(done)
 				this.sliceJob.backendLabel = 'forge-slicer'
 
-				if (this.sliceJob.jobId) {
-					this.sliceJob.gcodeBlob = await downloadGcode(this.sliceJob.jobId)
-					this.sliceJob.gcodeSizeBytes = this.sliceJob.gcodeBlob?.size || 0
-				}
 				const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
 				this.sliceJob.gcodeFilename = `${stem}.gcode`
 				this.sliceJob.status = 'done'
-				toastSuccess('Slice complete')
+
+				if (this.sliceJob.jobId) {
+					try {
+						this.sliceJob.gcodeBlob = await downloadGcode(this.sliceJob.jobId)
+						this.sliceJob.gcodeSizeBytes = this.sliceJob.gcodeBlob?.size || 0
+						this.sliceJob.error = ''
+					} catch (downloadErr) {
+						this.sliceJob.gcodeBlob = null
+						this.sliceJob.gcodeSizeBytes = 0
+						this.sliceJob.error = 'Slice finished but G-code download failed — retry download'
+						toastWarning(this.sliceJob.error)
+					}
+				}
+
+				if (this.sliceJob.error) {
+					// download warning already toasted
+				} else if (done.stream_incomplete) {
+					toastWarning('Slice finished but the progress stream dropped early — G-code recovered from the slicer job.')
+				} else {
+					toastSuccess('Slice complete')
+				}
 
 				if (andSend && this.sliceJob.gcodeBlob) {
 					await this.sendGcodeToPrinter(this.sliceJob.gcodeBlob, this.sliceJob.gcodeFilename, true)
 				}
+
+				this._recordJobHistory({ andSend })
 
 				return done
 			} catch (e) {
@@ -605,8 +1387,12 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		async sendGcodeToPrinter(gcodeBlob, filename, start = false) {
-			await moonrakerUpload(gcodeBlob, filename, start)
-			const name = this.appStatus.printer_display_name || this.config?.printer_display_name || 'printer'
+			const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
+			await moonrakerUpload(gcodeBlob, filename, start, targetId)
+			const name = this.activeTargetPrinter?.name
+				|| this.appStatus.printer_display_name
+				|| this.config?.printer_display_name
+				|| 'printer'
 			this.sliceJob.sentTo = name
 			this.sliceJob.printing = start
 			toastSuccess(start ? `Print started on ${name}` : `G-code uploaded to ${name}`)
@@ -620,7 +1406,33 @@ export const usePrintStore = defineStore('print', {
 			return this.runSlice({ signal, andSend: false })
 		},
 
+		requestPrePrintConfirm() {
+			return new Promise((resolve) => {
+				this.prePrintModal = { visible: true, resolve }
+			})
+		},
+
+		confirmPrePrint() {
+			const { resolve } = this.prePrintModal
+			this.prePrintModal = { visible: false, resolve: null }
+			if (resolve) {
+				resolve(true)
+			}
+		},
+
+		cancelPrePrint() {
+			const { resolve } = this.prePrintModal
+			this.prePrintModal = { visible: false, resolve: null }
+			if (resolve) {
+				resolve(false)
+			}
+		},
+
 		async sliceAndSend({ signal } = {}) {
+			const confirmed = await this.requestPrePrintConfirm()
+			if (!confirmed) {
+				return null
+			}
 			return this.runSlice({ signal, andSend: true })
 		},
 
@@ -630,6 +1442,24 @@ export const usePrintStore = defineStore('print', {
 			}
 			if (this.sliceJob.jobId) {
 				void cancelSliceJob(this.sliceJob.jobId)
+			}
+		},
+
+		async retryDownloadGcode() {
+			if (!this.sliceJob.jobId) {
+				toastError('No slice job to download from')
+				return false
+			}
+			try {
+				this.sliceJob.gcodeBlob = await downloadGcode(this.sliceJob.jobId)
+				this.sliceJob.gcodeSizeBytes = this.sliceJob.gcodeBlob?.size || 0
+				this.sliceJob.error = ''
+				toastSuccess('G-code downloaded')
+				return true
+			} catch (e) {
+				this.sliceJob.error = 'Slice finished but G-code download failed — retry download'
+				toastWarning(this.sliceJob.error)
+				return false
 			}
 		},
 
@@ -647,13 +1477,90 @@ export const usePrintStore = defineStore('print', {
 
 		async loadFileFromNextcloud({ dav_path, file_id } = {}) {
 			try {
+				const meta = await resolveFile({ dav_path, file_id })
 				const blob = await fetchModelBlob({ dav_path, file_id })
-				const name = dav_path?.split('/').pop() || 'model.stl'
-				return this.setModel(new File([blob], name, { type: blob.type }), 'files')
+				const name = meta?.basename || dav_path?.split('/').pop() || 'model.stl'
+				return this.setModel(
+					new File([blob], name, { type: blob.type }),
+					'files',
+					{ file_id: meta?.file_id ?? file_id, dav_path: meta?.dav_path ?? dav_path },
+				)
 			} catch (e) {
 				toastError('Could not load file from Nextcloud', e)
 				return false
 			}
+		},
+
+		async loadRecentModel(entry) {
+			if (!entry) {
+				return false
+			}
+			if (entry.fileId || entry.davPath) {
+				return this.loadFileFromNextcloud({ file_id: entry.fileId, dav_path: entry.davPath })
+			}
+			toastWarning('This recent model has no Files reference — pick it again from Nextcloud')
+			return false
+		},
+
+		async saveGcodeToFiles() {
+			if (!this.sliceJob.gcodeBlob) {
+				toastError('No G-code to save')
+				return false
+			}
+			if (!this.model.fileId && !this.model.davPath) {
+				toastWarning('Load the model from Nextcloud Files to save G-code beside it')
+				return false
+			}
+			this.savingGcode = true
+			try {
+				const result = await saveGcodeApi({
+					file_id: this.model.fileId || undefined,
+					dav_path: this.model.davPath || undefined,
+					gcodeBlob: this.sliceJob.gcodeBlob,
+					filename: this.sliceJob.gcodeFilename,
+				})
+				this.sliceJob.savedDavPath = result?.dav_path || ''
+				toastSuccess(`G-code saved to ${result?.basename || 'Files'}`)
+				return true
+			} catch (e) {
+				toastError('Save to Files failed', e)
+				return false
+			} finally {
+				this.savingGcode = false
+			}
+		},
+
+		async replayJobSlice(row) {
+			if (row?.fileId || row?.davPath) {
+				await this.loadFileFromNextcloud({ file_id: row.fileId, dav_path: row.davPath })
+			}
+			if (row?.printerId) {
+				this.selection.printerId = row.printerId
+			}
+			if (row?.filamentId) {
+				this.selection.filamentId = row.filamentId
+			}
+			if (row?.processId) {
+				this.selection.processId = row.processId
+			}
+			this.applyProfileDefaults()
+			this.setActiveTab(TABS.SLICE)
+		},
+
+		async replayJobPrint(row) {
+			if (row?.jobId && !this.sliceJob.gcodeBlob) {
+				this.sliceJob.jobId = row.jobId
+				await this.retryDownloadGcode()
+			}
+			if (this.sliceJob.gcodeBlob) {
+				await this.sendGcodeToPrinter(
+					this.sliceJob.gcodeBlob,
+					row?.gcodeFilename || this.sliceJob.gcodeFilename,
+					true,
+				)
+				return
+			}
+			toastWarning('G-code no longer available — slice again first')
 		},
 
 		clearPendingPrintUpload() {
@@ -695,6 +1602,10 @@ export const usePrintStore = defineStore('print', {
 		toggleOverridesCollapsed() {
 			this.overridesCollapsed = !this.overridesCollapsed
 			savePrefs({ overridesCollapsed: this.overridesCollapsed })
+		},
+
+		persistOverrides() {
+			this._persistOverrides()
 		},
 	},
 })

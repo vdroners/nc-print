@@ -13,14 +13,4 @@ export async function fetchConfig() {
 	return data
 }
 
-/** @deprecated Use fetchAppStatus from status-api.js */
-export async function fetchSlicerStatus() {
-	return fetchAppStatus()
-}
-
-/** @deprecated Use fetchAppStatus from status-api.js */
-export async function fetchPrinterStatus() {
-	return fetchAppStatus()
-}
-
 export { fetchAppStatus }

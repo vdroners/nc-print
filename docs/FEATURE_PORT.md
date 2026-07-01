@@ -2,7 +2,34 @@
 
 Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintforge/src/public/js/components/slicer-studio.js) and forge-slicer REST API.
 
-**Legend:** Done · v1.0.1 / v1.1 / v1.2 / v1.3 / v1.3.1 = shipped · Deferred = backlog
+**Legend:** Done · v1.x = shipped · Deferred = backlog / upstream blocked
+
+## Roadmap backlog → sprint map (C1–C6)
+
+| Backlog ID | Theme | Sprint | Status |
+|------------|-------|--------|--------|
+| C1 | Split workspace right rail | F (v1.5.2) | Done — `WorkspaceRail.vue` |
+| C2 | Pre-print modal before Slice & Send | D (v1.5.0) | Done — `PrePrintModal.vue` |
+| C3 | PNG preview lightbox | D (v1.5.0) | Done — `PreviewLightbox.vue` |
+| C4 | Save quality preset to forge | J (v1.7.x) | Deferred — `POST /api/profiles` 404; local presets in G |
+| C5 | Estimate vs actual on Print | G (v1.6.0) | Done |
+| C6 | Interactive toolpath preview | F (v1.5.2) | Done — 2D layer scrubber; 3D preview deferred (501) |
+
+## v1.7.0 shipped (2026-07-01)
+
+| Sprint | Highlights |
+|--------|------------|
+| 0 | forge-slicer API audit, proxy map, checked-in roadmap |
+| A | 3-column Prepare studio, slice summary, checklist actions, empty state, profile search |
+| B | meshState WYSIWYG, Apply/auto-apply, session restore |
+| C | Lay flat, scale, OBJ, mesh analyze/repair, auto-orient, supports, 3MF picker, recent models |
+| D | Slice review diff, tabbed results, pre-print modal, lightbox, support stats |
+| E | Save G-code to Files, job history |
+| F | G-code layer scrubber, workspace rail |
+| G | Multi-printer, local presets, Moonraker WS, estimate vs actual |
+| H | Shortcuts, SSE copy, error cards, camera PiP, a11y |
+| I | Profile quick-edit, multi-tool filament, tablet 1024px |
+| J | Upstream stubs (batch slice, forge preview flags off) |
 
 ## v1.3.1 shipped (2026-06-30)
 
@@ -15,49 +42,58 @@ Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintfo
 | Multi-tool filament breakdown | SliceResultPanel v1.3.0 |
 | Workflow banner + scroll fix | PrintWorkflowBanner v1.3.0 |
 
-## Prepare tab (25 elements)
+## Prepare tab
 
-| # | Feature | NC Print v1.2 | Phase |
-|---|---------|---------------|-------|
+| # | Feature | NC Print | Phase |
+|---|---------|----------|-------|
 | P1 | Slicer health banner | ServiceHealthBanner | v1.0.1 |
-| P2–P4 | Profile selects on Prepare | ProfilePicker | v1.1 |
-| P5 | Override grid + pre-fill | Collapsible overrides + merge | v1.1 |
-| P6 | Save quality preset | Deferred | — |
+| P2–P4 | Profile selects on Prepare | ProfilePicker + search | v1.7 |
+| P5 | Override grid + pre-fill | PrepareOverrides + ProfileQuickEdit | v1.7 |
+| P6 | Save quality preset | Local named presets | v1.6 (forge POST deferred) |
 | P7–P8 | Import / file input | ViewportToolbar | v1.1 |
 | P9 | Center on bed | Three.js recenter | v1.1 |
-| P10 | Auto-orient info toast | ViewportToolbar | v1.2 |
+| P10 | Auto-orient | MeshHealthPanel + toolbar | v1.7 |
 | P11 | Model info line | ViewportToolbar | v1.1 |
-| P12–P14 | Three.js viewport + STL | ModelViewport | v1.1 |
-| P15 | 3MF/OBJ preview | Slice-only toast | v1.1 |
-| P16–P18 | Viewport empty/drop/highlight | ModelViewport | v1.1 |
+| P12–P14 | Three.js viewport + STL/OBJ/3MF | ModelViewport + meshState | v1.7 |
+| P15 | 3MF multi-object picker | ThreeMfObjectPicker | v1.7 |
+| P16–P18 | Viewport empty/drop/highlight | PrepareEmptyState + ModelViewport | v1.7 |
 | P19 | 50 MB guard + toast | validateModelFile | v1.0.1 |
-| P20 | OrbitControls | three/viewport.js | v1.1 |
-| P21 | ResizeObserver (no rAF thrash) | Three.js + static fallback removed | v1.0.1 |
+| P20 | OrbitControls + view presets | three/viewport.js | v1.7 |
+| P21 | ResizeObserver | ModelViewport | v1.0.1 |
 | P22 | is_default profiles | pickDefaultProfileId | v1.1 |
 | P23 | Vendor in dropdown | ProfilePicker | v1.2 |
 | P24 | Clear model | ViewportToolbar | v1.1 |
-| P25 | Camera PiP | CameraPip | Done |
+| P25 | Camera PiP (draggable) | CameraPip | v1.7 |
+| — | 3-column studio layout | PrepareStudioLayout | v1.7 |
+| — | Slice summary + dirty badge | SliceSummaryCard | v1.7 |
+| — | Mesh analyze/repair | MeshHealthPanel | v1.7 |
+| — | Support/adhesion overrides | PrepareOverrides | v1.7 |
+| — | Recent models strip | RecentModelsStrip | v1.7 |
+| — | Workspace rail | WorkspaceRail | v1.7 |
 
-## Slice tab (21 elements)
+## Slice tab
 
-| # | Feature | NC Print v1.2 |
-|---|---------|---------------|
+| # | Feature | NC Print |
+|---|---------|----------|
 | S1–S4 | Slice + progress + layers | Done |
 | S2 | Server cancel job | cancelSliceJob v1.1 |
-| S5–S11 | SliceResultPanel | v1.0.1 |
-| S12 | Preview PNG | Done |
-| S13–S16 | Send section | Print tab + slice and send v1.1 |
-| S17 | Slice and send | Done |
-| S18 | Backend label | SliceResultPanel v1.0.1 |
-| S19 | Merged settings | v1.1 |
-| S20 | Read-only profile summary | SliceTab v1.1 |
+| S5–S11 | SliceResultPanel + support stats | v1.7 |
+| S12 | Preview PNG + lightbox | v1.7 |
+| S13–S16 | Send section | Print tab + slice and send |
+| S17 | Slice and send + pre-print modal | v1.7 |
+| S18 | Backend label | SliceResultPanel |
+| S19 | Merged settings + review diff | SliceReviewPanel v1.7 |
+| S20 | Tabbed results | SliceResultTabs v1.7 |
 | S21 | Go to Prepare CTA | v1.0.1 |
+| — | G-code layer scrubber | ToolpathScrubber v1.7 |
+| — | Save G-code to Files | GcodeSaveController v1.7 |
+| — | Job history | JobHistoryPanel v1.7 |
 
-## Print tab (12 elements)
+## Print tab
 
-| # | Feature | NC Print v1.2 |
-|---|---------|---------------|
-| R1–R3 | State + progress + controls | Done + printerControls v1.0.1 |
+| # | Feature | NC Print |
+|---|---------|----------|
+| R1–R3 | State + progress + controls | Done + Moonraker WS v1.7 |
 | R4–R5 | Filename + message | v1.0.1 |
 | R6 | Elapsed duration | v1.1 |
 | R7–R8 | Temps + camera refresh | v1.0.1 |
@@ -65,21 +101,27 @@ Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintfo
 | R10 | G-code upload | PrintTab v1.1 |
 | R11 | Upload toast | v1.0.1 |
 | R12 | Auto-switch Print | Done |
+| — | Multi-printer picker | MultiPrinterPicker v1.7 |
+| — | Estimate vs actual | PrintTab v1.7 |
+| — | Workspace rail | WorkspaceRail v1.7 |
 
-## Global (10 elements)
+## Global
 
-| # | Feature | NC Print v1.2 |
-|---|---------|---------------|
+| # | Feature | NC Print |
+|---|---------|----------|
 | G1 | NC 3D Print branding | v1.0.1 |
 | G2 | /api/status banner | v1.0.1 |
 | G3 | Toasts | v1.0.1 |
-| G4 | Job summary strip | v1.0.1 lite → v1.1 full |
+| G4 | Job summary in workflow banner | v1.7 |
 | G5 | Help workflow tab | v1.1 |
 | G6 | fileId deep link | v1.1 |
 | G7 | Node FilePicker + fetch API | v1.1 |
 | G8 | Disable slice when offline | v1.0.1 |
 | G9 | Wizard stepper | v1.2 |
-| G10 | Files app integration | Deferred |
+| G10 | Files save G-code sibling | v1.7 |
+| — | Keyboard shortcuts | App.vue v1.7 |
+| — | Error recovery cards | ErrorRecoveryCard v1.7 |
+| — | Multi-tool filament slots | MultiToolFilamentPicker v1.7 |
 
 ## forge-slicer API (via proxy)
 
@@ -87,12 +129,18 @@ Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintfo
 |-----|-----|--------|
 | GET /api/health | Status banner | v1.0.1 |
 | GET /api/profiles | ProfilePicker | Done |
+| POST /api/profiles | Save preset | **404** — local presets v1.6 |
 | POST /api/slice (SSE) | sliceStream | Done |
 | GET jobs/gcode, preview.png | Slice tab | Done |
 | POST jobs/:id/cancel | cancelSliceJob | v1.1 |
-| POST /api/preview | — | Deferred v1.2+ |
-| GET /api/jobs | — | Deferred v1.2+ |
+| GET /api/jobs | Job history enrich | v1.7 |
+| POST /api/preview | 3D toolpath | **501** — layer scrubber v1.7 |
+| POST /api/mesh/* | Mesh panel | **404** — browser fallback v1.7 |
 
-## Coverage summary (v1.2)
+See [`docs/plans/forge-slicer-api-audit.md`](docs/plans/forge-slicer-api-audit.md).
 
-~38% at v1.0 → **~85%** operator-facing parity at v1.2 (deferred: multi-printer picker, save preset, Files app handler, full 3MF preview).
+## Coverage summary
+
+~38% at v1.0 → **~85%** at v1.2 → **~95%** operator-facing parity at v1.7.
+
+**Still deferred:** forge POST profiles, server 3D preview, batch multi-object slice queue, seam/fuzzy region painting, raw YAML editor, phone-first UX.

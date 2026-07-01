@@ -62,7 +62,7 @@ export default {
 				return 'calibration'
 			}
 			if (this.workflowTab === TABS.PRINT) {
-				return 'limitations'
+				return 'limits'
 			}
 			return 'workflow'
 		},

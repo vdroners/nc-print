@@ -7,6 +7,7 @@ const pkg = require('./package.json')
 module.exports = merge(baseConfig, {
 	entry: {
 		main: path.resolve(__dirname, 'src', 'main.js'),
+		admin: path.resolve(__dirname, 'src', 'admin-settings.js'),
 		'files-action': path.resolve(__dirname, 'src', 'files-action', 'index.js'),
 	},
 	output: {

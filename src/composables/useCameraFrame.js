@@ -9,6 +9,7 @@ export function useCameraFrame(urlSource, intervalMs = 2000) {
 			return {
 				cameraFrameUrl: '',
 				cameraError: false,
+				cameraErrorMessage: '',
 				_cameraTimer: null,
 			}
 		},
@@ -24,6 +25,7 @@ export function useCameraFrame(urlSource, intervalMs = 2000) {
 				handler(url) {
 					this._stopCameraPoll()
 					this.cameraError = false
+					this.cameraErrorMessage = ''
 					if (!url) {
 						this.cameraFrameUrl = ''
 						return
@@ -52,6 +54,12 @@ export function useCameraFrame(urlSource, intervalMs = 2000) {
 			},
 			onCameraError() {
 				this.cameraError = true
+				this.cameraErrorMessage = 'Camera stream unavailable'
+			},
+			retryCamera() {
+				this.cameraError = false
+				this.cameraErrorMessage = ''
+				this._refreshCameraFrame()
 			},
 		},
 	}

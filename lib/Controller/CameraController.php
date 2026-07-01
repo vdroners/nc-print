@@ -49,7 +49,7 @@ class CameraController extends Controller
 			);
 		}
 
-		$url = $this->config->getMoonrakerCameraUrl();
+		$url = $this->config->resolveCameraUrl($this->request->getParam('printer_id'));
 		if (!$this->isSafeCameraUrl($url)) {
 			return new JSONResponse(
 				['error' => 'invalid_camera_url'],

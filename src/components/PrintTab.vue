@@ -3,43 +3,154 @@ import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import { pausePrint, resumePrint, cancelPrint, uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
+import { formatPrintTime } from '@/services/slicer-utils.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
+import WorkspaceRail from './WorkspaceRail.vue'
+import MultiPrinterPicker from './MultiPrinterPicker.vue'
+import TemperatureControl from './TemperatureControl.vue'
+import InPrintTuningPanel from './InPrintTuningPanel.vue'
+import ManualMotionPanel from './ManualMotionPanel.vue'
+import EmergencyStopButton from './EmergencyStopButton.vue'
+import PrintCompletionBanner from './PrintCompletionBanner.vue'
 
 export default {
 	name: 'PrintTab',
+	components: {
+		WorkspaceRail,
+		MultiPrinterPicker,
+		TemperatureControl,
+		InPrintTuningPanel,
+		ManualMotionPanel,
+		EmergencyStopButton,
+		PrintCompletionBanner,
+	},
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
 			busy: false,
 			uploadBusy: false,
 			startAfterUpload: true,
+			cancelConfirmOpen: false,
 		}
 	},
 	computed: {
 		...mapStores(usePrintStore),
+		printerId() {
+			return this.printStore.selectedPrinterId || undefined
+		},
 		streamUrl() {
-			return cameraStreamUrl(this.printStore.config)
+			return cameraStreamUrl(this.printStore.config, this.printStore.selectedPrinterId)
 		},
 		controls() {
 			return this.printStore.printerControls
 		},
+		isOffline() {
+			return !this.printStore.printerState.connected
+		},
 		showIdleGuide() {
-			return !this.controls.isActive && !this.printStore.printerState.filename
+			return this.printStore.printerState.connected
+				&& !this.controls.isActive
+				&& !this.printStore.printerState.filename
+				&& !this.controls.isComplete
+		},
+		showPrintControl() {
+			return this.printStore.printerState.connected
+				&& (this.controls.isActive || this.printStore.printerState.filename)
+				&& !this.controls.isComplete
 		},
 		elapsedLabel() {
 			const d = this.printStore.printerState.printDuration
 			if (d == null || Number.isNaN(d)) {
 				return null
 			}
-			const mins = Math.floor(d / 60)
-			const secs = Math.floor(d % 60)
-			return `${mins}m ${secs}s elapsed`
+			return formatPrintTime(d)
+		},
+		remainingLabel() {
+			const remaining = this.printStore.remainingPrintSeconds
+			if (remaining == null) {
+				return null
+			}
+			return formatPrintTime(remaining)
+		},
+		etaLabel() {
+			if (!this.remainingLabel) {
+				return null
+			}
+			return `~${this.remainingLabel} remaining`
+		},
+		estimateActualLabel() {
+			const row = this.printStore.estimateVsActual
+			if (!row) {
+				return null
+			}
+			const est = formatPrintTime(row.estimatedS)
+			if (row.actualS == null) {
+				return `Estimated ${est}`
+			}
+			const act = formatPrintTime(row.actualS)
+			const delta = row.actualS - row.estimatedS
+			const sign = delta >= 0 ? '+' : '−'
+			const deltaLabel = formatPrintTime(Math.abs(delta))
+			return `Estimated ${est} · Actual ${act} (${sign}${deltaLabel})`
+		},
+		progressSourceLabel() {
+			return this.printStore.printerProgressSource === 'ws' ? 'Live (WebSocket)' : 'Polling'
+		},
+		progressPercentLabel() {
+			const pct = this.printStore.printerState.progress * 100
+			if (pct > 0 && pct < 1) {
+				return `${pct.toFixed(1)}%`
+			}
+			return `${Math.round(pct)}%`
+		},
+		layerLabel() {
+			const layer = this.printStore.printerState.layer
+			const total = this.printStore.printerState.layerCount
+			if (layer == null || total == null) {
+				return null
+			}
+			return `Layer ${layer}/${total}`
+		},
+		tempSummary() {
+			const ps = this.printStore.printerState
+			const parts = []
+			if (ps.extruderTemp != null) {
+				let line = `Nozzle ${Math.round(ps.extruderTemp)}°C`
+				if (ps.extruderTarget != null && ps.extruderTarget > 0) {
+					line += ` → ${Math.round(ps.extruderTarget)}°C`
+				}
+				if (this.printStore.isExtruderHeating) {
+					line += ' (heating)'
+				}
+				parts.push(line)
+			}
+			if (ps.bedTemp != null) {
+				let line = `Bed ${Math.round(ps.bedTemp)}°C`
+				if (ps.bedTarget != null && ps.bedTarget > 0) {
+					line += ` → ${Math.round(ps.bedTarget)}°C`
+				}
+				if (this.printStore.isBedHeating) {
+					line += ' (heating)'
+				}
+				parts.push(line)
+			}
+			return parts.join(' · ')
+		},
+		cameraPlaceholderText() {
+			if (!this.streamUrl) {
+				return 'No camera URL configured — set webcam URL in NC Print settings.'
+			}
+			if (this.cameraError) {
+				return this.cameraErrorMessage || 'Camera unavailable'
+			}
+			return 'Loading camera…'
 		},
 	},
 	mounted() {
 		void this.consumePendingPrintUpload()
+		void this.printStore.requestPrintNotifications()
 	},
 	watch: {
 		'printStore.pendingPrintUpload'() {
@@ -53,7 +164,8 @@ export default {
 				return
 			}
 			this.printStore.clearPendingPrintUpload()
-			await this.uploadGcodeFile(new File([pending.blob], pending.filename, { type: 'text/plain' }))
+			const file = new File([pending.blob], pending.filename, { type: 'text/plain' })
+			await this.uploadGcodeFile(file, false)
 		},
 		goSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
@@ -73,13 +185,20 @@ export default {
 			}
 		},
 		onPause() {
-			return this.withBusy(() => pausePrint())
+			return this.withBusy(() => pausePrint(this.printerId))
 		},
 		onResume() {
-			return this.withBusy(() => resumePrint())
+			return this.withBusy(() => resumePrint(this.printerId))
 		},
-		onCancel() {
-			return this.withBusy(() => cancelPrint())
+		openCancelConfirm() {
+			this.cancelConfirmOpen = true
+		},
+		closeCancelConfirm() {
+			this.cancelConfirmOpen = false
+		},
+		onCancelConfirmed() {
+			this.cancelConfirmOpen = false
+			return this.withBusy(() => cancelPrint(this.printerId))
 		},
 		onGcodeInput(e) {
 			const file = e.target.files?.[0]
@@ -88,15 +207,15 @@ export default {
 			}
 			e.target.value = ''
 		},
-		async uploadGcodeFile(file) {
+		async uploadGcodeFile(file, startAfterUpload = this.startAfterUpload) {
 			if (!file?.name?.toLowerCase().endsWith('.gcode')) {
 				toastError('Select a .gcode file')
 				return
 			}
 			this.uploadBusy = true
 			try {
-				await uploadAndStart(file, file.name, this.startAfterUpload)
-				toastSuccess(this.startAfterUpload ? 'Print started' : 'G-code uploaded')
+				await uploadAndStart(file, file.name, startAfterUpload, this.printerId)
+				toastSuccess(startAfterUpload ? 'Print started' : 'G-code uploaded')
 				await this.printStore.refreshPrinterState()
 			} catch (e) {
 				toastError('Upload failed', e)
@@ -105,14 +224,26 @@ export default {
 			}
 		},
 		async pickGcodeFromFiles() {
-			const file = await pickFileFromNextcloud({
+			const picked = await pickFileFromNextcloud({
 				title: 'Select G-code',
 				filter: node => /\.gcode$/i.test(node?.basename || node?.displayname || ''),
 				canPick: node => /\.gcode$/i.test(node?.basename || node?.displayname || ''),
 				allowGcode: true,
 			})
-			if (file) {
-				await this.uploadGcodeFile(file)
+			if (picked?.file) {
+				await this.uploadGcodeFile(picked.file)
+			}
+		},
+		onPrintAgainUpload() {
+			if (this.printStore.sliceJob.gcodeBlob) {
+				void this.uploadGcodeFile(
+					new File(
+						[this.printStore.sliceJob.gcodeBlob],
+						this.printStore.sliceJob.gcodeFilename || 'job.gcode',
+						{ type: 'text/plain' },
+					),
+					true,
+				)
 			}
 		},
 	},
@@ -120,7 +251,21 @@ export default {
 </script>
 
 <template>
-	<div class="nc-print-print-tab">
+	<WorkspaceRail class="nc-print-print-tab">
+		<MultiPrinterPicker />
+
+		<div v-if="isOffline" class="nc-print-card nc-print-offline-banner" role="alert">
+			<h2 class="nc-print-card__title">Printer offline</h2>
+			<p style="margin: 0 0 8px; color: var(--nc-gcs-text-secondary); font-size: var(--nc-gcs-text-sm);">
+				Cannot reach Moonraker for the selected printer. Check power, network, and Admin settings.
+			</p>
+			<p v-if="printStore.printerState.lastError" style="margin: 0; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-danger-soft);">
+				{{ printStore.printerState.lastError }}
+			</p>
+		</div>
+
+		<PrintCompletionBanner @upload-last="onPrintAgainUpload" />
+
 		<div v-if="showIdleGuide" class="nc-print-card nc-print-idle-guide">
 			<h2 class="nc-print-card__title">No active print</h2>
 			<p style="margin: 0 0 12px; color: var(--nc-gcs-text-secondary); font-size: var(--nc-gcs-text-sm);">
@@ -136,13 +281,15 @@ export default {
 			</div>
 		</div>
 
-		<div v-if="!showIdleGuide" class="nc-print-card">
+		<div v-if="showPrintControl" class="nc-print-card">
 			<h2 class="nc-print-card__title">Print control</h2>
 			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 8px;">
 				State: <strong>{{ printStore.printerStatusLabel }}</strong>
-				<span v-if="printStore.printerState.progress">
-					· {{ Math.round(printStore.printerState.progress * 100) }}%
+				<span v-if="printStore.printerState.progress > 0">
+					· {{ progressPercentLabel }}
 				</span>
+				<span v-if="layerLabel"> · {{ layerLabel }}</span>
+				<span class="nc-print-progress-source"> · {{ progressSourceLabel }}</span>
 			</p>
 			<p v-if="printStore.printerState.filename" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
 				File: <strong>{{ printStore.printerState.filename }}</strong>
@@ -151,15 +298,14 @@ export default {
 				{{ printStore.printerState.message }}
 			</p>
 			<p v-if="elapsedLabel" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
-				{{ elapsedLabel }}
+				Elapsed: {{ elapsedLabel }}
+				<span v-if="etaLabel"> · {{ etaLabel }}</span>
 			</p>
-			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 12px;">
-				<span v-if="printStore.printerState.extruderTemp != null">
-					Nozzle {{ Math.round(printStore.printerState.extruderTemp) }}°C
-				</span>
-				<span v-if="printStore.printerState.bedTemp != null">
-					· Bed {{ Math.round(printStore.printerState.bedTemp) }}°C
-				</span>
+			<p v-if="estimateActualLabel" style="font-size: var(--nc-gcs-text-sm); margin: 0 0 8px;">
+				{{ estimateActualLabel }}
+			</p>
+			<p v-if="tempSummary" style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 12px;">
+				{{ tempSummary }}
 			</p>
 
 			<div v-if="controls.isActive" class="nc-print-progress">
@@ -187,11 +333,17 @@ export default {
 					type="button"
 					class="nc-print-btn nc-print-btn--danger"
 					:disabled="busy || !controls.canCancel"
-					@click="onCancel">
+					@click="openCancelConfirm">
 					Cancel
 				</button>
 			</div>
 		</div>
+
+		<InPrintTuningPanel />
+
+		<TemperatureControl />
+
+		<ManualMotionPanel />
 
 		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">Send G-code</h2>
@@ -214,18 +366,86 @@ export default {
 			</div>
 		</div>
 
-		<div class="nc-print-card">
-			<h2 class="nc-print-card__title">Camera</h2>
-			<div class="nc-print-camera-panel">
-				<img
-					v-if="cameraFrameUrl && !cameraError"
-					:src="cameraFrameUrl"
-					alt="Printer camera stream"
-					@error="onCameraError">
-				<div v-else class="nc-print-camera-placeholder">
-					{{ streamUrl ? 'Camera unavailable' : 'No camera URL configured — set webcam URL in NC Print settings.' }}
+		<EmergencyStopButton />
+
+		<div v-if="cancelConfirmOpen" class="nc-print-dialog-backdrop" role="alertdialog" aria-labelledby="nc-print-cancel-title">
+			<div class="nc-print-dialog">
+				<h3 id="nc-print-cancel-title">Cancel print?</h3>
+				<p>This will stop the current job on the printer. The partial print may need to be removed from the bed.</p>
+				<div class="nc-print-actions">
+					<button type="button" class="nc-print-btn" @click="closeCancelConfirm">
+						Keep printing
+					</button>
+					<button type="button" class="nc-print-btn nc-print-btn--danger" @click="onCancelConfirmed">
+						Cancel print
+					</button>
 				</div>
 			</div>
 		</div>
-	</div>
+
+		<template #rail>
+			<div class="nc-print-card">
+				<h2 class="nc-print-card__title">Camera</h2>
+				<div class="nc-print-camera-panel">
+					<img
+						v-if="cameraFrameUrl && !cameraError"
+						:src="cameraFrameUrl"
+						alt="Printer camera stream"
+						@error="onCameraError">
+					<div v-else class="nc-print-camera-placeholder">
+						<p>{{ cameraPlaceholderText }}</p>
+						<button v-if="cameraError && streamUrl" type="button" class="nc-print-btn" @click="retryCamera">
+							Retry camera
+						</button>
+					</div>
+				</div>
+			</div>
+		</template>
+	</WorkspaceRail>
 </template>
+
+<style scoped>
+.nc-print-progress-source {
+	color: var(--nc-gcs-text-muted);
+	font-size: 11px;
+}
+
+.nc-print-offline-banner {
+	background: color-mix(in srgb, var(--nc-gcs-danger) 10%, var(--nc-gcs-bg-surface));
+	border-color: color-mix(in srgb, var(--nc-gcs-danger) 30%, var(--nc-gcs-border));
+}
+
+.nc-print-dialog-backdrop {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.45);
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	padding: 16px;
+	position: fixed;
+	z-index: 9999;
+}
+
+.nc-print-dialog {
+	background: var(--nc-gcs-bg-surface);
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: var(--nc-gcs-radius);
+	max-width: 420px;
+	padding: var(--nc-gcs-space-lg);
+	width: 100%;
+}
+
+.nc-print-dialog h3 {
+	margin: 0 0 8px;
+}
+
+.nc-print-dialog p {
+	color: var(--nc-gcs-text-secondary);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 16px;
+}
+
+.nc-print-camera-placeholder p {
+	margin: 0 0 8px;
+}
+</style>

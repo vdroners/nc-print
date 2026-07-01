@@ -1,41 +1,52 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 
 export default {
 	name: 'ServiceHealthBanner',
+	components: { ErrorRecoveryCard },
 	computed: {
 		...mapStores(usePrintStore),
 		collapsedWhenHealthy() {
-			return this.printStore.appStatus.slicer_ok && this.printStore.appStatus.moonraker_ok
-		},
-		bannerClass() {
 			const s = this.printStore.appStatus
-			if (!s.slicer_enabled || !s.slicer_ok) {
-				return 'nc-print-health-banner--danger'
-			}
-			if (!s.moonraker_enabled || !s.moonraker_ok) {
-				return 'nc-print-health-banner--warn'
-			}
-			return 'nc-print-health-banner--ok'
+			return s.slicer_ok && s.moonraker_ok
+				&& !this.printStore.has3mfError
+				&& !this.printStore.hasGcodeDownloadError
 		},
-		message() {
+		recoveryCards() {
+			const cards = []
 			const s = this.printStore.appStatus
-			if (!s.loaded) {
-				return 'Checking slicer and printer services…'
+			if (s.loaded && s.slicer_enabled && !s.slicer_ok) {
+				cards.push({
+					kind: 'slicer_offline',
+					detail: s.slicer_error || '',
+					retry: () => this.printStore.loadAppStatus(),
+				})
 			}
-			if (!s.slicer_enabled) {
-				return 'Slicer integration disabled in Admin settings.'
+			if (s.loaded && s.moonraker_enabled && !s.moonraker_ok) {
+				cards.push({
+					kind: 'moonraker_offline',
+					detail: s.moonraker_error || '',
+					retry: () => this.printStore.loadAppStatus(),
+				})
 			}
-			if (!s.slicer_ok) {
-				return `Slicer offline${s.slicer_error ? ` (${s.slicer_error})` : ''} — see docs/TROUBLESHOOTING.md`
+			if (this.printStore.has3mfError) {
+				cards.push({
+					kind: '3mf_fail',
+					detail: this.printStore.model.convertError,
+				})
 			}
-			if (!s.moonraker_enabled) {
-				return 'Moonraker integration disabled in Admin settings.'
+			if (this.printStore.hasGcodeDownloadError) {
+				cards.push({
+					kind: 'gcode_download_fail',
+					detail: this.printStore.sliceJob.error,
+					retry: () => this.printStore.retryDownloadGcode(),
+				})
 			}
-			if (!s.moonraker_ok) {
-				return `Printer unreachable${s.moonraker_error ? ` (${s.moonraker_error})` : ''} — check K1 / Moonraker URL in Admin.`
-			}
+			return cards
+		},
+		okMessage() {
 			return 'Slicer and printer connected'
 		},
 	},
@@ -43,11 +54,30 @@ export default {
 </script>
 
 <template>
+	<div v-if="printStore.appStatus.loaded && !collapsedWhenHealthy" class="nc-print-health-stack">
+		<ErrorRecoveryCard
+			v-for="(card, i) in recoveryCards"
+			:key="card.kind + '-' + i"
+			:kind="card.kind"
+			:detail="card.detail"
+			@retry="card.retry && card.retry()" />
+	</div>
 	<div
-		v-if="printStore.appStatus.loaded && !collapsedWhenHealthy"
-		class="nc-print-health-banner"
-		:class="bannerClass"
+		v-else-if="printStore.appStatus.loaded && printStore.appStatus.slicer_ok && printStore.appStatus.moonraker_ok"
+		class="nc-print-health-banner nc-print-health-banner--ok nc-print-health-banner--compact"
 		role="status">
-		{{ message }}
+		{{ okMessage }}
 	</div>
 </template>
+
+<style scoped>
+.nc-print-health-stack {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nc-gcs-space-sm);
+}
+
+.nc-print-health-banner--compact {
+	margin-bottom: var(--nc-gcs-space-md);
+}
+</style>

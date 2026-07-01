@@ -7,7 +7,7 @@ import { toastError } from '@/services/toast.js'
  * @param {(node: object) => boolean} opts.filter
  * @param {(node: object) => boolean} opts.canPick
  * @param {boolean} [opts.allowGcode]
- * @returns {Promise<File|null>}
+ * @returns {Promise<{ file: File, davPath: string }|null>}
  */
 export async function pickFileFromNextcloud({ title, filter, canPick, allowGcode = false }) {
 	try {
@@ -35,7 +35,10 @@ export async function pickFileFromNextcloud({ title, filter, canPick, allowGcode
 		}
 		const blob = await fetchModelBlob({ dav_path: path, allow_gcode: allowGcode })
 		const name = path.split('/').pop() || (allowGcode ? 'job.gcode' : 'model.stl')
-		return new File([blob], name, { type: blob.type || 'application/octet-stream' })
+		return {
+			file: new File([blob], name, { type: blob.type || 'application/octet-stream' }),
+			davPath: path,
+		}
 	} catch (e) {
 		if (e?.constructor?.name === 'FilePickerClosed') {
 			return null

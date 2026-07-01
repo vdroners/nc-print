@@ -10,6 +10,19 @@ export default {
 			return this.printStore.prepareChecklist
 		},
 	},
+	methods: {
+		onRowClick(row) {
+			if (row.action) {
+				this.$emit('action', row.action)
+			}
+		},
+		rowClass(row) {
+			return [
+				row.ok ? 'nc-print-checklist__row--ok' : 'nc-print-checklist__row--missing',
+				row.action ? 'nc-print-checklist__row--clickable' : '',
+			]
+		},
+	},
 }
 </script>
 
@@ -21,10 +34,21 @@ export default {
 				v-for="row in items"
 				:key="row.id"
 				class="nc-print-checklist__row"
-				:class="row.ok ? 'nc-print-checklist__row--ok' : 'nc-print-checklist__row--missing'">
-				<span class="nc-print-checklist__mark" aria-hidden="true">{{ row.ok ? '✓' : '✗' }}</span>
-				<span class="nc-print-checklist__label">{{ row.label }}</span>
-				<span v-if="!row.ok && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
+				:class="rowClass(row)">
+				<button
+					v-if="row.action"
+					type="button"
+					class="nc-print-checklist__btn"
+					@click="onRowClick(row)">
+					<span class="nc-print-checklist__mark" aria-hidden="true">{{ row.ok ? '✓' : '✗' }}</span>
+					<span class="nc-print-checklist__label">{{ row.label }}</span>
+					<span v-if="!row.ok && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
+				</button>
+				<template v-else>
+					<span class="nc-print-checklist__mark" aria-hidden="true">{{ row.ok ? '✓' : '✗' }}</span>
+					<span class="nc-print-checklist__label">{{ row.label }}</span>
+					<span v-if="!row.ok && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
+				</template>
 			</li>
 		</ul>
 	</div>
@@ -38,16 +62,44 @@ export default {
 }
 
 .nc-print-checklist__row {
-	align-items: baseline;
-	display: flex;
-	flex-wrap: wrap;
 	font-size: var(--nc-gcs-text-sm);
-	gap: 6px 8px;
-	padding: 6px 0;
 }
 
 .nc-print-checklist__row + .nc-print-checklist__row {
 	border-top: 1px solid var(--nc-gcs-border);
+}
+
+.nc-print-checklist__btn {
+	align-items: baseline;
+	appearance: none;
+	background: none;
+	border: none;
+	color: inherit;
+	cursor: pointer;
+	display: flex;
+	flex-wrap: wrap;
+	font: inherit;
+	gap: 6px 8px;
+	padding: 6px 0;
+	text-align: left;
+	width: 100%;
+}
+
+.nc-print-checklist__btn:hover {
+	color: var(--nc-app-accent);
+}
+
+.nc-print-checklist__btn:focus-visible {
+	outline: 2px solid var(--nc-app-accent);
+	outline-offset: 2px;
+}
+
+.nc-print-checklist__row:not(.nc-print-checklist__row--clickable) {
+	align-items: baseline;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 8px;
+	padding: 6px 0;
 }
 
 .nc-print-checklist__mark {

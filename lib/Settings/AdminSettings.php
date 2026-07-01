@@ -45,6 +45,10 @@ class AdminSettings implements ISettings
 				ConfigService::KEY_ALLOWED_GROUPS,
 				ConfigService::DEFAULT_ALLOWED_GROUPS,
 			),
+			ConfigService::KEY_MULTI_PRINTERS => $this->getString(
+				ConfigService::KEY_MULTI_PRINTERS,
+				'',
+			),
 			ConfigService::KEY_SLICER_ENABLED => $this->isEnabled(
 				ConfigService::KEY_SLICER_ENABLED,
 				true,

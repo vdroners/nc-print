@@ -1,12 +1,12 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
-import { toastInfo } from '@/services/toast.js'
 
 export default {
 	name: 'ViewportToolbar',
 	props: {
 		canCenter: { type: Boolean, default: false },
+		canTransform: { type: Boolean, default: false },
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -15,7 +15,24 @@ export default {
 				return 'No model loaded'
 			}
 			const kb = Math.round(this.printStore.model.size / 1024)
-			return `${this.printStore.model.name} (${kb} KB)`
+			let line = `${this.printStore.model.name} (${kb} KB)`
+			const bbox = this.printStore.modelMeta.bbox
+			if (bbox) {
+				line += ` · ${Math.round(bbox.x)}×${Math.round(bbox.y)}×${Math.round(bbox.z)} mm`
+			}
+			if (this.printStore.meshHealth.analyzed) {
+				line += ` · ${this.printStore.meshHealth.overhangPct}% overhang`
+			}
+			if (this.printStore.model.convertedFrom3mf) {
+				line += ' · 3MF→STL for slice'
+			}
+			if (this.printStore.meshState.dirty && !this.printStore.meshState.autoApply) {
+				line += ' · transform pending apply'
+			}
+			if (this.printStore.meshState.applying) {
+				line += ' · applying…'
+			}
+			return line
 		},
 	},
 	methods: {
@@ -32,12 +49,27 @@ export default {
 		onCenter() {
 			this.$emit('center')
 		},
+		onRotate(axis) {
+			this.$emit('rotate', axis)
+		},
 		onAutoOrient() {
-			toastInfo('Orientation is applied during slicing on the server — use Center on bed to adjust placement.')
+			this.$emit('auto-orient')
+		},
+		onLayFlat() {
+			this.$emit('lay-flat')
+		},
+		onScaleToFit() {
+			this.$emit('scale-to-fit')
 		},
 		onClear() {
 			this.printStore.clearModel()
 			this.$emit('clear')
+		},
+		onApply() {
+			this.$emit('apply')
+		},
+		onAutoApplyChange(e) {
+			this.printStore.setMeshAutoApply(e.target.checked)
 		},
 	},
 }
@@ -53,20 +85,59 @@ export default {
 			type="file"
 			accept=".stl,.3mf,.obj"
 			hidden
+			aria-label="Import model file"
 			@change="onFileInput">
 		<button
 			type="button"
 			class="nc-print-btn"
 			:disabled="!canCenter"
+			title="Center on bed and drop to z=0"
 			@click="onCenter">
 			Center on bed
+		</button>
+		<span v-if="printStore.hasModel" class="nc-print-viewport-toolbar__rotate">
+			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around X" @click="onRotate('x')">↻ X</button>
+			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Y" @click="onRotate('y')">↻ Y</button>
+			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Z" @click="onRotate('z')">↻ Z</button>
+		</span>
+		<button
+			type="button"
+			class="nc-print-btn"
+			:disabled="!canTransform"
+			title="Place largest face on the bed"
+			@click="onLayFlat">
+			Lay flat
 		</button>
 		<button
 			type="button"
 			class="nc-print-btn"
-			:disabled="!printStore.hasModel"
+			:disabled="!canTransform"
+			title="Uniform scale to fit build volume"
+			@click="onScaleToFit">
+			Scale to fit
+		</button>
+		<button
+			type="button"
+			class="nc-print-btn"
+			:disabled="!canTransform"
+			title="Pick lowest-overhang axis-aligned rotation"
 			@click="onAutoOrient">
-			Orient (on slice)
+			Auto-orient
+		</button>
+		<label v-if="printStore.hasModel" class="nc-print-viewport-toolbar__auto">
+			<input
+				type="checkbox"
+				:checked="printStore.meshState.autoApply"
+				@change="onAutoApplyChange">
+			Auto-apply on edit
+		</label>
+		<button
+			v-if="printStore.hasModel && !printStore.meshState.autoApply"
+			type="button"
+			class="nc-print-btn nc-print-btn--primary"
+			:disabled="!printStore.meshState.dirty || printStore.meshState.applying"
+			@click="onApply">
+			Apply to slice
 		</button>
 		<button
 			type="button"
@@ -88,9 +159,32 @@ export default {
 	margin-bottom: var(--nc-gcs-space-sm);
 }
 
+.nc-print-viewport-toolbar__rotate {
+	display: inline-flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.nc-print-viewport-toolbar__auto {
+	align-items: center;
+	color: var(--nc-gcs-text-secondary);
+	display: inline-flex;
+	font-size: var(--nc-gcs-text-sm);
+	gap: 6px;
+}
+
 .nc-print-viewport-toolbar__info {
 	color: var(--nc-gcs-text-muted);
+	flex: 1 1 200px;
 	font-size: var(--nc-gcs-text-sm);
 	margin-left: auto;
+	min-width: 160px;
+	text-align: right;
+}
+
+:deep(.nc-print-btn--compact) {
+	font-size: 11px;
+	min-width: 0;
+	padding: 4px 8px;
 }
 </style>

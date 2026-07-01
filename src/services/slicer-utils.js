@@ -46,6 +46,21 @@ export function parseSseChunk(chunk, leftover = '') {
 }
 
 /**
+ * Parse a trailing SSE block that may lack the final blank-line delimiter
+ * when the server closes the socket (common on proxied streams).
+ *
+ * @param {string} leftover
+ * @returns {Array<{ event: string, parsed: object|null }>}
+ */
+export function flushSseLeftover(leftover = '') {
+	const trimmed = (leftover || '').trimEnd()
+	if (!trimmed) {
+		return []
+	}
+	return parseSseChunk('\n\n', trimmed).events
+}
+
+/**
  * @param {object} form
  * @returns {object}
  */
@@ -74,6 +89,24 @@ export function buildSliceOverrides(form = {}) {
 	num('first_layer_speed', form.firstLayerSpeed)
 	num('nozzle_temperature', form.nozzleTemp)
 	num('bed_temperature', form.bedTemp)
+	num('fan_speed', form.fanSpeed)
+	num('retraction_length', form.retractionLength)
+	num('retraction_speed', form.retractionSpeed)
+
+	const bool = (key, val) => {
+		if (val === '' || val === null || val === undefined) {
+			return
+		}
+		overrides[key] = val === true || val === 'true' || val === 1 || val === '1'
+	}
+	bool('enable_support', form.enableSupport)
+	num('support_threshold', form.supportThreshold)
+	num('brim_width', form.brimWidth)
+	num('raft_layers', form.raftLayers)
+	num('skirt_loops', form.skirtLoops)
+	if (form.supportType !== '' && form.supportType != null) {
+		overrides.support_type = String(form.supportType)
+	}
 
 	return overrides
 }
@@ -124,6 +157,63 @@ export function mergeProfileSettings(profiles, selection) {
  * Map merged Orca/forge profile keys to override form fields.
  * @param {object} merged
  */
+/** @type {Array<{ key: string, label: string, format?: (v: unknown) => string }>} */
+export const OVERRIDE_FIELD_DEFS = [
+	{ key: 'layerHeight', label: 'Layer height (mm)' },
+	{ key: 'lineWidth', label: 'Line width (mm)' },
+	{ key: 'perimeters', label: 'Perimeters' },
+	{ key: 'infillDensity', label: 'Infill density (%)' },
+	{ key: 'printSpeed', label: 'Print speed (mm/s)' },
+	{ key: 'firstLayerSpeed', label: 'First layer speed (mm/s)' },
+	{ key: 'nozzleTemp', label: 'Nozzle temp (°C)' },
+	{ key: 'bedTemp', label: 'Bed temp (°C)' },
+	{ key: 'fanSpeed', label: 'Fan speed (%)' },
+	{ key: 'retractionLength', label: 'Retraction (mm)' },
+	{ key: 'retractionSpeed', label: 'Retraction speed (mm/s)' },
+	{ key: 'enableSupport', label: 'Supports', format: v => (v ? 'On' : 'Off') },
+	{ key: 'supportType', label: 'Support type' },
+	{ key: 'supportThreshold', label: 'Support threshold (°)' },
+	{ key: 'brimWidth', label: 'Brim width (mm)' },
+	{ key: 'raftLayers', label: 'Raft layers' },
+	{ key: 'skirtLoops', label: 'Skirt loops' },
+]
+
+/**
+ * Rows where operator overrides differ from merged profile defaults.
+ * @param {object} form Current override form from store
+ * @param {object} mergedDefaults Output of mergeProfileSettings
+ * @returns {Array<{ key: string, label: string, defaultValue: string|number, overrideValue: string|number }>}
+ */
+function formatOverrideValue(value, format) {
+	if (value === '' || value == null) {
+		return ''
+	}
+	if (format) {
+		return format(value)
+	}
+	return String(value)
+}
+
+export function diffOverrides(form = {}, mergedDefaults = {}) {
+	const defaults = mergedToOverrideForm(mergedDefaults)
+	const rows = []
+	for (const { key, label, format } of OVERRIDE_FIELD_DEFS) {
+		const overrideValue = form[key]
+		const defaultValue = defaults[key]
+		const o = formatOverrideValue(overrideValue, format)
+		const d = formatOverrideValue(defaultValue, format)
+		if (o !== '' && o !== d) {
+			rows.push({
+				key,
+				label,
+				defaultValue: d || defaultValue,
+				overrideValue: o || overrideValue,
+			})
+		}
+	}
+	return rows
+}
+
 export function mergedToOverrideForm(merged = {}) {
 	const inf = merged.infillDensity ?? merged.infill_density
 	let infillDensity = ''
@@ -142,6 +232,15 @@ export function mergedToOverrideForm(merged = {}) {
 		firstLayerSpeed: merged.firstLayerSpeed ?? merged.first_layer_speed ?? '',
 		nozzleTemp: merged.nozzleTemp ?? merged.nozzle_temperature ?? '',
 		bedTemp: merged.bedTemp ?? merged.bed_temperature ?? '',
+		fanSpeed: merged.fanSpeed ?? merged.fan_speed ?? '',
+		retractionLength: merged.retractionLength ?? merged.retraction_length ?? '',
+		retractionSpeed: merged.retractionSpeed ?? merged.retraction_speed ?? '',
+		enableSupport: !!(merged.enableSupport ?? merged.enable_support),
+		supportType: merged.supportType ?? merged.support_type ?? '',
+		supportThreshold: merged.supportThreshold ?? merged.support_threshold ?? '',
+		brimWidth: merged.brimWidth ?? merged.brim_width ?? '',
+		raftLayers: merged.raftLayers ?? merged.raft_layers ?? '',
+		skirtLoops: merged.skirtLoops ?? merged.skirt_loops ?? '',
 	}
 }
 
@@ -156,8 +255,46 @@ export function pickDefaultProfileId(profiles, kind) {
 }
 
 /**
- * @param {number} seconds
+ * Resolve filament price per kg from profile settings or app config.
+ * @param {object|null|undefined} config App config from fetchConfig
+ * @param {object} [filamentSettings] Merged or filament profile settings_json
+ * @returns {number|null}
  */
+export function resolveFilamentPricePerKg(config, filamentSettings = {}) {
+	const profileKeys = [
+		filamentSettings.filament_price,
+		filamentSettings.filamentPrice,
+		filamentSettings.price_per_kg,
+		filamentSettings.pricePerKg,
+	]
+	for (const raw of profileKeys) {
+		const n = Number(raw)
+		if (Number.isFinite(n) && n > 0) {
+			return n
+		}
+	}
+	const fromConfig = Number(config?.default_filament_price_kg)
+	if (Number.isFinite(fromConfig) && fromConfig > 0) {
+		return fromConfig
+	}
+	return null
+}
+
+/**
+ * Estimate material cost from grams used and price per kg.
+ * @param {number} grams
+ * @param {number|null|undefined} pricePerKg
+ * @returns {number|null}
+ */
+export function estimateFilamentCost(grams, pricePerKg) {
+	const g = Number(grams)
+	const price = Number(pricePerKg)
+	if (!Number.isFinite(g) || g <= 0 || !Number.isFinite(price) || price <= 0) {
+		return null
+	}
+	return (g / 1000) * price
+}
+
 export function formatPrintTime(seconds) {
 	const s = Math.max(0, Math.round(Number(seconds) || 0))
 	const hours = Math.floor(s / 3600)
@@ -196,12 +333,78 @@ export function estimatePrintTimeBand(bbox, layerHeightMm) {
 }
 
 /**
+ * @param {ArrayBuffer} buf
+ * @returns {boolean}
+ */
+function isAsciiStl(buf) {
+	if (!buf || buf.byteLength < 5) {
+		return false
+	}
+	const head = new TextDecoder('ascii').decode(buf.slice(0, 5)).toLowerCase()
+	return head === 'solid'
+}
+
+/**
+ * Minimal ASCII STL parse — vertex lines only (no binary mis-read).
+ * @param {ArrayBuffer} buf
+ * @returns {{ triangleCount: number, bbox: { x: number, y: number, z: number }|null, note?: string }}
+ */
+function parseAsciiStlMetadata(buf) {
+	const text = new TextDecoder('utf-8', { fatal: false }).decode(buf)
+	if (!/^\s*solid\b/i.test(text)) {
+		return { triangleCount: 0, bbox: null, note: 'not ASCII STL' }
+	}
+	const vertexRe = /^\s*vertex\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s+([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*$/gim
+	let minX = Infinity
+	let minY = Infinity
+	let minZ = Infinity
+	let maxX = -Infinity
+	let maxY = -Infinity
+	let maxZ = -Infinity
+	let vertexCount = 0
+	let match
+	while ((match = vertexRe.exec(text)) !== null) {
+		const x = Number(match[1])
+		const y = Number(match[2])
+		const z = Number(match[3])
+		if (Number.isNaN(x) || Number.isNaN(y) || Number.isNaN(z)) {
+			continue
+		}
+		vertexCount++
+		minX = Math.min(minX, x)
+		maxX = Math.max(maxX, x)
+		minY = Math.min(minY, y)
+		maxY = Math.max(maxY, y)
+		minZ = Math.min(minZ, z)
+		maxZ = Math.max(maxZ, z)
+	}
+	if (vertexCount < 3) {
+		return { triangleCount: 0, bbox: null, note: 'ASCII STL: no vertices parsed' }
+	}
+	return {
+		triangleCount: Math.floor(vertexCount / 3),
+		bbox: {
+			x: maxX - minX,
+			y: maxY - minY,
+			z: maxZ - minZ,
+		},
+		note: 'ASCII STL',
+	}
+}
+
+/**
  * Parse binary STL header for triangle count / rough bbox (client-side).
  * @param {ArrayBuffer} buf
- * @returns {{ triangleCount: number, bbox: { x: number, y: number, z: number }|null }}
+ * @returns {{ triangleCount: number, bbox: { x: number, y: number, z: number }|null, note?: string }}
  */
 export function parseStlMetadata(buf) {
-	if (!buf || buf.byteLength < 84) {
+	if (!buf || buf.byteLength < 5) {
+		return { triangleCount: 0, bbox: null }
+	}
+	if (isAsciiStl(buf)) {
+		return parseAsciiStlMetadata(buf)
+	}
+	if (buf.byteLength < 84) {
 		return { triangleCount: 0, bbox: null }
 	}
 	const dv = new DataView(buf)
@@ -243,4 +446,69 @@ export function parseStlMetadata(buf) {
 			z: maxZ - minZ,
 		},
 	}
+}
+
+/** Human-readable labels for forge-slicer SSE progress stages. */
+export const SLICE_STAGE_LABELS = {
+	preparing: 'Preparing model',
+	prepare: 'Preparing model',
+	load: 'Loading model',
+	slice: 'Slicing layers',
+	slicing: 'Slicing layers',
+	generate: 'Generating toolpaths',
+	export: 'Exporting G-code',
+	exporting: 'Exporting G-code',
+	done: 'Complete',
+	complete: 'Complete',
+	cancelled: 'Cancelled',
+	error: 'Failed',
+}
+
+/**
+ * @param {string} stage raw stage from SSE
+ * @returns {string}
+ */
+export function mapSliceStageLabel(stage) {
+	if (!stage) {
+		return 'Slicing'
+	}
+	const key = String(stage).toLowerCase().replace(/\s+/g, '_')
+	if (SLICE_STAGE_LABELS[key]) {
+		return SLICE_STAGE_LABELS[key]
+	}
+	return String(stage).replace(/_/g, ' ')
+}
+
+/**
+ * @param {object} profiles pinia profiles state
+ * @param {string} printerId
+ * @returns {number}
+ */
+export function parseExtruderCount(profiles, printerId) {
+	const p = (profiles?.printers || []).find(x => String(x.id) === String(printerId))
+	if (!p?.settings_json) {
+		return 1
+	}
+	const s = parseProfileSettings(p.settings_json)
+	const n = Number(s.extruder_count ?? s.extruderCount ?? s.nozzle_diameter?.length ?? 1)
+	return Number.isFinite(n) && n > 0 ? Math.floor(n) : 1
+}
+
+/**
+ * @param {object} profiles
+ * @param {object} selection
+ * @returns {string[]}
+ */
+export function resolveFilamentIds(selection, extruderCount = 1) {
+	if (Array.isArray(selection.filamentIds) && selection.filamentIds.length) {
+		const ids = selection.filamentIds.filter(Boolean)
+		while (ids.length < extruderCount) {
+			ids.push(selection.filamentId || ids[0] || '')
+		}
+		return ids.slice(0, extruderCount)
+	}
+	if (selection.filamentId) {
+		return Array.from({ length: extruderCount }, () => selection.filamentId)
+	}
+	return []
 }

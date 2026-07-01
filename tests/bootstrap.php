@@ -12,3 +12,5 @@ foreach ([
 		break;
 	}
 }
+
+require_once __DIR__ . '/stubs/OcpStubs.php';

@@ -22,6 +22,34 @@ class PrinterController extends Controller
 	private const DEFAULT_TIMEOUT_SECONDS = 60;
 	private const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
+	private const NOZZLE_TEMP_MIN = 0;
+	private const NOZZLE_TEMP_MAX = 300;
+	private const BED_TEMP_MIN = 0;
+	private const BED_TEMP_MAX = 120;
+	private const TUNE_FACTOR_MIN = 50;
+	private const TUNE_FACTOR_MAX = 200;
+	private const FAN_SPEED_MIN = 0;
+	private const FAN_SPEED_MAX = 255;
+	private const BABYSTEP_Z_MIN = -2.0;
+	private const BABYSTEP_Z_MAX = 2.0;
+	private const JOG_DISTANCE_MIN = -10.0;
+	private const JOG_DISTANCE_MAX = 10.0;
+
+	/** @var list<string> */
+	private const MOTION_ACTIONS = ['home_all', 'home_z', 'jog', 'disable_steppers'];
+
+	/** @var list<string> */
+	private const ALLOWED_GCODE_ACTIONS = [
+		'tune_speed',
+		'tune_flow',
+		'tune_fan',
+		'babystep_z',
+		'home_all',
+		'home_z',
+		'jog',
+		'disable_steppers',
+	];
+
 	public function __construct(
 		IRequest $request,
 		private ConfigService $config,
@@ -46,12 +74,16 @@ class PrinterController extends Controller
 			'objects' => [
 				'print_stats' => null,
 				'display_status' => null,
+				'virtual_sdcard' => null,
 				'extruder' => null,
 				'heater_bed' => null,
+				'fan' => null,
+				'gcode_move' => null,
+				'toolhead' => null,
 			],
 		], JSON_THROW_ON_ERROR);
 
-		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json');
+		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $this->request->getParam('printer_id'));
 		if ($result === null) {
 			return new JSONResponse($this->emptyState('Moonraker unreachable'));
 		}
@@ -79,6 +111,110 @@ class PrinterController extends Controller
 	public function cancel(): JSONResponse
 	{
 		return $this->printAction('printer/print/cancel');
+	}
+
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	public function setTemperature(): JSONResponse
+	{
+		if ($gate = $this->controlGate()) {
+			return $gate;
+		}
+
+		$params = $this->mergedParams();
+		$printerId = $this->printerIdFromParams($params);
+		$hasNozzle = array_key_exists('nozzle', $params) && $params['nozzle'] !== '' && $params['nozzle'] !== null;
+		$hasBed = array_key_exists('bed', $params) && $params['bed'] !== '' && $params['bed'] !== null;
+		if (!$hasNozzle && !$hasBed) {
+			return new JSONResponse(
+				['error' => 'missing_target', 'message' => 'At least one of nozzle or bed temperature is required'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		$lines = [];
+		if ($hasNozzle) {
+			$nozzle = $this->clampNozzleTemp((float) $params['nozzle']);
+			$lines[] = sprintf('M104 S%d', (int) round($nozzle));
+		}
+		if ($hasBed) {
+			$bed = $this->clampBedTemp((float) $params['bed']);
+			$lines[] = sprintf('M140 S%d', (int) round($bed));
+		}
+
+		$result = $this->sendGcodeScript(implode("\n", $lines), $printerId);
+		if ($result === null) {
+			return new JSONResponse(
+				['error' => 'backend_unreachable', 'message' => 'Moonraker temperature request failed'],
+				Http::STATUS_BAD_GATEWAY,
+			);
+		}
+
+		return new JSONResponse($result);
+	}
+
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	public function emergencyStop(): JSONResponse
+	{
+		if ($gate = $this->controlGate()) {
+			return $gate;
+		}
+
+		$printerId = $this->printerIdFromParams($this->mergedParams());
+		$result = $this->moonrakerPost('printer/emergency_stop', '{}', 'application/json', $printerId);
+		if ($result === null) {
+			return new JSONResponse(
+				['error' => 'backend_unreachable', 'message' => 'Moonraker emergency stop failed'],
+				Http::STATUS_BAD_GATEWAY,
+			);
+		}
+
+		return new JSONResponse($result);
+	}
+
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	public function gcodeAction(): JSONResponse
+	{
+		if ($gate = $this->controlGate()) {
+			return $gate;
+		}
+
+		$params = $this->mergedParams();
+		$printerId = $this->printerIdFromParams($params);
+		$action = strtolower(trim((string) ($params['action'] ?? '')));
+		if ($action === '' || !in_array($action, self::ALLOWED_GCODE_ACTIONS, true)) {
+			return new JSONResponse(
+				['error' => 'invalid_action', 'message' => 'Unsupported gcode action'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		if (in_array($action, self::MOTION_ACTIONS, true) && $this->isPrintActive($printerId)) {
+			return new JSONResponse(
+				['error' => 'motion_blocked', 'message' => 'Manual motion is not allowed while a print is active'],
+				Http::STATUS_CONFLICT,
+			);
+		}
+
+		$script = $this->buildGcodeScriptForAction($action, $params);
+		if ($script === null) {
+			return new JSONResponse(
+				['error' => 'invalid_params', 'message' => 'Invalid or missing parameters for action'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		$result = $this->sendGcodeScript($script, $printerId);
+		if ($result === null) {
+			return new JSONResponse(
+				['error' => 'backend_unreachable', 'message' => 'Moonraker gcode request failed'],
+				Http::STATUS_BAD_GATEWAY,
+			);
+		}
+
+		return new JSONResponse($result);
 	}
 
 	#[NoCSRFRequired]
@@ -132,7 +268,7 @@ class PrinterController extends Controller
 		$start = in_array(strtolower($startRaw), ['1', 'true', 'yes', 'on'], true);
 
 		$built = MultipartBuilder::buildMoonrakerUpload($binary, $filename, $start);
-		$result = $this->moonrakerPost('server/files/upload', $built['body'], $built['contentType']);
+		$result = $this->moonrakerPost('server/files/upload', $built['body'], $built['contentType'], $this->request->getParam('printer_id'));
 		if ($result === null) {
 			return new JSONResponse(
 				['error' => 'backend_unreachable', 'message' => 'Moonraker upload failed'],
@@ -143,7 +279,7 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
-	private function printAction(string $path): JSONResponse
+	private function controlGate(): ?JSONResponse
 	{
 		if (!$this->access->canUseApp()) {
 			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
@@ -154,8 +290,40 @@ class PrinterController extends Controller
 				Http::STATUS_SERVICE_UNAVAILABLE,
 			);
 		}
+		return null;
+	}
 
-		$result = $this->moonrakerPost($path, '{}', 'application/json');
+	/** @param array<string, mixed> $params */
+	private function printerIdFromParams(array $params): ?string
+	{
+		$id = $params['printer_id'] ?? $this->request->getParam('printer_id');
+		if ($id === null || $id === '') {
+			return null;
+		}
+		return (string) $id;
+	}
+
+	/** @return array<string, mixed> */
+	private function mergedParams(): array
+	{
+		$params = $this->request->getParams();
+		$raw = file_get_contents('php://input');
+		if (is_string($raw) && $raw !== '') {
+			$json = json_decode($raw, true);
+			if (is_array($json)) {
+				$params = array_merge($params, $json);
+			}
+		}
+		return $params;
+	}
+
+	private function printAction(string $path): JSONResponse
+	{
+		if ($gate = $this->controlGate()) {
+			return $gate;
+		}
+
+		$result = $this->moonrakerPost($path, '{}', 'application/json', $this->request->getParam('printer_id'));
 		if ($result === null) {
 			return new JSONResponse(
 				['error' => 'backend_unreachable', 'message' => 'Moonraker request failed'],
@@ -188,38 +356,179 @@ class PrinterController extends Controller
 	{
 		$printStats = is_array($status['print_stats'] ?? null) ? $status['print_stats'] : [];
 		$display = is_array($status['display_status'] ?? null) ? $status['display_status'] : [];
+		$virtualSdcard = is_array($status['virtual_sdcard'] ?? null) ? $status['virtual_sdcard'] : [];
 		$extruder = is_array($status['extruder'] ?? null) ? $status['extruder'] : [];
 		$bed = is_array($status['heater_bed'] ?? null) ? $status['heater_bed'] : [];
+		$fan = is_array($status['fan'] ?? null) ? $status['fan'] : [];
+		$gcodeMove = is_array($status['gcode_move'] ?? null) ? $status['gcode_move'] : [];
+		$toolhead = is_array($status['toolhead'] ?? null) ? $status['toolhead'] : [];
 		$info = is_array($printStats['info'] ?? null) ? $printStats['info'] : [];
 
 		$state = (string) ($printStats['state'] ?? 'unknown');
-		$progress = $display['progress'] ?? $printStats['print_duration'] ?? 0;
-		if (!is_numeric($progress)) {
-			$progress = 0.0;
-		} else {
-			$progress = (float) $progress;
-			if ($progress > 1.0) {
-				$progress = min(1.0, $progress / 100.0);
-			}
-		}
+		$progress = $this->normalizeProgress(
+			$virtualSdcard['progress'] ?? null,
+			$display['progress'] ?? null,
+		);
+
+		$printDuration = $printStats['print_duration'] ?? $info['print_duration'] ?? null;
+		$totalDuration = $printStats['total_duration'] ?? $info['total_duration'] ?? null;
+		$fanSpeed = isset($fan['speed']) ? (float) $fan['speed'] : null;
+		$speedFactor = isset($gcodeMove['speed_factor']) ? (float) $gcodeMove['speed_factor'] : null;
+		$flowFactor = isset($gcodeMove['extrude_factor']) ? (float) $gcodeMove['extrude_factor'] : null;
+		$zOffset = isset($toolhead['homing_origin']) && is_array($toolhead['homing_origin']) && isset($toolhead['homing_origin'][2])
+			? (float) $toolhead['homing_origin'][2]
+			: null;
 
 		return [
 			'connected' => true,
 			'state' => $state,
 			'progress' => $progress,
 			'extruder_temp' => isset($extruder['temperature']) ? (float) $extruder['temperature'] : null,
+			'extruder_target' => isset($extruder['target']) ? (float) $extruder['target'] : null,
+			'extruder_power' => isset($extruder['power']) ? (float) $extruder['power'] : null,
 			'bed_temp' => isset($bed['temperature']) ? (float) $bed['temperature'] : null,
+			'bed_target' => isset($bed['target']) ? (float) $bed['target'] : null,
+			'bed_power' => isset($bed['power']) ? (float) $bed['power'] : null,
+			'fan_speed' => $fanSpeed,
+			'speed_factor' => $speedFactor,
+			'flow_factor' => $flowFactor,
+			'z_offset' => $zOffset,
 			'message' => (string) ($display['message'] ?? ''),
 			'filename' => $printStats['filename'] ?? null,
-			'print_duration' => isset($info['print_duration']) ? (float) $info['print_duration'] : null,
-			'total_duration' => isset($info['total_duration']) ? (float) $info['total_duration'] : null,
+			'print_duration' => is_numeric($printDuration) ? (float) $printDuration : null,
+			'total_duration' => is_numeric($totalDuration) ? (float) $totalDuration : null,
+			'layer' => isset($virtualSdcard['layer']) ? (int) $virtualSdcard['layer'] : null,
+			'layer_count' => isset($virtualSdcard['layer_count']) ? (int) $virtualSdcard['layer_count'] : null,
 		];
 	}
 
-	/** @return array<string, mixed>|null */
-	private function moonrakerPost(string $path, string $body, string $contentType): ?array
+	private function normalizeProgress(mixed $primary, mixed $fallback): float
 	{
-		$url = rtrim($this->config->getMoonrakerInternalUrl(), '/') . '/' . ltrim($path, '/');
+		foreach ([$primary, $fallback] as $value) {
+			if (!is_numeric($value)) {
+				continue;
+			}
+			$progress = (float) $value;
+			if ($progress <= 0.0) {
+				continue;
+			}
+			if ($progress > 1.0) {
+				$progress = min(1.0, $progress / 100.0);
+			}
+			return $progress;
+		}
+
+		return 0.0;
+	}
+
+	private function clampNozzleTemp(float $value): float
+	{
+		return max(self::NOZZLE_TEMP_MIN, min(self::NOZZLE_TEMP_MAX, $value));
+	}
+
+	private function clampBedTemp(float $value): float
+	{
+		return max(self::BED_TEMP_MIN, min(self::BED_TEMP_MAX, $value));
+	}
+
+	private function clampTuneFactor(float $value): int
+	{
+		return (int) round(max(self::TUNE_FACTOR_MIN, min(self::TUNE_FACTOR_MAX, $value)));
+	}
+
+	private function clampFanSpeed(float $value): int
+	{
+		return (int) round(max(self::FAN_SPEED_MIN, min(self::FAN_SPEED_MAX, $value)));
+	}
+
+	private function clampBabystepZ(float $value): float
+	{
+		return max(self::BABYSTEP_Z_MIN, min(self::BABYSTEP_Z_MAX, $value));
+	}
+
+	private function clampJogDistance(float $value): float
+	{
+		return max(self::JOG_DISTANCE_MIN, min(self::JOG_DISTANCE_MAX, $value));
+	}
+
+	private function isPrintActive(?string $printerId): bool
+	{
+		$payload = json_encode([
+			'objects' => ['print_stats' => null],
+		], JSON_THROW_ON_ERROR);
+		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $printerId);
+		if ($result === null) {
+			return true;
+		}
+		$status = $result['status'] ?? $result['result']['status'] ?? [];
+		$printStats = is_array($status['print_stats'] ?? null) ? $status['print_stats'] : [];
+		$state = strtolower((string) ($printStats['state'] ?? ''));
+		return in_array($state, ['printing', 'paused'], true);
+	}
+
+	/** @return array<string, mixed>|null */
+	private function sendGcodeScript(string $script, ?string $printerId): ?array
+	{
+		$body = json_encode(['script' => $script], JSON_THROW_ON_ERROR);
+		return $this->moonrakerPost('printer/gcode/script', $body, 'application/json', $printerId);
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 */
+	private function buildGcodeScriptForAction(string $action, array $params): ?string
+	{
+		switch ($action) {
+			case 'tune_speed':
+				if (!isset($params['value']) || !is_numeric($params['value'])) {
+					return null;
+				}
+				return sprintf('M220 S%d', $this->clampTuneFactor((float) $params['value']));
+			case 'tune_flow':
+				if (!isset($params['value']) || !is_numeric($params['value'])) {
+					return null;
+				}
+				return sprintf('M221 S%d', $this->clampTuneFactor((float) $params['value']));
+			case 'tune_fan':
+				if (!isset($params['value']) || !is_numeric($params['value'])) {
+					return null;
+				}
+				return sprintf('M106 S%d', $this->clampFanSpeed((float) $params['value']));
+			case 'babystep_z':
+				if (!isset($params['value']) || !is_numeric($params['value'])) {
+					return null;
+				}
+				$adjust = $this->clampBabystepZ((float) $params['value']);
+				return sprintf('SET_GCODE_OFFSET Z_ADJUST=%.3f MOVE=1', $adjust);
+			case 'home_all':
+				return 'G28';
+			case 'home_z':
+				return 'G28 Z';
+			case 'disable_steppers':
+				return 'M84';
+			case 'jog':
+				$axis = strtolower(trim((string) ($params['axis'] ?? '')));
+				if (!in_array($axis, ['x', 'y', 'z'], true)) {
+					return null;
+				}
+				if (!isset($params['distance']) || !is_numeric($params['distance'])) {
+					return null;
+				}
+				$distance = $this->clampJogDistance((float) $params['distance']);
+				if (abs($distance) < 0.0001) {
+					return null;
+				}
+				$axisLetter = strtoupper($axis);
+				return sprintf("G91\nG0 %s%.3f F3000\nG90", $axisLetter, $distance);
+			default:
+				return null;
+		}
+	}
+
+	/** @return array<string, mixed>|null */
+	private function moonrakerPost(string $path, string $body, string $contentType, ?string $printerId = null): ?array
+	{
+		$url = rtrim($this->config->resolveMoonrakerUrl($printerId), '/') . '/' . ltrim($path, '/');
 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
