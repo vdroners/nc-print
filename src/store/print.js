@@ -204,6 +204,110 @@ export const usePrintStore = defineStore('print', {
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done'
 		},
+		prepareChecklist(state) {
+			const rows = [
+				{
+					id: 'model',
+					label: 'Model loaded',
+					ok: !!state.model.file,
+					hint: 'Import or pick a file from Nextcloud',
+				},
+				{
+					id: 'printer',
+					label: 'Printer profile',
+					ok: !!state.selection.printerId,
+					hint: 'Choose a printer on Prepare (or check slicer profiles)',
+				},
+				{
+					id: 'filament',
+					label: 'Filament profile',
+					ok: !!state.selection.filamentId,
+					hint: 'Choose a filament profile',
+				},
+				{
+					id: 'process',
+					label: 'Process / quality profile',
+					ok: !!state.selection.processId,
+					hint: 'Choose a process profile',
+				},
+				{
+					id: 'slicer',
+					label: 'Slicer service online',
+					ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok,
+					hint: 'Start forge-slicer or check Admin settings',
+				},
+			]
+			return rows
+		},
+		firstPrepareBlocker(state) {
+			for (const row of [
+				{ ok: !!state.model.file, label: 'Model loaded', hint: 'Import or pick a file from Nextcloud' },
+				{ ok: !!state.selection.printerId, label: 'Printer profile', hint: 'Choose a printer on Prepare' },
+				{ ok: !!state.selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
+				{ ok: !!state.selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
+				{ ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok, label: 'Slicer service', hint: 'Start forge-slicer' },
+			]) {
+				if (!row.ok) {
+					return `${row.label}: ${row.hint}`
+				}
+			}
+			return ''
+		},
+		printStepEnabled(state) {
+			return state.sliceJob.status === 'done'
+				|| !!state.pendingPrintUpload
+				|| state.printerState.filename
+				|| (state.printerState.state || '').toLowerCase().includes('print')
+				|| (state.printerState.state || '').toLowerCase().includes('pause')
+		},
+		workflowStepSubtitle(state) {
+			return (stepId) => {
+				if (stepId === TABS.PREPARE) {
+					return state.model.name || 'Import a model'
+				}
+				if (stepId === TABS.SLICE) {
+					if (state.sliceJob.status === 'running') {
+						return `Slicing ${state.sliceJob.pct}%`
+					}
+					if (state.sliceJob.status === 'done') {
+						return 'Slice complete'
+					}
+					if (state.sliceJob.status === 'error') {
+						return 'Slice failed'
+					}
+					return state.model.file ? 'Ready to slice' : 'Load model first'
+				}
+				if (stepId === TABS.PRINT) {
+					if (state.printerState.filename) {
+						return state.printerState.filename
+					}
+					if (!state.printerState.connected) {
+						return 'Offline'
+					}
+					const st = (state.printerState.state || '').toLowerCase()
+					if (st.includes('print')) {
+						return 'Printing'
+					}
+					if (st.includes('pause')) {
+						return 'Paused'
+					}
+					return state.printerState.state || 'Ready'
+				}
+				return ''
+			}
+		},
+		sliceBlockReason(state) {
+			if (!state.model.file) {
+				return 'Load a model on Prepare first'
+			}
+			if (!state.selection.printerId || !state.selection.filamentId || !state.selection.processId) {
+				return 'Select printer, filament, and process on Prepare'
+			}
+			if (state.appStatus.loaded && state.appStatus.slicer_enabled && !state.appStatus.slicer_ok) {
+				return 'Slicer service offline'
+			}
+			return ''
+		},
 	},
 
 	actions: {

@@ -18,9 +18,15 @@ export default {
 		},
 	},
 	methods: {
+		stepSubtitle(stepId) {
+			return this.printStore.workflowStepSubtitle(stepId)
+		},
 		isEnabled(stepId) {
 			if (stepId === TABS.SLICE) {
-				return this.printStore.hasModel
+				return this.printStore.prepareComplete
+			}
+			if (stepId === TABS.PRINT) {
+				return this.printStore.printStepEnabled
 			}
 			return true
 		},
@@ -58,7 +64,9 @@ export default {
 		onStepClick(stepId) {
 			if (!this.isEnabled(stepId)) {
 				if (stepId === TABS.SLICE) {
-					toastInfo('Load a model on Prepare first')
+					toastInfo(this.printStore.firstPrepareBlocker || 'Complete Prepare first')
+				} else if (stepId === TABS.PRINT) {
+					toastInfo('Slice a model or upload G-code first')
 				}
 				return
 			}
@@ -81,9 +89,13 @@ export default {
 						class="nc-print-workflow__btn"
 						:aria-current="printStore.activeTab === step.id ? 'step' : null"
 						:disabled="!isEnabled(step.id)"
+						:title="!isEnabled(step.id) && step.id === TABS.SLICE ? printStore.firstPrepareBlocker : ''"
 						@click="onStepClick(step.id)">
 						<span class="nc-print-workflow__num">{{ stepDisplay(step, index) }}</span>
-						<span class="nc-print-workflow__label">{{ step.label }}</span>
+						<span class="nc-print-workflow__text">
+							<span class="nc-print-workflow__label">{{ step.label }}</span>
+							<span class="nc-print-workflow__sub">{{ stepSubtitle(step.id) }}</span>
+						</span>
 					</button>
 				</li>
 				<li

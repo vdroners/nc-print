@@ -1,8 +1,10 @@
-# Verify — NC Print v1.3.0
+# Verify — NC Print v1.3.1
 
 Signed off: **2026-06-30** (UTC) — lab server 10.0.0.84, `cloud_app` + forge-slicer + K1 Moonraker.
 
-**v1.3:** Centered workflow banner, scroll fix, Files app handler, slicer status card, multi-tool filament breakdown, Orca calibration links in Help. Re-run NS3/NS12 after deploy.
+**v1.3.1:** Viewport load fix, PrepareChecklist, workflow gates, sticky CTAs, Help Services tab, G17–G19. Re-run **NS12.15–NS12.18** (viewport + E2E workflow).
+
+**v1.3:** Centered workflow banner, scroll fix, Files app handler, slicer status card, multi-tool filament breakdown, Orca calibration links in Help.
 
 **v1.2 UX overhaul:** Three.js viewport, profiles on Prepare, Files fetch API, G-code upload, health banner, toasts.
 
@@ -64,6 +66,13 @@ From Docker, slicer health uses `InternalUrlResolver` → `http://10.0.0.84:8082
 | **NS12** | UX + visual acceptance | **NOT RUN** | — | Blocked at Nextcloud login in automated browser; NS12.1–12.9 manual |
 | NS12.10 | Scroll + pinned workflow banner | **NOT RUN** | — | Slice tab with overrides expanded: banner stays visible; bottom buttons reachable via tab scroll |
 | NS12.11 | Files app Open action | **NOT RUN** | — | Right-click STL/G-code → Open in NC 3D Print; G-code opens Print tab |
+| NS12.12 | Sticky Prepare CTA | **NOT RUN** | — | "Next to Slice" visible without scrolling past viewport |
+| NS12.13 | Slice → Print handoff | **NOT RUN** | — | After slice complete, "Monitor on Print →" opens Print tab |
+| NS12.14 | Print idle empty | **NOT RUN** | — | Idle printer shows guided panel with Go to Slice / Prepare |
+| NS12.15 | STL viewport renders | **NOT RUN** | — | Import STL; bed grid + mesh visible; orbit + bbox overlay |
+| NS12.16 | Prepare checklist | **NOT RUN** | — | Missing profile shows ✗; CTA disabled with title tooltip |
+| NS12.17 | End-to-end workflow | **NOT RUN** | — | STL → profiles → Slice only or send → Print progress |
+| NS12.18 | 3MF/OBJ path | **NOT RUN** | — | 3MF loads with info banner; slice succeeds without mesh |
 
 ## CLI API gates (deployed)
 
@@ -86,7 +95,10 @@ G12 PASS proxy bases set
 G13 PASS slicer api/ prefix gate
 G14 PASS http=401 fallback=ApiController
 G15 PASS admin_can_use=1 ws_ticket=yes
-G16 PASS files-action.mjs present
+G16 PASS nc_print-files-action.mjs
+G17 PASS viewport.js + three chunk
+G18 PASS vitest viewport-stl (npm run test)
+G19 PASS vitest prepare-workflow (npm run test)
 ```
 
 ## Preflight static

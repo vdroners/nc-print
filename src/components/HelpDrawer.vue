@@ -1,5 +1,7 @@
 <script>
 import { NcModal } from '@nextcloud/vue'
+import SlicerStatusCard from './SlicerStatusCard.vue'
+import { TABS } from '@/store/print.js'
 
 const CALIBRATION_LINKS = [
 	{
@@ -36,15 +38,34 @@ const CALIBRATION_LINKS = [
 
 export default {
 	name: 'HelpDrawer',
-	components: { NcModal },
+	components: { NcModal, SlicerStatusCard },
 	props: {
 		open: { type: Boolean, default: false },
+		workflowTab: { type: String, default: 'workflow' },
 	},
 	data() {
 		return {
 			tab: 'workflow',
 			calibrationLinks: CALIBRATION_LINKS,
 		}
+	},
+	watch: {
+		open(isOpen) {
+			if (isOpen) {
+				this.tab = this.initialTab
+			}
+		},
+	},
+	computed: {
+		initialTab() {
+			if (this.workflowTab === TABS.SLICE) {
+				return 'calibration'
+			}
+			if (this.workflowTab === TABS.PRINT) {
+				return 'limitations'
+			}
+			return 'workflow'
+		},
 	},
 	methods: {
 		close() {
@@ -82,6 +103,14 @@ export default {
 					type="button"
 					role="tab"
 					class="nc-print-help-tabs__btn"
+					:class="{ 'nc-print-help-tabs__btn--active': tab === 'services' }"
+					@click="tab = 'services'">
+					Services
+				</button>
+				<button
+					type="button"
+					role="tab"
+					class="nc-print-help-tabs__btn"
 					:class="{ 'nc-print-help-tabs__btn--active': tab === 'limits' }"
 					@click="tab = 'limits'">
 					Limitations
@@ -105,7 +134,7 @@ export default {
 				<h2 style="margin-top: 0;">OrcaSlicer calibration guides</h2>
 				<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin-top: 0;">
 					NC Print slices with forge-slicer (Orca engine). Run these calibrations in desktop OrcaSlicer,
-					then export or sync profiles to the forge-slicer config directory shown on Prepare.
+					then export or sync profiles to the forge-slicer config directory (Help → Services).
 				</p>
 				<ul class="nc-print-help-cal-list">
 					<li v-for="link in calibrationLinks" :key="link.href">
@@ -115,7 +144,15 @@ export default {
 				</ul>
 			</div>
 
-			<div v-else role="tabpanel">
+			<div v-else-if="tab === 'services'" role="tabpanel">
+				<h2 style="margin-top: 0;">Forge slicer & printer</h2>
+				<SlicerStatusCard />
+				<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted);">
+					When services are offline, see <code>docs/TROUBLESHOOTING.md</code> and Admin settings.
+				</p>
+			</div>
+
+			<div v-else-if="tab === 'limits'" role="tabpanel">
 				<h2 style="margin-top: 0;">NC 3D Print — limitations</h2>
 				<ul style="padding-left: 1.2em; line-height: 1.6; color: var(--nc-gcs-text-secondary);">
 					<li>

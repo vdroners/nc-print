@@ -22,4 +22,10 @@ for f in lib/Service/MultipartBuilder.php lib/Controller/PrinterController.php l
   lint_php "$f"
 done
 
-echo "OK preflight static checks"
+# G17 — viewport module + three chunk artifact
+test -f src/three/viewport.js
+grep -q 'export async function createViewport' src/three/viewport.js
+ls js/nc_print-nc-print-three.js* >/dev/null 2>&1 || npm run build >/dev/null
+ls js/nc_print-nc-print-three.js* >/dev/null
+
+echo "OK preflight static checks (G17 viewport bundle)"

@@ -2,7 +2,18 @@
 
 Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintforge/src/public/js/components/slicer-studio.js) and forge-slicer REST API.
 
-**Legend:** Done · v1.0.1 / v1.1 / v1.2 = shipped in that release · Deferred = not planned in v1.2
+**Legend:** Done · v1.0.1 / v1.1 / v1.2 / v1.3 / v1.3.1 = shipped · Deferred = backlog
+
+## v1.3.1 shipped (2026-06-30)
+
+| Item | Component |
+|------|-----------|
+| Viewport load queue + WebGL errors | ModelViewport v1.3.1 |
+| PrepareChecklist | PrepareChecklist.vue |
+| Files Open in NC 3D Print | files-action.mjs v1.3.0 |
+| Slicer status (Help → Services) | SlicerStatusCard |
+| Multi-tool filament breakdown | SliceResultPanel v1.3.0 |
+| Workflow banner + scroll fix | PrintWorkflowBanner v1.3.0 |
 
 ## Prepare tab (25 elements)
 

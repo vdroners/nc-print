@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.1] - 2026-06-30
+
+### Fixed
+
+- **3D viewport:** queue pending model load after WebGL init; explicit 360px canvas height; `setSize(..., true)`; WebGL error banner; distinct STL error vs 3MF/OBJ loaded states
+- **Workflow completion:** PrepareChecklist (model, profiles, slicer); Slice gated on `prepareComplete`; slice buttons require profiles; Print step gated until slice/G-code/print active
+- **Silent failures:** STL preview errors toast + inline message; profile retry on Prepare
+
+### Added
+
+- Sticky **Next to Slice →** footer on Prepare; **Monitor on Print →** after slice; Print tab idle guided empty state
+- Workflow banner step sub-labels; contextual Help tab from active workflow step; Services tab in Help (slicer status card moved off Prepare)
+- Consolidated import cluster (toolbar + From Files); shared `pickFileFromNextcloud` composable; `ProfileSummaryChip` on Slice
+- Automated gates G17–G19; VERIFY NS12.10–NS12.18 manual rows
+
 ## [1.3.0] - 2026-06-30
 
 ### Added

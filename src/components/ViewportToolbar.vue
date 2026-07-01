@@ -33,7 +33,7 @@ export default {
 			this.$emit('center')
 		},
 		onAutoOrient() {
-			toastInfo('Auto-orient runs on the server during slicing — use Center on bed to adjust placement.')
+			toastInfo('Orientation is applied during slicing on the server — use Center on bed to adjust placement.')
 		},
 		onClear() {
 			this.printStore.clearModel()
@@ -66,7 +66,7 @@ export default {
 			class="nc-print-btn"
 			:disabled="!printStore.hasModel"
 			@click="onAutoOrient">
-			Auto-orient
+			Orient (on slice)
 		</button>
 		<button
 			type="button"

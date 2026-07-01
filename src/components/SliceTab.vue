@@ -2,12 +2,14 @@
 import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import { previewUrl } from '@/services/slicer-api.js'
+import PrepareChecklist from './PrepareChecklist.vue'
 import SliceResultPanel from './SliceResultPanel.vue'
+import ProfileSummaryChip from './ProfileSummaryChip.vue'
 import GcodePreview from './GcodePreview.vue'
 
 export default {
 	name: 'SliceTab',
-	components: { SliceResultPanel, GcodePreview },
+	components: { PrepareChecklist, SliceResultPanel, ProfileSummaryChip, GcodePreview },
 	data() {
 		return {
 			abortController: null,
@@ -27,9 +29,20 @@ export default {
 		slicerDisabled() {
 			return !this.printStore.slicerReady
 		},
-		profileSummary() {
-			const n = this.printStore.selectedProfileNames
-			return `${n.printer} · ${n.filament} · ${n.process}`
+		sliceBlockReason() {
+			return this.printStore.sliceBlockReason
+		},
+		sliceActionsDisabled() {
+			return this.slicing || this.slicerDisabled || !this.printStore.profilesReady
+		},
+		sliceDisabledTitle() {
+			if (this.slicerDisabled) {
+				return 'Slicer offline'
+			}
+			if (!this.printStore.profilesReady) {
+				return this.printStore.sliceBlockReason
+			}
+			return ''
 		},
 	},
 	methods: {
@@ -64,6 +77,9 @@ export default {
 			this.printStore.cancelSlice(this.abortController)
 			this.abortController = null
 		},
+		goPrint() {
+			this.printStore.setActiveTab(TABS.PRINT)
+		},
 	},
 }
 </script>
@@ -78,12 +94,11 @@ export default {
 		</div>
 
 		<template v-else>
+			<PrepareChecklist />
+
 			<div class="nc-print-card">
 				<h2 class="nc-print-card__title">Profiles</h2>
-				<p style="margin: 0; color: var(--nc-gcs-text-muted); font-size: var(--nc-gcs-text-sm);">
-					{{ profileSummary }}
-					<button type="button" class="nc-print-link-btn" @click="goPrepare">Edit on Prepare</button>
-				</p>
+				<ProfileSummaryChip />
 			</div>
 
 			<div class="nc-print-card">
@@ -149,19 +164,24 @@ export default {
 					{{ printStore.sliceJob.error }}
 				</p>
 
+				<p v-if="sliceBlockReason && !slicing" style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-warning, #eab308); margin: 0 0 8px;">
+					{{ sliceBlockReason }}
+				</p>
+
 				<div class="nc-print-actions">
 					<button
 						type="button"
 						class="nc-print-btn nc-print-btn--primary"
-						:disabled="slicing || slicerDisabled"
-						:title="slicerDisabled ? 'Slicer offline' : ''"
+						:disabled="sliceActionsDisabled"
+						:title="sliceDisabledTitle"
 						@click="onSliceAndSend">
 						Slice and send to printer
 					</button>
 					<button
 						type="button"
 						class="nc-print-btn"
-						:disabled="slicing || slicerDisabled"
+						:disabled="sliceActionsDisabled"
+						:title="sliceDisabledTitle"
 						@click="onSliceOnly">
 						Slice only
 					</button>
@@ -176,6 +196,12 @@ export default {
 			</div>
 
 			<SliceResultPanel />
+
+			<div v-if="printStore.sliceComplete" class="nc-print-actions nc-print-slice-handoff">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrint">
+					Monitor on Print →
+				</button>
+			</div>
 
 			<div v-if="previewImageUrl && printStore.sliceJob.status === 'done'" class="nc-print-card">
 				<h2 class="nc-print-card__title">Preview</h2>
@@ -221,5 +247,9 @@ export default {
 	font: inherit;
 	margin-left: 8px;
 	text-decoration: underline;
+}
+
+.nc-print-slice-handoff {
+	margin-top: var(--nc-gcs-space-md);
 }
 </style>

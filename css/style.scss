@@ -326,6 +326,19 @@
 	}
 }
 
+.nc-print-job-strip__seg--static {
+	background: none;
+	border: none;
+	color: inherit;
+	cursor: default;
+	font: inherit;
+	padding: 0;
+
+	&:hover {
+		color: inherit;
+	}
+}
+
 .nc-print-job-strip__dot {
 	color: var(--nc-gcs-text-muted);
 }
@@ -360,7 +373,7 @@
 	justify-content: center;
 	list-style: none;
 	margin: 0;
-	max-width: min(96vw, 520px);
+	max-width: min(96vw, 640px);
 	padding: 6px 10px;
 	background: var(--nc-gcs-bg-surface);
 	border: 1px solid var(--nc-gcs-border);
@@ -383,9 +396,26 @@
 	font-family: inherit;
 	font-size: var(--nc-gcs-text-sm);
 	font-weight: 500;
-	gap: 6px;
+	gap: 8px;
 	padding: 6px 12px;
 	transition: background 0.15s, color 0.15s;
+}
+
+.nc-print-workflow__text {
+	align-items: flex-start;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.nc-print-workflow__sub {
+	color: var(--nc-gcs-text-muted);
+	font-size: 10px;
+	font-weight: 400;
+	max-width: 110px;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 

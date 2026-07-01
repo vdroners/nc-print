@@ -58,7 +58,7 @@ export async function createViewport(canvas, wrap) {
 		const h = Math.max(wrap.clientHeight, 320)
 		camera.aspect = w / h
 		camera.updateProjectionMatrix()
-		renderer.setSize(w, h, false)
+		renderer.setSize(w, h, true)
 	}
 
 	function drawBed(volume) {

@@ -1,10 +1,10 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore } from '@/store/print.js'
+import { usePrintStore, TABS } from '@/store/print.js'
 import { pausePrint, resumePrint, cancelPrint, uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
-import { fetchModelBlob } from '@/services/files-api.js'
+import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 
 export default {
@@ -24,6 +24,9 @@ export default {
 		},
 		controls() {
 			return this.printStore.printerControls
+		},
+		showIdleGuide() {
+			return !this.controls.isActive && !this.printStore.printerState.filename
 		},
 		elapsedLabel() {
 			const d = this.printStore.printerState.printDuration
@@ -51,6 +54,12 @@ export default {
 			}
 			this.printStore.clearPendingPrintUpload()
 			await this.uploadGcodeFile(new File([pending.blob], pending.filename, { type: 'text/plain' }))
+		},
+		goSlice() {
+			this.printStore.setActiveTab(TABS.SLICE)
+		},
+		goPrepare() {
+			this.printStore.setActiveTab(TABS.PREPARE)
 		},
 		async withBusy(fn) {
 			this.busy = true
@@ -96,30 +105,14 @@ export default {
 			}
 		},
 		async pickGcodeFromFiles() {
-			try {
-				const dialogs = await import('@nextcloud/dialogs')
-				const { getFilePickerBuilder, FilePickerClosed } = dialogs
-				const builder = getFilePickerBuilder('Select G-code')
-				builder.setMultiSelect(false)
-				builder.setFilter(node => /\.gcode$/i.test(node?.basename || node?.displayname || ''))
-				builder.setCanPick(node => /\.gcode$/i.test(node?.basename || node?.displayname || ''))
-				const picker = builder.build()
-				const result = await picker.pick()
-				if (!result) {
-					return
-				}
-				let path = typeof result === 'string' ? result : (Array.isArray(result) ? result[0]?.path : result?.path)
-				if (!path) {
-					return
-				}
-				const blob = await fetchModelBlob({ dav_path: path, allow_gcode: true })
-				const name = path.split('/').pop() || 'job.gcode'
-				await this.uploadGcodeFile(new File([blob], name, { type: 'text/plain' }))
-			} catch (e) {
-				if (e?.constructor?.name === 'FilePickerClosed') {
-					return
-				}
-				toastError('File pick failed', e)
+			const file = await pickFileFromNextcloud({
+				title: 'Select G-code',
+				filter: node => /\.gcode$/i.test(node?.basename || node?.displayname || ''),
+				canPick: node => /\.gcode$/i.test(node?.basename || node?.displayname || ''),
+				allowGcode: true,
+			})
+			if (file) {
+				await this.uploadGcodeFile(file)
 			}
 		},
 	},
@@ -128,7 +121,22 @@ export default {
 
 <template>
 	<div class="nc-print-print-tab">
-		<div class="nc-print-card">
+		<div v-if="showIdleGuide" class="nc-print-card nc-print-idle-guide">
+			<h2 class="nc-print-card__title">No active print</h2>
+			<p style="margin: 0 0 12px; color: var(--nc-gcs-text-secondary); font-size: var(--nc-gcs-text-sm);">
+				Slice a model and send G-code from the <strong>Slice</strong> tab, or upload G-code below.
+			</p>
+			<div class="nc-print-actions">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goSlice">
+					Go to Slice
+				</button>
+				<button type="button" class="nc-print-btn" @click="goPrepare">
+					Go to Prepare
+				</button>
+			</div>
+		</div>
+
+		<div v-if="!showIdleGuide" class="nc-print-card">
 			<h2 class="nc-print-card__title">Print control</h2>
 			<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin: 0 0 8px;">
 				State: <strong>{{ printStore.printerStatusLabel }}</strong>

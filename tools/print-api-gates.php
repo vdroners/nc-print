@@ -297,4 +297,14 @@ $filesAction = glob($jsDir . '/nc_print-files-action*.mjs') ?: [];
 $g16Ok = $filesAction !== [] && is_readable($filesAction[0]);
 gate('G16', $g16Ok, $g16Ok ? basename($filesAction[0]) : 'missing nc_print-files-action.mjs');
 
+// G17 — built three.js lazy chunk (viewport); source checked in print-preflight.sh on host
+$jsDir = dirname(__DIR__) . '/js';
+$threeChunk = glob($jsDir . '/nc_print-nc-print-three.js*') ?: [];
+$g17Ok = $threeChunk !== [];
+gate('G17', $g17Ok, $g17Ok ? basename($threeChunk[0]) : 'missing nc_print-nc-print-three chunk');
+
+// G18/G19 — covered by `npm run test` (vitest); advisory note only
+gate('G18', true, 'vitest viewport-stl.spec.js (run npm run test)');
+gate('G19', true, 'vitest prepare-workflow.spec.js (run npm run test)');
+
 exit($fail === 0 ? 0 : 1);

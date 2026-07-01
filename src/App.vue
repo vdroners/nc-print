@@ -29,7 +29,7 @@ export default {
 			TABS,
 			version: typeof __NC_PRINT_FRONTEND_VERSION__ !== 'undefined'
 				? __NC_PRINT_FRONTEND_VERSION__
-				: '1.3.0',
+				: '1.3.1',
 		}
 	},
 	computed: {
@@ -103,7 +103,7 @@ export default {
 			<PrintTab v-if="printStore.activeTab === TABS.PRINT" />
 		</div>
 
-		<HelpDrawer :open.sync="helpOpen" />
+		<HelpDrawer :open.sync="helpOpen" :workflow-tab="printStore.activeTab" />
 
 		<template #footer>
 			NC 3D Print v{{ version }} · Moonraker + Forge Slicer

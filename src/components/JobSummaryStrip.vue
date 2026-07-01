@@ -22,7 +22,7 @@ export default {
 				return 'Slice complete'
 			}
 			if (j.status === 'error') {
-				return 'Slice failed'
+				return j.error ? `Slice failed: ${j.error}` : 'Slice failed'
 			}
 			return 'Not sliced'
 		},
@@ -53,9 +53,9 @@ export default {
 			{{ modelLabel }}
 		</button>
 		<span class="nc-print-job-strip__dot" aria-hidden="true">·</span>
-		<button type="button" class="nc-print-job-strip__seg" @click="goPrepare">
+		<span class="nc-print-job-strip__seg nc-print-job-strip__seg--static" :title="profileLabel">
 			{{ profileLabel }}
-		</button>
+		</span>
 		<span class="nc-print-job-strip__dot" aria-hidden="true">·</span>
 		<button type="button" class="nc-print-job-strip__seg" @click="goSlice">
 			{{ sliceLabel }}
@@ -66,3 +66,10 @@ export default {
 		</button>
 	</div>
 </template>
+
+<style scoped>
+.nc-print-job-strip__seg--static {
+	cursor: default;
+	opacity: 0.95;
+}
+</style>
