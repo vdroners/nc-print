@@ -4,14 +4,8 @@ import { usePrintStore, TABS } from '@/store/print.js'
 import PrintAppShell from './components/PrintAppShell.vue'
 import ServiceHealthBanner from './components/ServiceHealthBanner.vue'
 import JobSummaryStrip from './components/JobSummaryStrip.vue'
-import WorkflowStepper from './components/WorkflowStepper.vue'
+import PrintWorkflowBanner from './components/PrintWorkflowBanner.vue'
 import HelpDrawer from './components/HelpDrawer.vue'
-
-const TAB_LABELS = {
-	[TABS.PREPARE]: 'Prepare',
-	[TABS.SLICE]: 'Slice',
-	[TABS.PRINT]: 'Print',
-}
 
 const PrepareTab = () => import(/* webpackChunkName: "nc-print-prepare" */ './components/PrepareTab.vue')
 const SliceTab = () => import(/* webpackChunkName: "nc-print-slice" */ './components/SliceTab.vue')
@@ -23,7 +17,7 @@ export default {
 		PrintAppShell,
 		ServiceHealthBanner,
 		JobSummaryStrip,
-		WorkflowStepper,
+		PrintWorkflowBanner,
 		HelpDrawer,
 		PrepareTab,
 		SliceTab,
@@ -33,10 +27,9 @@ export default {
 		return {
 			helpOpen: false,
 			TABS,
-			TAB_LABELS,
 			version: typeof __NC_PRINT_FRONTEND_VERSION__ !== 'undefined'
 				? __NC_PRINT_FRONTEND_VERSION__
-				: '1.2.0',
+				: '1.3.0',
 		}
 	},
 	computed: {
@@ -66,9 +59,6 @@ export default {
 		this.printStore.stopStatusPolling()
 	},
 	methods: {
-		setTab(tab) {
-			this.printStore.setActiveTab(tab)
-		},
 		openHelp() {
 			this.helpOpen = true
 		},
@@ -97,31 +87,17 @@ export default {
 			</button>
 		</template>
 
-		<WorkflowStepper />
-
-		<nav class="nc-print-tabs" role="tablist" aria-label="Workflow">
-			<button
-				v-for="tab in [TABS.PREPARE, TABS.SLICE, TABS.PRINT]"
-				:id="'nc-print-tab-' + tab"
-				:key="tab"
-				type="button"
-				role="tab"
-				class="nc-print-tabs__btn"
-				:class="{ 'nc-print-tabs__btn--active': printStore.activeTab === tab }"
-				:aria-selected="printStore.activeTab === tab"
-				:aria-controls="tabPanelId"
-				@click="setTab(tab)">
-				{{ TAB_LABELS[tab] }}
-			</button>
-		</nav>
-
-		<ServiceHealthBanner />
-		<JobSummaryStrip />
+		<div class="nc-print-chrome">
+			<PrintWorkflowBanner />
+			<ServiceHealthBanner />
+			<JobSummaryStrip />
+		</div>
 
 		<div
 			:id="tabPanelId"
+			class="nc-print-tab-scroll"
 			role="tabpanel"
-			:aria-labelledby="'nc-print-tab-' + printStore.activeTab">
+			:aria-label="printStore.activeTab + ' workflow step'">
 			<PrepareTab v-if="printStore.activeTab === TABS.PREPARE" />
 			<SliceTab v-if="printStore.activeTab === TABS.SLICE" />
 			<PrintTab v-if="printStore.activeTab === TABS.PRINT" />

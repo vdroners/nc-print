@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace OCA\NcPrint\AppInfo;
 
+use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\NcPrint\Listener\LoadFilesActions;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -21,6 +23,10 @@ class Application extends App implements IBootstrap
 
 	public function register(IRegistrationContext $context): void
 	{
+		$context->registerEventListener(
+			LoadAdditionalScriptsEvent::class,
+			LoadFilesActions::class,
+		);
 	}
 
 	public function boot(IBootContext $context): void

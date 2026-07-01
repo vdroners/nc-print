@@ -1,6 +1,39 @@
 <script>
 import { NcModal } from '@nextcloud/vue'
 
+const CALIBRATION_LINKS = [
+	{
+		title: 'Flow rate (extrusion multiplier)',
+		href: 'https://wiki.orcaslicer.com/en/troubleshooting/flow-rate-calibration',
+		note: 'Dial in extrusion when walls are over- or under-filled.',
+	},
+	{
+		title: 'Pressure advance / Linear advance',
+		href: 'https://wiki.orcaslicer.com/en/troubleshooting/pressure-advance-calibration',
+		note: 'Reduce corner blobs and improve sharp corners on direct-drive and Bowden setups.',
+	},
+	{
+		title: 'Retraction tuning',
+		href: 'https://wiki.orcaslicer.com/en/troubleshooting/retraction-calibration',
+		note: 'Minimize stringing without clogging the hot end.',
+	},
+	{
+		title: '0.2 mm tolerance test',
+		href: 'https://wiki.orcaslicer.com/en/troubleshooting/0.2mm-tolerance-test',
+		note: 'Quick dimensional sanity check for XY accuracy.',
+	},
+	{
+		title: 'Temperature tower',
+		href: 'https://wiki.orcaslicer.com/en/troubleshooting/temperature-tower',
+		note: 'Find the best nozzle temp for a new filament roll.',
+	},
+	{
+		title: 'OrcaSlicer wiki home',
+		href: 'https://wiki.orcaslicer.com/',
+		note: 'Full desktop slicer docs — run calibrations in OrcaSlicer, then save profiles for NC Print.',
+	},
+]
+
 export default {
 	name: 'HelpDrawer',
 	components: { NcModal },
@@ -10,6 +43,7 @@ export default {
 	data() {
 		return {
 			tab: 'workflow',
+			calibrationLinks: CALIBRATION_LINKS,
 		}
 	},
 	methods: {
@@ -40,6 +74,14 @@ export default {
 					type="button"
 					role="tab"
 					class="nc-print-help-tabs__btn"
+					:class="{ 'nc-print-help-tabs__btn--active': tab === 'calibration' }"
+					@click="tab = 'calibration'">
+					Calibration
+				</button>
+				<button
+					type="button"
+					role="tab"
+					class="nc-print-help-tabs__btn"
 					:class="{ 'nc-print-help-tabs__btn--active': tab === 'limits' }"
 					@click="tab = 'limits'">
 					Limitations
@@ -54,8 +96,23 @@ export default {
 					<li><strong>Print</strong> — send G-code, monitor progress, pause/resume/cancel, watch the camera.</li>
 				</ol>
 				<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted);">
-					See <code>docs/OPERATOR.md</code>, <code>docs/TROUBLESHOOTING.md</code>, and <code>docs/ADMIN.md</code> in the app repository.
+					Open STL/3MF/OBJ or G-code from the Files app via <strong>Open in NC 3D Print</strong>.
+					See <code>docs/OPERATOR.md</code>, <code>docs/TROUBLESHOOTING.md</code>, and <code>docs/ADMIN.md</code>.
 				</p>
+			</div>
+
+			<div v-else-if="tab === 'calibration'" role="tabpanel">
+				<h2 style="margin-top: 0;">OrcaSlicer calibration guides</h2>
+				<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin-top: 0;">
+					NC Print slices with forge-slicer (Orca engine). Run these calibrations in desktop OrcaSlicer,
+					then export or sync profiles to the forge-slicer config directory shown on Prepare.
+				</p>
+				<ul class="nc-print-help-cal-list">
+					<li v-for="link in calibrationLinks" :key="link.href">
+						<a :href="link.href" target="_blank" rel="noopener noreferrer">{{ link.title }}</a>
+						<span>{{ link.note }}</span>
+					</li>
+				</ul>
 			</div>
 
 			<div v-else role="tabpanel">
@@ -78,6 +135,9 @@ export default {
 					<li>
 						<strong>Camera stream.</strong> MJPEG or snapshot URLs must be configured in app settings.
 					</li>
+					<li>
+						<strong>Calibration wizards.</strong> Orca desktop calibration flows are not embedded — use the Calibration tab links.
+					</li>
 				</ul>
 			</div>
 
@@ -97,6 +157,7 @@ export default {
 
 .nc-print-help-tabs {
 	display: flex;
+	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm);
 	margin-bottom: var(--nc-gcs-space-md);
 }
@@ -114,5 +175,34 @@ export default {
 .nc-print-help-tabs__btn--active {
 	border-color: var(--nc-app-accent);
 	color: var(--nc-app-accent);
+}
+
+.nc-print-help-cal-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.nc-print-help-cal-list li {
+	border-bottom: 1px solid var(--nc-gcs-border);
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 0;
+}
+
+.nc-print-help-cal-list a {
+	color: var(--nc-app-accent);
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.nc-print-help-cal-list a:hover {
+	text-decoration: underline;
+}
+
+.nc-print-help-cal-list span {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
 }
 </style>

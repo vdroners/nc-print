@@ -35,15 +35,22 @@ class FilesController extends Controller
 			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
 		}
 
+		$params = json_decode((string) file_get_contents('php://input'), true);
+		if (!is_array($params)) {
+			$params = $this->request->getParams();
+		}
+
 		try {
 			$user = $this->access->requireUser();
 			$root = \OC::$server->getUserFolder($user->getUID());
-			$fileId = (int) $this->request->getParam('file_id', 0);
-			$davPath = (string) $this->request->getParam('dav_path', '');
+			$fileId = (int) ($params['file_id'] ?? 0);
+			$davPath = (string) ($params['dav_path'] ?? '');
+			$allowGcode = !empty($params['allow_gcode']);
 			$file = $this->files->resolveNode(
 				$root,
 				$davPath !== '' ? $davPath : null,
 				$fileId > 0 ? $fileId : null,
+				$allowGcode,
 			);
 			return new JSONResponse($this->files->describeFile($root, $file));
 		} catch (NotFoundException) {
@@ -73,10 +80,12 @@ class FilesController extends Controller
 			$root = \OC::$server->getUserFolder($user->getUID());
 			$fileId = (int) ($params['file_id'] ?? 0);
 			$davPath = (string) ($params['dav_path'] ?? '');
+			$allowGcode = !empty($params['allow_gcode']);
 			$file = $this->files->resolveNode(
 				$root,
 				$davPath !== '' ? $davPath : null,
 				$fileId > 0 ? $fileId : null,
+				$allowGcode,
 			);
 			$content = $this->files->readFileContents($file);
 			$mime = $file->getMimeType() ?: 'application/octet-stream';

@@ -78,6 +78,9 @@ class ApiController extends Controller
 			'slicer_ok' => $slicerProbe['ok'],
 			'slicer_latency_ms' => $slicerProbe['latency_ms'],
 			'slicer_error' => $slicerProbe['error'],
+			'slicer_version' => $slicerProbe['version'] ?? null,
+			'slicer_upstream' => $slicerProbe['upstream'] ?? null,
+			'slicer_config_dir' => $slicerProbe['config_dir'] ?? null,
 			'moonraker_ok' => $moonrakerProbe['ok'],
 			'moonraker_latency_ms' => $moonrakerProbe['latency_ms'],
 			'moonraker_error' => $moonrakerProbe['error'],
@@ -85,7 +88,7 @@ class ApiController extends Controller
 		]);
 	}
 
-	/** @return array{ok: bool, latency_ms: int|null, error: string|null} */
+	/** @return array{ok: bool, latency_ms: int|null, error: string|null, version?: string, upstream?: string, config_dir?: string} */
 	private function probeUrl(string $url, bool $enabled): array
 	{
 		if (!$enabled) {
@@ -113,6 +116,22 @@ class ApiController extends Controller
 			return ['ok' => false, 'latency_ms' => $latencyMs, 'error' => 'HTTP ' . $code];
 		}
 
-		return ['ok' => true, 'latency_ms' => $latencyMs, 'error' => null];
+		$result = ['ok' => true, 'latency_ms' => $latencyMs, 'error' => null];
+		if (str_contains($url, '/api/health') && is_string($body) && $body !== '') {
+			$data = json_decode($body, true);
+			if (is_array($data)) {
+				if (isset($data['version']) && is_string($data['version'])) {
+					$result['version'] = $data['version'];
+				}
+				if (isset($data['upstream']) && is_string($data['upstream'])) {
+					$result['upstream'] = $data['upstream'];
+				}
+				if (isset($data['config_dir']) && is_string($data['config_dir'])) {
+					$result['config_dir'] = $data['config_dir'];
+				}
+			}
+		}
+
+		return $result;
 	}
 }

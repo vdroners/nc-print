@@ -46,6 +46,7 @@ class PageController extends Controller
 		Util::addScript(Application::APP_ID, 'nc_print-main');
 
 		$fileId = (int) $this->request->getParam('fileId', 0);
+		$openTab = (string) $this->request->getParam('tab', '');
 		$version = $this->config->getAppValue(
 			Application::APP_ID,
 			'installed_version',
@@ -60,6 +61,7 @@ class PageController extends Controller
 				),
 				'app_version' => $version,
 				'file_id' => $fileId > 0 ? $fileId : null,
+				'open_tab' => in_array($openTab, ['prepare', 'slice', 'print'], true) ? $openTab : null,
 			],
 		);
 

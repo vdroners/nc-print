@@ -35,7 +35,23 @@ export default {
 			return `${mins}m ${secs}s elapsed`
 		},
 	},
+	mounted() {
+		void this.consumePendingPrintUpload()
+	},
+	watch: {
+		'printStore.pendingPrintUpload'() {
+			void this.consumePendingPrintUpload()
+		},
+	},
 	methods: {
+		async consumePendingPrintUpload() {
+			const pending = this.printStore.pendingPrintUpload
+			if (!pending?.blob) {
+				return
+			}
+			this.printStore.clearPendingPrintUpload()
+			await this.uploadGcodeFile(new File([pending.blob], pending.filename, { type: 'text/plain' }))
+		},
 		async withBusy(fn) {
 			this.busy = true
 			try {
@@ -96,7 +112,7 @@ export default {
 				if (!path) {
 					return
 				}
-				const blob = await fetchModelBlob({ dav_path: path })
+				const blob = await fetchModelBlob({ dav_path: path, allow_gcode: true })
 				const name = path.split('/').pop() || 'job.gcode'
 				await this.uploadGcodeFile(new File([blob], name, { type: 'text/plain' }))
 			} catch (e) {

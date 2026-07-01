@@ -13,14 +13,20 @@ class FileFetchService
 {
 	private const MAX_BYTES = 50 * 1024 * 1024;
 	private const MODEL_EXT = ['stl', '3mf', 'obj'];
+	private const GCODE_EXT = ['gcode'];
 
-	public function resolveNode(Folder $userRoot, ?string $davPath, ?int $fileId): File
+	public function resolveNode(Folder $userRoot, ?string $davPath, ?int $fileId, bool $allowGcode = false): File
 	{
+		$allowed = self::MODEL_EXT;
+		if ($allowGcode) {
+			$allowed = array_merge($allowed, self::GCODE_EXT);
+		}
+
 		if ($fileId !== null && $fileId > 0) {
 			$nodes = $userRoot->getById($fileId);
 			foreach ($nodes as $node) {
 				if ($node instanceof File && $node->getSize() <= self::MAX_BYTES) {
-					$this->assertModelFile($node->getName());
+					$this->assertAllowedFile($node->getName(), $allowed);
 					return $node;
 				}
 			}
@@ -38,7 +44,7 @@ class FileFetchService
 		if (!($node instanceof File)) {
 			throw new \InvalidArgumentException('not_a_file');
 		}
-		$this->assertModelFile($node->getName());
+		$this->assertAllowedFile($node->getName(), $allowed);
 		if ($node->getSize() > self::MAX_BYTES) {
 			throw new \InvalidArgumentException('file_too_large');
 		}
@@ -73,11 +79,16 @@ class FileFetchService
 		}
 	}
 
-	private function assertModelFile(string $name): void
+	private function assertAllowedFile(string $name, array $allowed): void
 	{
 		$ext = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-		if (!in_array($ext, self::MODEL_EXT, true)) {
+		if (!in_array($ext, $allowed, true)) {
 			throw new \InvalidArgumentException('invalid_extension');
 		}
+	}
+
+	private function assertModelFile(string $name): void
+	{
+		$this->assertAllowedFile($name, self::MODEL_EXT);
 	}
 }

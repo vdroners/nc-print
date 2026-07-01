@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.3.0] - 2026-06-30
+
+### Added
+
+- Centered **Prepare · Slice · Print** workflow banner (NC-GCS `gcs-step-banner` pattern); removed duplicate tab bar and legacy stepper
+- Pinned chrome + scrollable tab panel (`.nc-print-tab-scroll`) — long Slice/Prepare panels scroll correctly
+- Files app **Open in NC 3D Print** action for STL/3MF/OBJ/G-code (`nc_print-files-action.mjs`)
+- G-code deep link: `?fileId=&tab=print` loads file on Print tab
+- **Slicer status card** on Prepare (forge-slicer version, engine, profiles path, latency)
+- Multi-tool **filament breakdown** on slice result when forge-slicer returns per-tool grams
+- Help drawer **Calibration** tab with OrcaSlicer wiki links
+- API gates G16 (files-action bundle on disk)
+
+### Fixed
+
+- `FilesController::resolve` JSON body parsing and missing JSON response
+- G-code fetch via `allow_gcode` on `/api/files/fetch` and `/resolve`
+
 ## [1.2.0] - 2026-06-30
 
 ### Added

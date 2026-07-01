@@ -5,7 +5,7 @@ const base = () => generateUrl('/apps/nc_print/api/files')
 
 /**
  * Resolve file metadata (size, basename) without downloading body.
- * @param {{ dav_path?: string, file_id?: number }} params
+ * @param {{ dav_path?: string, file_id?: number, allow_gcode?: boolean }} params
  */
 export async function resolveFile(params) {
 	const { data } = await axios.post(`${base()}/resolve`, params)
@@ -13,8 +13,8 @@ export async function resolveFile(params) {
 }
 
 /**
- * Download a model file from the user's Nextcloud storage.
- * @param {{ dav_path?: string, file_id?: number }} params
+ * Download a model or G-code file from the user's Nextcloud storage.
+ * @param {{ dav_path?: string, file_id?: number, allow_gcode?: boolean }} params
  * @returns {Promise<Blob>}
  */
 export async function fetchModelBlob(params) {

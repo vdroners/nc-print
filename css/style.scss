@@ -16,39 +16,7 @@
 	height: 100%;
 }
 
-/* ─── Tab bar ─────────────────────────────────────────────────────── */
-.nc-print-tabs {
-	display: flex;
-	gap: var(--nc-gcs-space-xs);
-	border-bottom: 1px solid var(--nc-gcs-border);
-	margin: calc(-1 * var(--nc-gcs-space-md)) calc(-1 * var(--nc-gcs-space-lg)) var(--nc-gcs-space-md);
-	padding: 0 var(--nc-gcs-space-lg);
-}
-
-.nc-print-tabs__btn {
-	appearance: none;
-	background: transparent;
-	border: none;
-	border-bottom: 2px solid transparent;
-	color: var(--nc-gcs-text-muted);
-	cursor: pointer;
-	font-family: inherit;
-	font-size: var(--nc-gcs-text-base);
-	font-weight: 500;
-	margin-bottom: -1px;
-	padding: var(--nc-gcs-space-sm) var(--nc-gcs-space-md);
-	transition: color 0.15s, border-color 0.15s;
-
-	&:hover {
-		color: var(--nc-gcs-text-primary);
-	}
-
-	&--active {
-		border-bottom-color: var(--nc-app-accent);
-		color: var(--nc-app-accent);
-	}
-}
-
+/* ─── Tab bar (removed — workflow banner is primary nav) ────────── */
 /* ─── Status chip ───────────────────────────────────────────────── */
 .nc-print-status-chip {
 	align-items: center;
@@ -362,56 +330,115 @@
 	color: var(--nc-gcs-text-muted);
 }
 
-/* ─── Wizard stepper ────────────────────────────────────────────── */
-.nc-print-wizard {
+/* ─── App layout: pinned chrome + scrollable tab panel ─────────── */
+.nc-gcs-app-shell--nc_print .nc-gcs-app-shell__body {
+	overflow: hidden;
+}
+
+.nc-print-chrome {
+	flex-shrink: 0;
+}
+
+.nc-print-tab-scroll {
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+}
+
+/* ─── Centered workflow banner (NC-GCS gcs-step-banner pattern) ─ */
+.nc-print-workflow {
 	display: flex;
-	gap: var(--nc-gcs-space-sm);
-	list-style: none;
+	justify-content: center;
 	margin: 0 0 var(--nc-gcs-space-md);
-	padding: 0;
 }
 
-.nc-print-wizard__step {
-	flex: 1 1 0;
+.nc-print-workflow__list {
+	align-items: center;
+	display: flex;
+	gap: 0;
+	justify-content: center;
+	list-style: none;
+	margin: 0;
+	max-width: min(96vw, 520px);
+	padding: 6px 10px;
+	background: var(--nc-gcs-bg-surface);
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: var(--nc-gcs-radius);
 }
 
-.nc-print-wizard__btn {
+.nc-print-workflow__step {
+	flex: 0 0 auto;
+}
+
+.nc-print-workflow__btn {
 	align-items: center;
 	appearance: none;
-	background: var(--nc-gcs-bg-elevated);
-	border: 1px solid var(--nc-gcs-border);
+	background: transparent;
+	border: none;
 	border-radius: var(--nc-gcs-radius-sm);
-	color: var(--nc-gcs-text-secondary);
+	color: var(--nc-gcs-text-muted);
 	cursor: pointer;
 	display: flex;
 	font-family: inherit;
 	font-size: var(--nc-gcs-text-sm);
-	gap: 8px;
-	padding: 8px 10px;
-	width: 100%;
+	font-weight: 500;
+	gap: 6px;
+	padding: 6px 12px;
+	transition: background 0.15s, color 0.15s;
+	white-space: nowrap;
 }
 
-.nc-print-wizard__step--active .nc-print-wizard__btn {
-	border-color: var(--nc-app-accent);
+.nc-print-workflow__btn:hover:not(:disabled) {
+	background: var(--nc-gcs-bg-elevated);
+	color: var(--nc-gcs-text-primary);
+}
+
+.nc-print-workflow__btn:focus-visible {
+	outline: 2px solid var(--nc-app-accent);
+	outline-offset: 2px;
+}
+
+.nc-print-workflow__step--active .nc-print-workflow__btn {
+	background: color-mix(in srgb, var(--nc-app-accent) 18%, transparent);
 	color: var(--nc-app-accent);
 }
 
-.nc-print-wizard__step--done .nc-print-wizard__num {
+.nc-print-workflow__step--done .nc-print-workflow__num {
 	background: var(--nc-app-accent);
 	color: #052e16;
 }
 
-.nc-print-wizard__num {
+.nc-print-workflow__step--disabled .nc-print-workflow__btn {
+	cursor: not-allowed;
+	opacity: 0.45;
+}
+
+.nc-print-workflow__num {
 	align-items: center;
 	background: var(--nc-gcs-border);
 	border-radius: 50%;
 	display: inline-flex;
 	font-size: 11px;
+	font-weight: 600;
 	height: 22px;
 	justify-content: center;
-	width: 22px;
+	min-width: 22px;
 }
 
+.nc-print-workflow__connector {
+	background: var(--nc-gcs-border);
+	flex: 0 0 20px;
+	height: 2px;
+	list-style: none;
+	margin: 0;
+}
+
+.nc-print-workflow__step--done + .nc-print-workflow__connector {
+	background: color-mix(in srgb, var(--nc-app-accent) 55%, var(--nc-gcs-border));
+}
+
+/* ─── Wizard stepper (legacy — removed from App; keep class names unused) */
 /* ─── Slice result ──────────────────────────────────────────────── */
 .nc-print-slice-result__list {
 	display: grid;

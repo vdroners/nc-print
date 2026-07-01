@@ -22,6 +22,25 @@ export default {
 			}
 			return (this.job.gcodeSizeBytes / 1024).toFixed(1)
 		},
+		filamentBreakdown() {
+			const rows = this.job.filamentBreakdown || []
+			if (!rows.length) {
+				return []
+			}
+			if (rows.length === 1) {
+				return []
+			}
+			return rows.map((grams, index) => ({
+				tool: index + 1,
+				grams: Number(grams) || 0,
+			}))
+		},
+		filamentBreakdownTotal() {
+			if (!this.filamentBreakdown.length) {
+				return this.job.filamentUsedG
+			}
+			return this.filamentBreakdown.reduce((sum, row) => sum + row.grams, 0)
+		},
 	},
 	methods: {
 		download() {
@@ -45,8 +64,17 @@ export default {
 			</div>
 			<div>
 				<dt>Filament</dt>
-				<dd>{{ job.filamentUsedG.toFixed(2) }} g</dd>
+				<dd>{{ filamentBreakdownTotal.toFixed(2) }} g</dd>
 			</div>
+			<template v-if="filamentBreakdown.length">
+				<div
+					v-for="row in filamentBreakdown"
+					:key="'tool-' + row.tool"
+					class="nc-print-slice-result__tool-row">
+					<dt>Tool {{ row.tool }}</dt>
+					<dd>{{ row.grams.toFixed(2) }} g</dd>
+				</div>
+			</template>
 			<div v-if="gcodeKb">
 				<dt>G-code</dt>
 				<dd>{{ gcodeKb }} KB</dd>
@@ -70,3 +98,9 @@ export default {
 		</button>
 	</div>
 </template>
+
+<style scoped>
+.nc-print-slice-result__tool-row dt {
+	padding-left: 12px;
+}
+</style>

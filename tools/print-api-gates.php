@@ -291,4 +291,10 @@ try {
 	gate('G15', false, $e->getMessage());
 }
 
+// G16 — Files app init script bundle on disk
+$jsDir = dirname(__DIR__) . '/js';
+$filesAction = glob($jsDir . '/nc_print-files-action*.mjs') ?: [];
+$g16Ok = $filesAction !== [] && is_readable($filesAction[0]);
+gate('G16', $g16Ok, $g16Ok ? basename($filesAction[0]) : 'missing nc_print-files-action.mjs');
+
 exit($fail === 0 ? 0 : 1);

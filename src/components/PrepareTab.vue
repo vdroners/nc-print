@@ -4,6 +4,7 @@ import { usePrintStore, TABS } from '@/store/print.js'
 import ModelViewport from './ModelViewport.vue'
 import CameraPip from './CameraPip.vue'
 import ProfilePicker from './ProfilePicker.vue'
+import SlicerStatusCard from './SlicerStatusCard.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
 import { fetchModelBlob } from '@/services/files-api.js'
@@ -11,7 +12,7 @@ import { toastError } from '@/services/toast.js'
 
 export default {
 	name: 'PrepareTab',
-	components: { ModelViewport, CameraPip, ProfilePicker, ViewportToolbar },
+	components: { ModelViewport, CameraPip, ProfilePicker, SlicerStatusCard, ViewportToolbar },
 	computed: {
 		...mapStores(usePrintStore),
 		buildVolume() {
@@ -90,6 +91,8 @@ export default {
 			<h2 class="nc-print-card__title">Profiles</h2>
 			<ProfilePicker v-if="printStore.profiles.loaded" />
 		</div>
+
+		<SlicerStatusCard />
 
 		<div class="nc-print-row nc-print-row--equal">
 			<button type="button" class="nc-print-card nc-print-dropzone" @click="pickFromFiles">

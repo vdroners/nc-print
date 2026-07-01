@@ -10,7 +10,7 @@ import {
 import { fetchState, uploadAndStart as moonrakerUpload } from '@/services/moonraker-api.js'
 import { fetchConfig } from '@/services/config-api.js'
 import { fetchAppStatus } from '@/services/status-api.js'
-import { fetchModelBlob } from '@/services/files-api.js'
+import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
 
@@ -120,6 +120,7 @@ export const usePrintStore = defineStore('print', {
 			printDuration: null,
 			totalDuration: null,
 		},
+		pendingPrintUpload: null,
 		_pollTimer: null,
 		_statusTimer: null,
 		_sliceAbort: null,
@@ -551,11 +552,39 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
+		clearPendingPrintUpload() {
+			this.pendingPrintUpload = null
+		},
+
 		async bootstrapDeepLink() {
-			const fileId = this.bootstrap?.file_id
+			const b = this.bootstrap
+			if (!b) {
+				return
+			}
+
+			const openTab = b.open_tab
+			if (openTab && Object.values(TABS).includes(openTab)) {
+				this.activeTab = openTab
+			}
+
+			const fileId = b.file_id
 			if (!fileId) {
 				return
 			}
+
+			if (openTab === TABS.PRINT) {
+				try {
+					const meta = await resolveFile({ file_id: fileId, allow_gcode: true })
+					const blob = await fetchModelBlob({ file_id: fileId, allow_gcode: true })
+					const name = meta?.basename || meta?.name || `job-${fileId}.gcode`
+					this.pendingPrintUpload = { blob, filename: name }
+					this.activeTab = TABS.PRINT
+				} catch (e) {
+					toastError('Could not load G-code from Nextcloud', e)
+				}
+				return
+			}
+
 			await this.loadFileFromNextcloud({ file_id: fileId })
 		},
 
