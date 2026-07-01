@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
+	<id>nc_print</id>
+	<name>NC 3D Print</name>
+	<summary>Slice, send, and monitor Klipper/Moonraker 3D prints from Nextcloud</summary>
+	<description><![CDATA[NC 3D Print — standalone Nextcloud app for headless Orca slicing (forge-slicer REST),
+Moonraker printer control, and live camera monitoring. No NC-GCS dependency required.]]></description>
+	<version>1.0.0</version>
+	<licence>AGPL-3.0-or-later</licence>
+	<author>NC-GCS Program</author>
+	<namespace>NcPrint</namespace>
+	<category>tools</category>
+	<dependencies>
+		<nextcloud min-version="28" max-version="33"/>
+	</dependencies>
+	<navigations>
+		<navigation>
+			<name>NC 3D Print</name>
+			<route>nc_print.page.index</route>
+			<icon>app.svg</icon>
+			<order>85</order>
+		</navigation>
+	</navigations>
+</info>
