@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.10.4] - 2026-07-02
+
+Prepare-tab declutter from continued live UX review — the empty chamber now sits
+directly under the workflow banner instead of below the fold.
+
+### Changed
+
+- **Prepare tab is viewport-first.** Removed the `PrepareEmptyState` block (hero,
+  "Import an STL, 3MF, or OBJ…" lead, and the `1 / 2 / 3` step list that just
+  duplicated the top Prepare/Slice/Print stepper). With no model loaded the
+  centre column is now a single slim import row (`Import STL/3MF/OBJ` +
+  `From Files`) above the 3D chamber, so the empty bed is visible immediately.
+- **`ViewportToolbar` is context-aware.** The view/orient/apply groups (Center on
+  bed, rotate, Lay flat, Scale to fit, Auto-orient, Auto-apply) and the "No model
+  loaded" info line no longer render while empty — they appear once a model is
+  loaded. `From Files` moved into the toolbar and the duplicate `From Files`
+  button was removed, collapsing three import affordances down to two.
+
+### Fixed
+
+- **Workflow phase boxes no longer look clipped/crowded.** Step subtitles are now
+  a single ellipsized line (full text stays in the hover tooltip) and the stepper
+  pill uses `align-items: stretch`, so the active step no longer balloons to two
+  lines and burst the bar on wide layouts.
+
 ## [1.10.3] - 2026-07-02
 
 Follow-up UI polish from a second live audit.

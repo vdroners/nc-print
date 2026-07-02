@@ -12,7 +12,6 @@ import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
 import RecentModelsStrip from './RecentModelsStrip.vue'
 import NcPrintCollapsible from './NcPrintCollapsible.vue'
 import PrepareStudioLayout from './PrepareStudioLayout.vue'
-import PrepareEmptyState from './PrepareEmptyState.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import PreciseTransformPanel from './PreciseTransformPanel.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
@@ -33,7 +32,6 @@ export default {
 		RecentModelsStrip,
 		NcPrintCollapsible,
 		PrepareStudioLayout,
-		PrepareEmptyState,
 		SliceSummaryCard,
 		PreciseTransformPanel,
 		NcPrintIcon,
@@ -223,32 +221,19 @@ export default {
 		</template>
 
 		<template #center>
-			<PrepareEmptyState v-if="!printStore.hasModel">
-				<template #actions>
-					<button type="button" class="nc-print-btn nc-print-btn--primary" @click="triggerImport">
-						Import model
-					</button>
-					<button type="button" class="nc-print-btn" @click="pickFromFiles">
-						From Files
-					</button>
-				</template>
-			</PrepareEmptyState>
-
 			<div ref="importCluster" class="nc-print-import-cluster">
 				<ViewportToolbar
 					ref="toolbar"
 					:can-center="printStore.hasModel"
 					:can-transform="canTransform"
 					@import="onToolbarImport"
+					@pick-files="pickFromFiles"
 					@center="onCenter"
 					@rotate="onRotate"
 					@lay-flat="onLayFlat"
 					@scale-to-fit="onScaleToFit"
 					@auto-orient="onAutoOrient"
 					@apply="onApplyMesh" />
-				<button type="button" class="nc-print-btn" @click="pickFromFiles">
-					From Files
-				</button>
 			</div>
 
 			<div class="nc-print-viewport-wrap nc-print-viewport-wrap--studio">

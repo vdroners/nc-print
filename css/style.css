@@ -585,7 +585,7 @@ input:checked + .nc-print-switch__slider::before {
 }
 
 .nc-print-workflow__list {
-  align-items: center;
+  align-items: stretch;
   display: flex;
   gap: 0;
   justify-content: center;
@@ -636,7 +636,7 @@ input:checked + .nc-print-switch__slider::before {
   max-width: 320px;
   overflow: hidden;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 /* ─── Prepare studio layout ───────────────────────────────────── */

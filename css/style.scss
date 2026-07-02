@@ -627,7 +627,7 @@
 }
 
 .nc-print-workflow__list {
-	align-items: center;
+	align-items: stretch;
 	display: flex;
 	gap: 0;
 	justify-content: center;
@@ -678,7 +678,7 @@
 	max-width: 320px;
 	overflow: hidden;
 	-webkit-box-orient: vertical;
-	-webkit-line-clamp: 2;
+	-webkit-line-clamp: 1;
 }
 
 /* ─── Prepare studio layout ───────────────────────────────────── */

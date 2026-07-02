@@ -46,6 +46,9 @@ export default {
 			}
 			e.target.value = ''
 		},
+		onPickFiles() {
+			this.$emit('pick-files')
+		},
 		onCenter() {
 			this.$emit('center')
 		},
@@ -89,17 +92,20 @@ export default {
 				hidden
 				aria-label="Import model file"
 				@change="onFileInput">
+			<button type="button" class="nc-print-btn" @click="onPickFiles">
+				From Files
+			</button>
 			<button
+				v-if="printStore.hasModel"
 				type="button"
 				class="nc-print-btn"
-				:disabled="!printStore.hasModel"
 				@click="onClear">
 				Clear
 			</button>
 		</div>
 
 		<!-- Group 2: view -->
-		<div class="nc-print-toolbar-group">
+		<div v-if="printStore.hasModel" class="nc-print-toolbar-group">
 			<button
 				type="button"
 				class="nc-print-btn"
@@ -111,7 +117,7 @@ export default {
 		</div>
 
 		<!-- Group 3: orient -->
-		<div class="nc-print-toolbar-group">
+		<div v-if="printStore.hasModel" class="nc-print-toolbar-group">
 			<span v-if="printStore.hasModel" class="nc-print-viewport-toolbar__rotate">
 				<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around X" @click="onRotate('x')">↻ X</button>
 				<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Y" @click="onRotate('y')">↻ Y</button>
@@ -144,7 +150,7 @@ export default {
 		</div>
 
 		<!-- Group 4: apply -->
-		<div class="nc-print-toolbar-group">
+		<div v-if="printStore.hasModel" class="nc-print-toolbar-group">
 			<label v-if="printStore.hasModel" class="nc-print-switch nc-print-viewport-toolbar__auto">
 				<input
 					type="checkbox"
@@ -163,7 +169,7 @@ export default {
 			</button>
 		</div>
 
-		<span class="nc-print-viewport-toolbar__info">{{ infoLine }}</span>
+		<span v-if="printStore.hasModel" class="nc-print-viewport-toolbar__info">{{ infoLine }}</span>
 	</div>
 </template>
 
