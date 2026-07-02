@@ -396,15 +396,89 @@ $g25 = $printerSrc !== ''
 	&& gate_routes_contain($routesRaw, '/api/printer/pause');
 gate('G25', $g25, $g25 ? 'printer_id on print actions' : 'printer_id missing on pause path');
 
-// G26 — manual motion refused while printing
+// G26 — manual motion refused while printing.
+// v1.9.0: the print-active guard now merges MOTION_ACTIONS with the Part B
+// IDLE_ONLY_ACTIONS into a local $idleOnly set, so accept either the legacy
+// literal or the merged form — both enforce the same block.
+$g26MotionGuarded = preg_match("/in_array\\(\\\$action, self::MOTION_ACTIONS, true\\)/", $printerSrc) === 1
+	|| (
+		str_contains($printerSrc, 'array_merge(self::MOTION_ACTIONS, self::IDLE_ONLY_ACTIONS)')
+		&& preg_match("/in_array\\(\\\$action, \\\$idleOnly, true\\)/", $printerSrc) === 1
+	);
 $g26 = $printerSrc !== ''
 	&& str_contains($printerSrc, 'motion_blocked')
 	&& str_contains($printerSrc, 'isPrintActive')
 	&& str_contains($printerSrc, 'MOTION_ACTIONS')
-	&& preg_match("/in_array\\(\\\$action, self::MOTION_ACTIONS, true\\)/", $printerSrc) === 1;
+	&& $g26MotionGuarded;
 gate('G26', $g26, $g26 ? 'motion blocked while printing' : 'motion guard missing');
 
-// G27 — release version >= 1.8.0
-gate('G27', version_compare($version, '1.8.0', '>='), 'version=' . $version);
+// G27 — release version >= 1.9.0 (v1.9.0 UX cohesion + Part B foundation)
+gate('G27', version_compare($version, '1.9.0', '>='), 'version=' . $version);
+
+// ---------------------------------------------------------------------------
+// WS7 — deploy freshness + Part B proxy/console security regression
+// ---------------------------------------------------------------------------
+
+$deployRoot = '/var/www/html/custom_apps/nc_print';
+$deployedCss = $deployRoot . '/css/style.css';
+
+// G34 — deployed CSS carries the WS1 sticky chrome (guards against stale CSS).
+if (!is_readable($deployedCss)) {
+	gate('G34', true, 'skip: deployed css/style.css not present (source-tree run)');
+} else {
+	$cssRaw = (string) file_get_contents($deployedCss);
+	$g34 = str_contains($cssRaw, 'position: sticky') || str_contains($cssRaw, 'position:sticky');
+	gate('G34', $g34, $g34 ? 'sticky chrome CSS deployed' : 'stale CSS: no sticky chrome');
+}
+
+// G35 — CSS/JS deploy freshness: deployed CSS mtime >= newest JS mtime - 60s.
+$jsGlob = glob($deployRoot . '/js/nc_print-main*.js') ?: [];
+if (!is_readable($deployedCss) || $jsGlob === []) {
+	gate('G35', true, 'skip: deployed assets not present (source-tree run)');
+} else {
+	$cssMtime = (int) filemtime($deployedCss);
+	$jsMtime = 0;
+	foreach ($jsGlob as $jsFile) {
+		$jsMtime = max($jsMtime, (int) filemtime($jsFile));
+	}
+	$g35 = $cssMtime >= ($jsMtime - 60);
+	gate('G35', $g35, $g35
+		? sprintf('fresh: css=%d js=%d', $cssMtime, $jsMtime)
+		: sprintf('stale css: css=%d < js=%d-60', $cssMtime, $jsMtime));
+}
+
+// G45 — Part B proxy allowlist + console-off regression.
+$proxySrcPath = dirname(__DIR__) . '/lib/Controller/MoonrakerProxyController.php';
+$proxySrc = is_readable($proxySrcPath) ? (string) file_get_contents($proxySrcPath) : '';
+$configSrcPath = dirname(__DIR__) . '/lib/Service/ConfigService.php';
+$configSrcG45 = is_readable($configSrcPath) ? (string) file_get_contents($configSrcPath) : '';
+
+// Part B read prefixes present, raw gcode passthrough never allowed, console
+// disabled by default, and consoleCommand guards on isConsoleEnabled.
+$partBPrefixes = [
+	'server/temperature_store',
+	'server/history/',
+	'server/job_queue/',
+	'machine/timelapse/',
+	'server/spoolman/',
+];
+$g45Reads = $proxySrc !== '';
+foreach ($partBPrefixes as $prefix) {
+	$g45Reads = $g45Reads && str_contains($proxySrc, "'" . $prefix . "'");
+}
+$g45NoRawGcode = $proxySrc !== ''
+	&& !str_contains($proxySrc, "'printer/gcode/script'")
+	&& !str_contains($proxySrc, "'printer/gcode'");
+$g45ConsoleGuard = $printerSrc !== ''
+	&& str_contains($printerSrc, 'isConsoleEnabled')
+	&& preg_match("/function consoleCommand\\(/", $printerSrc) === 1;
+$g45ConsoleDefaultOff = $configSrcG45 !== ''
+	&& preg_match("/function isConsoleEnabled\\([\\s\\S]{0,200}?false/", $configSrcG45) === 1;
+
+$g45 = $g45Reads && $g45NoRawGcode && $g45ConsoleGuard && $g45ConsoleDefaultOff;
+gate('G45', $g45, $g45
+	? 'proxy allowlist + console-off regression OK'
+	: sprintf('reads=%d noraw=%d guard=%d off=%d',
+		$g45Reads ? 1 : 0, $g45NoRawGcode ? 1 : 0, $g45ConsoleGuard ? 1 : 0, $g45ConsoleDefaultOff ? 1 : 0));
 
 exit($fail === 0 ? 0 : 1);

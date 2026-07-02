@@ -104,9 +104,10 @@ export class MoonrakerWsClient {
 	 * @param {(state: object) => void} opts.onState
 	 * @param {(err: Error) => void} [opts.onError]
 	 */
-	constructor({ onState, onError } = {}) {
+	constructor({ onState, onError, onGcodeResponse } = {}) {
 		this.onState = onState || (() => {})
 		this.onError = onError || (() => {})
+		this.onGcodeResponse = onGcodeResponse || (() => {})
 		this._ws = null
 		this._pollTimer = null
 		this._reconnectTimer = null
@@ -216,6 +217,14 @@ export class MoonrakerWsClient {
 						const msg = JSON.parse(ev.data)
 						if (msg.method === 'notify_status_update' && msg.params?.[0]) {
 							this.onState(normalizeMoonrakerStatus(msg.params[0]))
+						} else if (msg.method === 'notify_gcode_response' && Array.isArray(msg.params)) {
+							// WS11: live console scrollback. Moonraker broadcasts
+							// gcode responses to every connection.
+							for (const line of msg.params) {
+								if (typeof line === 'string') {
+									this.onGcodeResponse(line)
+								}
+							}
 						}
 					} catch {
 						// ignore malformed frames

@@ -7,15 +7,6 @@
   height: calc(100vh - var(--header-height, 50px));
 }
 
-.nc-print-mount {
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
 /* ─── Tab bar (removed — workflow banner is primary nav) ────────── */
 /* ─── Status chip ───────────────────────────────────────────────── */
 .nc-print-status-chip {
@@ -295,24 +286,7 @@
   width: 100%;
 }
 
-/* ─── Camera pip / panel ────────────────────────────────────────── */
-.nc-print-camera-pip {
-  border: 1px solid var(--nc-gcs-border);
-  border-radius: var(--nc-gcs-radius-sm);
-  bottom: var(--nc-gcs-space-md);
-  overflow: hidden;
-  position: absolute;
-  right: var(--nc-gcs-space-md);
-  width: 160px;
-  z-index: 2;
-}
-.nc-print-camera-pip img,
-.nc-print-camera-pip video {
-  display: block;
-  height: auto;
-  width: 100%;
-}
-
+/* ─── Camera panel ──────────────────────────────────────────────── */
 .nc-print-camera-panel {
   aspect-ratio: 16/9;
   background: var(--nc-gcs-bg-elevated);
@@ -568,20 +542,39 @@ input:checked + .nc-print-switch__slider::before {
   color: var(--nc-gcs-text-muted);
 }
 
-/* ─── App layout: pinned chrome + scrollable tab panel ─────────── */
+/* ─── App layout: single body scroll + sticky chrome ───────────── */
+/* The shell body (css/nc-print-theme.css) already owns the y-scroll via
+ * `flex: 1; min-height: 0; overflow: auto`. We no longer clip it; the
+ * chrome bar sticks to the top of that scrolling body. */
 .nc-gcs-app-shell--nc_print .nc-gcs-app-shell__body {
-  overflow: hidden;
+  --nc-print-chrome-h: 0px;
 }
 
 .nc-print-chrome {
-  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--nc-gcs-bg-app);
+  /* full-bleed across the body's --nc-gcs-space-lg padding */
+  margin: calc(-1 * var(--nc-gcs-space-lg)) calc(-1 * var(--nc-gcs-space-lg)) 0;
+  padding: var(--nc-gcs-space-lg) var(--nc-gcs-space-lg) var(--nc-gcs-space-sm);
+}
+
+/* Chrome content shares the centered content cap so it aligns with the
+ * scrolling body on ultra-wide displays. */
+.nc-print-chrome > * {
+  margin-inline: auto;
+  max-width: min(1680px, 100%);
+  width: 100%;
 }
 
 .nc-print-tab-scroll {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
+  /* plain content wrapper — body owns the scroll. Centered + capped so
+   * 1920+ displays don't stretch the 3-column studio edge-to-edge. */
+  display: block;
+  margin-inline: auto;
+  max-width: min(1680px, 100%);
+  width: 100%;
 }
 
 /* ─── Centered workflow banner (NC-GCS gcs-step-banner pattern) ─ */
@@ -636,12 +629,14 @@ input:checked + .nc-print-switch__slider::before {
 
 .nc-print-workflow__sub {
   color: var(--nc-gcs-text-muted);
+  display: -webkit-box;
   font-size: 10px;
   font-weight: 400;
-  max-width: 180px;
+  line-height: 1.3;
+  max-width: 320px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 /* ─── Prepare studio layout ───────────────────────────────────── */
@@ -650,20 +645,20 @@ input:checked + .nc-print-switch__slider::before {
 }
 
 .nc-print-viewport-wrap--studio {
-  min-height: 420px;
+  min-height: clamp(360px, 52vh, 640px);
 }
 
 .nc-print-viewport-wrap--studio .nc-print-viewport-inner {
   height: 100%;
-  min-height: 420px;
+  min-height: clamp(360px, 52vh, 640px);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
   .nc-print-workflow__list {
     max-width: 100%;
   }
   .nc-print-workflow__sub {
-    max-width: 120px;
+    max-width: 220px;
   }
   .nc-print-viewport-wrap--studio {
     min-height: 320px;
@@ -744,13 +739,13 @@ input:checked + .nc-print-switch__slider::before {
   margin: 0;
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 900px) {
   .nc-print-workflow__list {
     max-width: 100%;
     overflow-x: auto;
   }
   .nc-print-workflow__sub {
-    max-width: 72px;
+    max-width: 160px;
   }
   .nc-print-profile-picker {
     grid-template-columns: 1fr;
@@ -758,16 +753,8 @@ input:checked + .nc-print-switch__slider::before {
   .nc-print-viewport-wrap {
     min-height: 260px;
   }
-  .nc-print-tab-scroll {
-    padding-bottom: var(--nc-gcs-space-lg);
-  }
   .nc-print-prepare-footer {
     position: static;
-  }
-}
-@media (max-width: 720px) {
-  .nc-print-viewport-wrap {
-    min-height: 240px;
   }
   .nc-print-camera-panel {
     order: -1;

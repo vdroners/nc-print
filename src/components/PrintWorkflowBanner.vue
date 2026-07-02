@@ -26,7 +26,9 @@ export default {
 				return this.printStore.prepareComplete
 			}
 			if (stepId === TABS.PRINT) {
-				return this.printStore.printStepEnabled
+				// WS8: Print is a live monitor whenever a printer is reachable,
+				// even with nothing sliced/queued.
+				return this.printStore.printMonitorReachable || this.printStore.printStepEnabled
 			}
 			return true
 		},
@@ -66,7 +68,7 @@ export default {
 				if (stepId === TABS.SLICE) {
 					toastInfo(this.printStore.firstPrepareBlocker || 'Complete Prepare first')
 				} else if (stepId === TABS.PRINT) {
-					toastInfo('Slice a model or upload G-code first')
+					toastInfo('Connect a printer to monitor')
 				}
 				return
 			}

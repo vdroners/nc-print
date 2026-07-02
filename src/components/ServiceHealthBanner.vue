@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
+import { isHealthy, buildRecoveryCards } from '@/utils/service-health.js'
 
 export default {
 	name: 'ServiceHealthBanner',
@@ -9,51 +10,32 @@ export default {
 	computed: {
 		...mapStores(usePrintStore),
 		collapsedWhenHealthy() {
-			const s = this.printStore.appStatus
-			return s.slicer_ok && s.moonraker_ok
-				&& !this.printStore.has3mfError
-				&& !this.printStore.hasGcodeDownloadError
+			return isHealthy(this.printStore.appStatus, {
+				has3mfError: this.printStore.has3mfError,
+				hasGcodeDownloadError: this.printStore.hasGcodeDownloadError,
+			})
 		},
 		recoveryCards() {
-			const cards = []
-			const s = this.printStore.appStatus
-			if (s.loaded && s.slicer_enabled && !s.slicer_ok) {
-				cards.push({
-					kind: 'slicer_offline',
-					detail: s.slicer_error || '',
-					retry: () => this.printStore.loadAppStatus(),
-				})
+			const cards = buildRecoveryCards(this.printStore.appStatus, {
+				has3mfError: this.printStore.has3mfError,
+				convertError: this.printStore.model.convertError,
+				hasGcodeDownloadError: this.printStore.hasGcodeDownloadError,
+				gcodeError: this.printStore.sliceJob.error,
+			})
+			const retries = {
+				slicer_offline: () => this.printStore.loadAppStatus(),
+				moonraker_offline: () => this.printStore.loadAppStatus(),
+				gcode_download_fail: () => this.printStore.retryDownloadGcode(),
 			}
-			if (s.loaded && s.moonraker_enabled && !s.moonraker_ok) {
-				cards.push({
-					kind: 'moonraker_offline',
-					detail: s.moonraker_error || '',
-					retry: () => this.printStore.loadAppStatus(),
-				})
-			}
-			if (this.printStore.has3mfError) {
-				cards.push({
-					kind: '3mf_fail',
-					detail: this.printStore.model.convertError,
-				})
-			}
-			if (this.printStore.hasGcodeDownloadError) {
-				cards.push({
-					kind: 'gcode_download_fail',
-					detail: this.printStore.sliceJob.error,
-					retry: () => this.printStore.retryDownloadGcode(),
-				})
-			}
-			return cards
-		},
-		okMessage() {
-			return 'Slicer and printer connected'
+			return cards.map(c => ({ ...c, retry: retries[c.kind] }))
 		},
 	},
 }
 </script>
 
 <template>
+	<!-- Health surfaces ONLY when something is broken. A healthy lab shows
+	     nothing (zero height) so the chrome bar stays a single clean row. -->
 	<div v-if="printStore.appStatus.loaded && !collapsedWhenHealthy" class="nc-print-health-stack">
 		<ErrorRecoveryCard
 			v-for="(card, i) in recoveryCards"
@@ -62,12 +44,6 @@ export default {
 			:detail="card.detail"
 			@retry="card.retry && card.retry()" />
 	</div>
-	<div
-		v-else-if="printStore.appStatus.loaded && printStore.appStatus.slicer_ok && printStore.appStatus.moonraker_ok"
-		class="nc-print-health-banner nc-print-health-banner--ok nc-print-health-banner--compact"
-		role="status">
-		{{ okMessage }}
-	</div>
 </template>
 
 <style scoped>
@@ -75,9 +51,6 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: var(--nc-gcs-space-sm);
-}
-
-.nc-print-health-banner--compact {
-	margin-bottom: var(--nc-gcs-space-md);
+	margin-top: var(--nc-gcs-space-sm);
 }
 </style>

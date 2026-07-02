@@ -8,6 +8,30 @@ Configure in **Settings → NC 3D Print**:
 - **Allowed groups** — comma-separated Nextcloud groups (default `19 Labs`)
 - Feature toggles to disable slicer or Moonraker independently
 
+## G-code console (`console_enabled`) — off by default
+
+The Print monitor can expose a Mainsail/Fluidd-style G-code console (WS11). For
+safety it is **disabled by default**: the read-only response log always renders,
+but the command **input is hidden** and the backend `printer#consoleCommand`
+endpoint returns **403** until an admin explicitly opts in.
+
+Enable it only for trusted operators:
+
+```bash
+# inside cloud_app
+occ config:app:set nc_print console_enabled --value=1   # enable
+occ config:app:set nc_print console_enabled --value=0   # disable (default)
+```
+
+Even when enabled, sends are still guarded server-side: commands are length- and
+charset-validated, motion commands are refused while a print is active, and
+there is **no raw `printer/gcode/script` passthrough** — every write flows
+through allowlisted `PrinterController` actions. All other Part B panels
+(temperature graph, bed mesh, queue, filament, history, timelapse) are
+read-only through the Moonraker proxy allowlist and need no toggle; they
+feature-detect from `/server/info` components and hide when the corresponding
+Moonraker plugin is absent.
+
 
 ## Docker (`cloud_app`)
 

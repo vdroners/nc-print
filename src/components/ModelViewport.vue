@@ -4,6 +4,7 @@ import { usePrintStore } from '@/store/print.js'
 import { createViewport } from '@/three/viewport.js'
 import { toastError, toastInfo, toastSuccess } from '@/services/toast.js'
 import { isModelFilename } from '@/shared/modelFileNode.js'
+import { formatBedLegend } from '@/utils/viewport-format.js'
 import {
 	analyzeMesh,
 	autoOrient,
@@ -52,6 +53,12 @@ export default {
 		},
 		showLoadError() {
 			return !!this.file && !!this.loadError && !this.loading
+		},
+		bedLegend() {
+			return formatBedLegend(this.buildVolume)
+		},
+		bedLegendWarn() {
+			return !!this.printStore.modelMeta.bbox && !this.printStore.modelMeta.fitsBed
 		},
 	},
 	watch: {
@@ -364,6 +371,12 @@ export default {
 			Preview failed: {{ loadError }}. You can still slice on the Slice tab.
 		</div>
 		<div
+			class="nc-print-viewport-bed-legend"
+			:class="{ 'nc-print-viewport-bed-legend--warn': bedLegendWarn }"
+			aria-hidden="true">
+			{{ bedLegend }}
+		</div>
+		<div
 			v-if="printStore.modelMeta.bbox && !printStore.modelMeta.fitsBed"
 			class="nc-print-viewport-warn">
 			Model may exceed build volume
@@ -379,8 +392,8 @@ export default {
 		</div>
 		<div
 			v-else-if="printStore.meshState.appliedAt && !printStore.meshState.dirty"
-			class="nc-print-viewport-applied">
-			Applied
+			class="nc-print-badge nc-print-badge--ok nc-print-viewport-applied nc-print-viewport-applied--flash">
+			<span aria-hidden="true">✓</span> Applied to slice mesh
 		</div>
 		<div v-if="printStore.modelMeta.bbox" class="nc-print-viewport-meta">
 			{{ Math.round(printStore.modelMeta.bbox.x) }}×{{ Math.round(printStore.modelMeta.bbox.y) }}×{{ Math.round(printStore.modelMeta.bbox.z) }} mm
@@ -391,7 +404,7 @@ export default {
 
 <style scoped>
 .nc-print-viewport-inner {
-	height: 360px;
+	height: 100%;
 	min-height: 360px;
 	position: relative;
 }
@@ -493,6 +506,40 @@ export default {
 
 .nc-print-viewport-applied--pending {
 	opacity: 0.85;
+}
+
+.nc-print-viewport-applied--flash {
+	animation: nc-print-applied-flash 0.9s ease-out 1;
+}
+
+@keyframes nc-print-applied-flash {
+	0% {
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--nc-app-accent) 65%, transparent);
+		transform: scale(1.06);
+	}
+	100% {
+		box-shadow: 0 0 0 8px transparent;
+		transform: scale(1);
+	}
+}
+
+.nc-print-viewport-bed-legend {
+	background: rgba(0, 0, 0, 0.45);
+	border-radius: var(--nc-gcs-radius-sm);
+	color: #e6edf3;
+	font-size: 11px;
+	font-weight: 500;
+	padding: 4px 8px;
+	position: absolute;
+	right: 8px;
+	top: 8px;
+	z-index: 2;
+	pointer-events: none;
+}
+
+.nc-print-viewport-bed-legend--warn {
+	background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 70%, #000);
+	color: #1a1400;
 }
 
 .nc-print-viewport-meta {

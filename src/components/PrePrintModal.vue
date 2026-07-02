@@ -2,9 +2,12 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { activateFocusTrap } from '@/composables/useFocusTrap.js'
+import { useCameraFrame } from '@/composables/useCameraFrame.js'
+import { cameraStreamUrl } from '@/services/moonraker-api.js'
 
 export default {
 	name: 'PrePrintModal',
+	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
 			focusTrap: null,
@@ -15,13 +18,29 @@ export default {
 		visible() {
 			return this.printStore.prePrintModal.visible
 		},
+		streamUrl() {
+			if (!this.printStore.prePrintModal.visible) {
+				return ''
+			}
+			return cameraStreamUrl(this.printStore.config, this.printStore.selectedPrinterId)
+		},
+		cameraPlaceholderText() {
+			if (!this.streamUrl) {
+				return 'No camera configured'
+			}
+			if (this.cameraError) {
+				return this.cameraErrorMessage || 'Camera unavailable'
+			}
+			return 'Loading camera…'
+		},
 		checklist() {
 			const rows = [
 				{
 					id: 'model',
 					label: 'Model loaded and slice-ready',
 					ok: this.printStore.prepareChecklist.find(r => r.id === 'mesh')?.ok
-						&& this.printStore.prepareChecklist.find(r => r.id === 'model')?.ok,
+						&& this.printStore.prepareChecklist.find(r => r.id === 'model')?.ok
+						&& this.printStore.prepareChecklist.find(r => r.id === 'preview')?.ok,
 				},
 				{
 					id: 'profiles',
@@ -73,7 +92,7 @@ export default {
 			}
 		},
 	},
-	beforeUnmount() {
+	beforeDestroy() {
 		document.removeEventListener('keydown', this.onKeydown)
 		this.focusTrap?.deactivate()
 	},
@@ -120,6 +139,20 @@ export default {
 				<p class="nc-print-preprint-modal__lead">
 					Confirm the checklist below. G-code will upload to the printer and start printing.
 				</p>
+				<div class="nc-print-preprint-modal__camera nc-print-camera-panel">
+					<img
+						v-if="cameraFrameUrl && !cameraError"
+						:src="cameraFrameUrl"
+						alt="Printer chamber preview"
+						loading="lazy"
+						@error="onCameraError">
+					<div v-else class="nc-print-camera-placeholder">
+						<p>{{ cameraPlaceholderText }}</p>
+						<button v-if="cameraError" type="button" class="nc-print-btn nc-print-btn--small" @click="retryCamera">
+							Retry
+						</button>
+					</div>
+				</div>
 				<ul class="nc-print-preprint-modal__list">
 					<li
 						v-for="row in checklist"
@@ -193,6 +226,23 @@ export default {
 	color: var(--nc-gcs-text-secondary);
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0 0 var(--nc-gcs-space-md);
+}
+
+.nc-print-preprint-modal__camera {
+	margin: 0 0 var(--nc-gcs-space-md);
+	max-width: 260px;
+}
+
+.nc-print-preprint-modal__camera .nc-print-camera-placeholder {
+	flex-direction: column;
+	gap: 6px;
+	min-height: 120px;
+	padding: var(--nc-gcs-space-sm);
+	text-align: center;
+}
+
+.nc-print-preprint-modal__camera .nc-print-camera-placeholder p {
+	margin: 0;
 }
 
 .nc-print-preprint-modal__list {

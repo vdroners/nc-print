@@ -77,76 +77,92 @@ export default {
 
 <template>
 	<div class="nc-print-viewport-toolbar">
-		<button type="button" class="nc-print-btn" @click="onImportClick">
-			Import STL/3MF/OBJ
-		</button>
-		<input
-			ref="fileInput"
-			type="file"
-			accept=".stl,.3mf,.obj"
-			hidden
-			aria-label="Import model file"
-			@change="onFileInput">
-		<button
-			type="button"
-			class="nc-print-btn"
-			:disabled="!canCenter"
-			title="Center on bed and drop to z=0"
-			@click="onCenter">
-			Center on bed
-		</button>
-		<span v-if="printStore.hasModel" class="nc-print-viewport-toolbar__rotate">
-			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around X" @click="onRotate('x')">↻ X</button>
-			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Y" @click="onRotate('y')">↻ Y</button>
-			<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Z" @click="onRotate('z')">↻ Z</button>
-		</span>
-		<button
-			type="button"
-			class="nc-print-btn"
-			:disabled="!canTransform"
-			title="Place largest face on the bed"
-			@click="onLayFlat">
-			Lay flat
-		</button>
-		<button
-			type="button"
-			class="nc-print-btn"
-			:disabled="!canTransform"
-			title="Uniform scale to fit build volume"
-			@click="onScaleToFit">
-			Scale to fit
-		</button>
-		<button
-			type="button"
-			class="nc-print-btn"
-			:disabled="!canTransform"
-			title="Pick lowest-overhang axis-aligned rotation"
-			@click="onAutoOrient">
-			Auto-orient
-		</button>
-		<label v-if="printStore.hasModel" class="nc-print-switch nc-print-viewport-toolbar__auto">
+		<!-- Group 1: file -->
+		<div class="nc-print-toolbar-group">
+			<button type="button" class="nc-print-btn" @click="onImportClick">
+				Import STL/3MF/OBJ
+			</button>
 			<input
-				type="checkbox"
-				:checked="printStore.meshState.autoApply"
-				@change="onAutoApplyChange">
-			<span class="nc-print-switch__slider" />
-			<span class="nc-print-switch__label">Auto-apply on edit</span>
-		</label>
-		<button
-			v-if="printStore.hasModel && !printStore.meshState.autoApply"
-			type="button"
-			class="nc-print-btn nc-print-btn--primary"
-			:disabled="!printStore.meshState.dirty || printStore.meshState.applying"
-			@click="onApply">
-			Apply to slice
-		</button>
-		<button
-			type="button"
-			class="nc-print-btn"
-			:disabled="!printStore.hasModel"
-			@click="onClear">
-			Clear
-		</button>
+				ref="fileInput"
+				type="file"
+				accept=".stl,.3mf,.obj"
+				hidden
+				aria-label="Import model file"
+				@change="onFileInput">
+			<button
+				type="button"
+				class="nc-print-btn"
+				:disabled="!printStore.hasModel"
+				@click="onClear">
+				Clear
+			</button>
+		</div>
+
+		<!-- Group 2: view -->
+		<div class="nc-print-toolbar-group">
+			<button
+				type="button"
+				class="nc-print-btn"
+				:disabled="!canCenter"
+				title="Center on bed and drop to z=0"
+				@click="onCenter">
+				Center on bed
+			</button>
+		</div>
+
+		<!-- Group 3: orient -->
+		<div class="nc-print-toolbar-group">
+			<span v-if="printStore.hasModel" class="nc-print-viewport-toolbar__rotate">
+				<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around X" @click="onRotate('x')">↻ X</button>
+				<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Y" @click="onRotate('y')">↻ Y</button>
+				<button type="button" class="nc-print-btn nc-print-btn--compact" title="Rotate 90° around Z" @click="onRotate('z')">↻ Z</button>
+			</span>
+			<button
+				type="button"
+				class="nc-print-btn"
+				:disabled="!canTransform"
+				title="Place largest face on the bed"
+				@click="onLayFlat">
+				Lay flat
+			</button>
+			<button
+				type="button"
+				class="nc-print-btn"
+				:disabled="!canTransform"
+				title="Uniform scale to fit build volume"
+				@click="onScaleToFit">
+				Scale to fit
+			</button>
+			<button
+				type="button"
+				class="nc-print-btn"
+				:disabled="!canTransform"
+				title="Pick lowest-overhang axis-aligned rotation"
+				@click="onAutoOrient">
+				Auto-orient
+			</button>
+		</div>
+
+		<!-- Group 4: apply -->
+		<div class="nc-print-toolbar-group">
+			<label v-if="printStore.hasModel" class="nc-print-switch nc-print-viewport-toolbar__auto">
+				<input
+					type="checkbox"
+					:checked="printStore.meshState.autoApply"
+					@change="onAutoApplyChange">
+				<span class="nc-print-switch__slider" />
+				<span class="nc-print-switch__label">Auto-apply on edit</span>
+			</label>
+			<button
+				v-if="printStore.hasModel && !printStore.meshState.autoApply"
+				type="button"
+				class="nc-print-btn nc-print-btn--primary"
+				:disabled="!printStore.meshState.dirty || printStore.meshState.applying"
+				@click="onApply">
+				Apply to slice
+			</button>
+		</div>
+
 		<span class="nc-print-viewport-toolbar__info">{{ infoLine }}</span>
 	</div>
 </template>
@@ -158,6 +174,18 @@ export default {
 	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm);
 	margin-bottom: var(--nc-gcs-space-sm);
+}
+
+.nc-print-toolbar-group {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--nc-gcs-space-sm);
+}
+
+.nc-print-toolbar-group + .nc-print-toolbar-group {
+	border-left: 1px solid var(--nc-gcs-border);
+	padding-left: var(--nc-gcs-space-sm);
 }
 
 .nc-print-viewport-toolbar__rotate {

@@ -22,10 +22,17 @@ export default {
 .nc-print-prepare-studio {
 	display: grid;
 	gap: var(--nc-gcs-space-md);
-	grid-template-columns: minmax(220px, 280px) minmax(480px, 1fr) minmax(200px, 260px);
+	grid-template-columns: minmax(220px, 280px) minmax(480px, 1fr) minmax(240px, 320px);
 }
 
-@media (max-width: 1199px) {
+.nc-print-prepare-studio__right {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nc-gcs-space-md);
+	min-width: 0;
+}
+
+@media (max-width: 1200px) {
 	.nc-print-prepare-studio {
 		grid-template-columns: 1fr 1fr;
 	}
@@ -36,7 +43,7 @@ export default {
 	}
 }
 
-@media (max-width: 899px) {
+@media (max-width: 900px) {
 	.nc-print-prepare-studio {
 		grid-template-columns: 1fr;
 	}

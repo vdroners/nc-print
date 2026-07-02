@@ -91,6 +91,10 @@ class ApiController extends Controller
 			'moonraker_ok' => $moonrakerProbe['ok'],
 			'moonraker_latency_ms' => $moonrakerProbe['latency_ms'],
 			'moonraker_error' => $moonrakerProbe['error'],
+			'console_enabled' => $this->configService->isConsoleEnabled(),
+			// WS-foundation feature detection: which optional Moonraker
+			// components / plugins exist so the UI can hide unsupported tabs.
+			'moonraker_features' => $this->detectMoonrakerFeatures($moonrakerProbe),
 			'printer_display_name' => $this->configService->getPrinterDisplayName(),
 			'multi_printers' => $this->configService->getMultiPrinters(),
 		]);
@@ -139,7 +143,41 @@ class ApiController extends Controller
 				}
 			}
 		}
+		if (str_contains($url, '/server/info') && is_string($body) && $body !== '') {
+			$data = json_decode($body, true);
+			$components = $data['result']['components'] ?? $data['components'] ?? null;
+			if (is_array($components)) {
+				$result['components'] = array_values(array_filter($components, 'is_string'));
+			}
+		}
 
 		return $result;
+	}
+
+	/**
+	 * Map the Moonraker `server/info` components list to the optional feature
+	 * flags the UI branches on. Absent probe → all false.
+	 *
+	 * @param array<string, mixed> $moonrakerProbe
+	 * @return array<string, bool>
+	 */
+	private function detectMoonrakerFeatures(array $moonrakerProbe): array
+	{
+		$components = [];
+		if (isset($moonrakerProbe['components']) && is_array($moonrakerProbe['components'])) {
+			$components = array_map('strtolower', $moonrakerProbe['components']);
+		}
+		$has = static fn (string $name): bool => in_array($name, $components, true);
+
+		return [
+			// Klipper-side objects (exclude_object, bed_mesh) are reported by
+			// printer/objects/list at runtime; expose the Moonraker-plugin
+			// components here and let the client refine with an objects query.
+			'history' => $has('history'),
+			'job_queue' => $has('job_queue'),
+			'timelapse' => $has('timelapse'),
+			'spoolman' => $has('spoolman'),
+			'power' => $has('power'),
+		];
 	}
 }

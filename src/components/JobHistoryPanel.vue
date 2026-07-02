@@ -5,10 +5,17 @@ import { formatPrintTime } from '@/services/slicer-utils.js'
 
 export default {
 	name: 'JobHistoryPanel',
+	props: {
+		/** Compact mode: fewer columns/hints, capped rows (Print monitor). */
+		compact: { type: Boolean, default: false },
+		/** Max rows to show (0 = all). */
+		limit: { type: Number, default: 0 },
+	},
 	computed: {
 		...mapStores(usePrintStore),
 		rows() {
-			return this.printStore.jobHistory
+			const all = this.printStore.jobHistory
+			return this.limit > 0 ? all.slice(0, this.limit) : all
 		},
 	},
 	methods: {
@@ -38,12 +45,14 @@ export default {
 <template>
 	<div v-if="rows.length" class="nc-print-card nc-print-job-history">
 		<h2 class="nc-print-card__title">Recent jobs</h2>
-		<p class="nc-print-job-history__hint">
-			Last {{ rows.length }} slice jobs on this browser (local only).
-		</p>
-		<p class="nc-print-job-history__hint nc-print-job-history__hint--sub">
-			Restore settings reloads profiles and overrides from a past job — click <strong>Slice only</strong> or <strong>Slice and send</strong> to run again.
-		</p>
+		<template v-if="!compact">
+			<p class="nc-print-job-history__hint">
+				Last {{ rows.length }} slice jobs on this browser (local only).
+			</p>
+			<p class="nc-print-job-history__hint nc-print-job-history__hint--sub">
+				Restore settings reloads profiles and overrides from a past job — click <strong>Slice only</strong> or <strong>Slice and send</strong> to run again.
+			</p>
+		</template>
 		<div class="nc-print-job-history__table-wrap">
 			<table class="nc-print-job-history__table">
 				<thead>

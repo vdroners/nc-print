@@ -35,8 +35,23 @@ class PrinterController extends Controller
 	private const JOG_DISTANCE_MIN = -10.0;
 	private const JOG_DISTANCE_MAX = 10.0;
 
+	private const CONSOLE_CMD_MAX_LEN = 256;
+
 	/** @var list<string> */
 	private const MOTION_ACTIONS = ['home_all', 'home_z', 'jog', 'disable_steppers'];
+
+	/**
+	 * Actions that must NOT run while a print is active (idle-only), in
+	 * addition to MOTION_ACTIONS. Part B guarded writes (WS12/WS14).
+	 * @var list<string>
+	 */
+	private const IDLE_ONLY_ACTIONS = [
+		'bed_mesh_calibrate',
+		'filament_load',
+		'filament_unload',
+		'filament_purge',
+		'pid_calibrate',
+	];
 
 	/** @var list<string> */
 	private const ALLOWED_GCODE_ACTIONS = [
@@ -48,6 +63,15 @@ class PrinterController extends Controller
 		'home_z',
 		'jog',
 		'disable_steppers',
+		// Part B guarded writes (WS12/WS13/WS14). Each maps to a fixed,
+		// parameterised script below — never a raw passthrough.
+		'bed_mesh_calibrate',
+		'exclude_object',
+		'filament_load',
+		'filament_unload',
+		'filament_purge',
+		'set_heater_temp',
+		'pid_calibrate',
 	];
 
 	public function __construct(
@@ -191,9 +215,10 @@ class PrinterController extends Controller
 			);
 		}
 
-		if (in_array($action, self::MOTION_ACTIONS, true) && $this->isPrintActive($printerId)) {
+		$idleOnly = array_merge(self::MOTION_ACTIONS, self::IDLE_ONLY_ACTIONS);
+		if (in_array($action, $idleOnly, true) && $this->isPrintActive($printerId)) {
 			return new JSONResponse(
-				['error' => 'motion_blocked', 'message' => 'Manual motion is not allowed while a print is active'],
+				['error' => 'motion_blocked', 'message' => 'This action is not allowed while a print is active'],
 				Http::STATUS_CONFLICT,
 			);
 		}
@@ -506,6 +531,20 @@ class PrinterController extends Controller
 				return 'G28 Z';
 			case 'disable_steppers':
 				return 'M84';
+			case 'bed_mesh_calibrate':
+				return 'BED_MESH_CALIBRATE';
+			case 'filament_load':
+				return 'LOAD_FILAMENT';
+			case 'filament_unload':
+				return 'UNLOAD_FILAMENT';
+			case 'filament_purge':
+				return 'PURGE_FILAMENT';
+			case 'set_heater_temp':
+				return $this->buildSetHeaterTempScript($params);
+			case 'exclude_object':
+				return $this->buildExcludeObjectScript($params);
+			case 'pid_calibrate':
+				return $this->buildPidCalibrateScript($params);
 			case 'jog':
 				$axis = strtolower(trim((string) ($params['axis'] ?? '')));
 				if (!in_array($axis, ['x', 'y', 'z'], true)) {
@@ -523,6 +562,116 @@ class PrinterController extends Controller
 			default:
 				return null;
 		}
+	}
+
+	/**
+	 * WS10/WS14: SET_HEATER_TEMPERATURE with a whitelisted heater name and a
+	 * clamped target. Rejects arbitrary heater identifiers.
+	 * @param array<string, mixed> $params
+	 */
+	private function buildSetHeaterTempScript(array $params): ?string
+	{
+		$heater = strtolower(trim((string) ($params['heater'] ?? '')));
+		// Allow extruder, extruder1..N, heater_bed, and generic heater names.
+		if (!preg_match('/^(heater_bed|extruder[0-9]?|heater_generic [a-z0-9_]+|[a-z0-9_]+)$/', $heater)) {
+			return null;
+		}
+		if (!isset($params['target']) || !is_numeric($params['target'])) {
+			return null;
+		}
+		$isBed = ($heater === 'heater_bed');
+		$target = $isBed
+			? $this->clampBedTemp((float) $params['target'])
+			: $this->clampNozzleTemp((float) $params['target']);
+		return sprintf('SET_HEATER_TEMPERATURE HEATER=%s TARGET=%d', $heater, (int) round($target));
+	}
+
+	/**
+	 * WS13: EXCLUDE_OBJECT NAME=<name>. The object name originates from the
+	 * printer's own exclude_object list; still constrained to a safe charset.
+	 * @param array<string, mixed> $params
+	 */
+	private function buildExcludeObjectScript(array $params): ?string
+	{
+		$name = trim((string) ($params['name'] ?? ''));
+		if ($name === '' || strlen($name) > 128) {
+			return null;
+		}
+		// Klipper object names: alnum, space, underscore, dash, dot, parens.
+		if (!preg_match('/^[A-Za-z0-9 _\-.()]+$/', $name)) {
+			return null;
+		}
+		return sprintf('EXCLUDE_OBJECT NAME=%s', $name);
+	}
+
+	/**
+	 * WS10: PID_CALIBRATE HEATER=<heater> TARGET=<temp>. Whitelisted heater.
+	 * @param array<string, mixed> $params
+	 */
+	private function buildPidCalibrateScript(array $params): ?string
+	{
+		$heater = strtolower(trim((string) ($params['heater'] ?? '')));
+		if (!in_array($heater, ['extruder', 'heater_bed'], true)) {
+			return null;
+		}
+		if (!isset($params['target']) || !is_numeric($params['target'])) {
+			return null;
+		}
+		$target = ($heater === 'heater_bed')
+			? $this->clampBedTemp((float) $params['target'])
+			: $this->clampNozzleTemp((float) $params['target']);
+		if ($target <= 0) {
+			return null;
+		}
+		return sprintf('PID_CALIBRATE HEATER=%s TARGET=%d', $heater, (int) round($target));
+	}
+
+	/**
+	 * WS11: arbitrary G-code console send. Only reachable when the admin has
+	 * turned on `console_enabled`. Per-command guard: length cap, single line,
+	 * printable ASCII. Motion-while-printing rules still apply.
+	 */
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	public function consoleCommand(): JSONResponse
+	{
+		if ($gate = $this->controlGate()) {
+			return $gate;
+		}
+		if (!$this->config->isConsoleEnabled()) {
+			return new JSONResponse(
+				['error' => 'console_disabled', 'message' => 'The G-code console is disabled by the administrator.'],
+				Http::STATUS_FORBIDDEN,
+			);
+		}
+
+		$params = $this->mergedParams();
+		$printerId = $this->printerIdFromParams($params);
+		$command = (string) ($params['command'] ?? '');
+
+		if ($command === '' || strlen($command) > self::CONSOLE_CMD_MAX_LEN) {
+			return new JSONResponse(
+				['error' => 'invalid_command', 'message' => 'Command must be 1-256 characters'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+		// Single line, printable ASCII only (no control chars, no newlines).
+		if (preg_match('/[^\x20-\x7E]/', $command)) {
+			return new JSONResponse(
+				['error' => 'invalid_command', 'message' => 'Command must be a single line of printable ASCII'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		$result = $this->sendGcodeScript(trim($command), $printerId);
+		if ($result === null) {
+			return new JSONResponse(
+				['error' => 'backend_unreachable', 'message' => 'Moonraker console request failed'],
+				Http::STATUS_BAD_GATEWAY,
+			);
+		}
+
+		return new JSONResponse($result);
 	}
 
 	/** @return array<string, mixed>|null */

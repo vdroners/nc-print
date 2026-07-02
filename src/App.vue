@@ -2,8 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import PrintAppShell from './components/PrintAppShell.vue'
-import ServiceHealthBanner from './components/ServiceHealthBanner.vue'
-import PrintWorkflowBanner from './components/PrintWorkflowBanner.vue'
+import AppChromeBar from './components/AppChromeBar.vue'
 import HelpDrawer from './components/HelpDrawer.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
@@ -16,8 +15,7 @@ export default {
 	name: 'App',
 	components: {
 		PrintAppShell,
-		ServiceHealthBanner,
-		PrintWorkflowBanner,
+		AppChromeBar,
 		HelpDrawer,
 		PrepareTab,
 		SliceTab,
@@ -56,13 +54,33 @@ export default {
 	},
 	mounted() {
 		window.addEventListener('keydown', this.onGlobalKeydown)
+		this.$nextTick(this.observeChromeHeight)
 	},
 	beforeDestroy() {
 		window.removeEventListener('keydown', this.onGlobalKeydown)
 		this.printStore.stopPrinterPolling()
 		this.printStore.stopStatusPolling()
+		if (this._chromeObserver) {
+			this._chromeObserver.disconnect()
+			this._chromeObserver = null
+		}
 	},
 	methods: {
+		observeChromeHeight() {
+			const chrome = this.$el?.querySelector?.('.nc-print-chrome')
+			const body = this.$el?.querySelector?.('.nc-gcs-app-shell__body') || chrome?.parentElement
+			if (!chrome || !body) {
+				return
+			}
+			const apply = () => {
+				body.style.setProperty('--nc-print-chrome-h', `${Math.round(chrome.offsetHeight)}px`)
+			}
+			apply()
+			if (typeof ResizeObserver !== 'undefined') {
+				this._chromeObserver = new ResizeObserver(apply)
+				this._chromeObserver.observe(chrome)
+			}
+		},
 		openHelp() {
 			this.helpOpen = true
 		},
@@ -149,8 +167,7 @@ export default {
 		</template>
 
 		<div class="nc-print-chrome">
-			<PrintWorkflowBanner />
-			<ServiceHealthBanner />
+			<AppChromeBar />
 		</div>
 
 		<div

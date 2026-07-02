@@ -1,5 +1,58 @@
 # Changelog
 
+## [1.9.0] - 2026-07-01
+
+UX cohesion, trust/WYSIWYG, and a Mainsail/Fluidd-class monitoring foundation
+(Part B). All new printer-control surfaces go through guarded, allowlisted
+backend actions — never a raw G-code passthrough.
+
+### Added — UX cohesion (WS1–WS9)
+
+- Single body scroll with unified 1200/900 breakpoints; camera consolidated to a
+  single live view (removed the redundant PiP + PrePrint preview) (WS1)
+- `AppChromeBar` unified top chrome; healthy service-health banner auto-hides;
+  notification bell (WS3)
+- `NcPrintCollapsible` + grouped `ViewportToolbar` to reduce Prepare density (WS2)
+- `SliceHandoffCard` unifies the slice summary and adds a "Monitor on Print" CTA;
+  richer empty states on Slice (WS5)
+- Compact job history on the Print monitor, completion filament stats, and a
+  fullscreen camera overlay (Esc to close) (WS4)
+- Bed legend + "Applied" badge; blocking gate when the viewport preview was
+  skipped so slicing is never "blind" (WS6)
+- Always-navigable Print monitor (idle-safe) plus reopen recent project/model and
+  replay-slice from the chrome (WS8)
+- Content max-width/centering, sticky-rail chrome offset via `--nc-print-chrome-h`,
+  removed overflow clipping, spacing-token cleanup (WS9)
+
+### Added — Mainsail/Fluidd-class monitoring (Part B, WS10–WS16)
+
+- Live multi-series temperature graph with presets + PID tune (WS10)
+- Read-only G-code console log with allowlisted send, gated behind an admin
+  `console_enabled` toggle (default off) (WS11)
+- Bed mesh heatmap + calibrate action (idle-only) (WS12)
+- Print/job queue + mid-print exclude-object (WS13)
+- Filament management: Spoolman spool + runout sensors, load/unload/purge, and
+  last-slice cost estimate (WS14)
+- Moonraker history/statistics + embedded G-code thumbnails (WS15)
+- moonraker-timelapse integration: rendered-video list, in-app playback, download
+  (feature-detected; hidden when the plugin is absent) (WS16)
+
+### Security
+
+- Moonraker proxy allowlist extended with read-only Part B prefixes only; raw
+  `printer/gcode/script` passthrough stays blocked
+- All write actions (bed mesh calibrate, filament, heater/PID, exclude-object) go
+  through guarded `PrinterController` actions with parameter validation and
+  idle/motion guards
+- G-code console send disabled by default and admin-gated (`console_enabled`)
+
+### Gates
+
+- G27 version floor bumped to `>= 1.9.0`
+- G34 (deployed sticky-chrome CSS), G35 (CSS/JS deploy freshness), G45 (proxy
+  allowlist + console-off regression); new Vitest specs G38a–G44a; PHPUnit
+  console/proxy guards
+
 ## [1.8.1] - 2026-07-01
 
 Theme cohesion + presentation refresh aligned with NC-GCS visual language.

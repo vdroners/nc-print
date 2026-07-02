@@ -17,6 +17,8 @@ class ConfigService
 	public const KEY_PRINTER_DISPLAY_NAME = 'printer_display_name';
 	public const KEY_ALLOWED_GROUPS = 'allowed_groups';
 	public const KEY_MULTI_PRINTERS = 'multi_printers';
+	/** WS11 G-code console: arbitrary command send. Default OFF. */
+	public const KEY_CONSOLE_ENABLED = 'console_enabled';
 
 	/** Reachable from cloud_app via host.docker.internal or bridge gateway. */
 	public const DEFAULT_SLICER_INTERNAL_URL = 'http://host.docker.internal:8766';
@@ -72,6 +74,19 @@ class ConfigService
 		return $this->isEnabledFlag(
 			self::KEY_MOONRAKER_ENABLED,
 			true,
+		);
+	}
+
+	/**
+	 * WS11: whether the arbitrary G-code console send path is enabled.
+	 * Security-sensitive — defaults OFF and must be explicitly turned on by
+	 * an administrator.
+	 */
+	public function isConsoleEnabled(): bool
+	{
+		return $this->isEnabledFlag(
+			self::KEY_CONSOLE_ENABLED,
+			false,
 		);
 	}
 
@@ -198,6 +213,7 @@ class ConfigService
 			'app_id' => Application::APP_ID,
 			'slicer_enabled' => $this->isSlicerEnabled(),
 			'moonraker_enabled' => $this->isMoonrakerEnabled(),
+			'console_enabled' => $this->isConsoleEnabled(),
 			'printer_display_name' => $this->getPrinterDisplayName(),
 			'multi_printers' => $this->getMultiPrinters(),
 			'slicer_proxy_base' => '/apps/' . Application::APP_ID . '/api/slicer',

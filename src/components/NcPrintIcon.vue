@@ -14,6 +14,19 @@ const ICONS = {
 	check: '<path d="M5 12l5 5l10-10" />',
 	alert: '<path d="M12 9v4" /><path d="M10.363 3.591l-8.106 13.534a1.914 1.914 0 0 0 1.636 2.875h16.214a1.914 1.914 0 0 0 1.636-2.875L13.637 3.591a1.914 1.914 0 0 0-3.274 0" /><path d="M12 16h.01" />',
 	upload: '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /><path d="M7 9l5-5l5 5" /><path d="M12 4v12" />',
+	bell: '<path d="M10 5a2 2 0 1 1 4 0a7 7 0 0 1 4 6v3a4 4 0 0 0 2 3H4a4 4 0 0 0 2-3v-3a7 7 0 0 1 4-6" /><path d="M9 17v1a3 3 0 0 0 6 0v-1" />',
+	'bell-off': '<path d="M9 9v-1a3 3 0 0 1 5.106 -2.114" /><path d="M6 8v3a4 4 0 0 1 -2 3h11" /><path d="M15 11v3a4 4 0 0 0 2 3" /><path d="M9 17v1a3 3 0 0 0 6 0v-1" /><path d="M3 3l18 18" />',
+	clock: '<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 7v5l3 3" />',
+	'chevron-down': '<path d="M6 9l6 6l6 -6" />',
+	folder: '<path d="M5 4h4l3 3h7a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2" />',
+	maximize: '<path d="M4 8v-2a2 2 0 0 1 2 -2h2" /><path d="M4 16v2a2 2 0 0 0 2 2h2" /><path d="M16 4h2a2 2 0 0 1 2 2v2" /><path d="M16 20h2a2 2 0 0 0 2 -2v-2" />',
+	close: '<path d="M18 6l-12 12" /><path d="M6 6l12 12" />',
+	terminal: '<path d="M5 7l5 5l-5 5" /><path d="M12 19h7" />',
+	grid: '<path d="M4 4h6v6h-6z" /><path d="M14 4h6v6h-6z" /><path d="M4 14h6v6h-6z" /><path d="M14 14h6v6h-6z" />',
+	spool: '<path d="M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0" /><path d="M12 12m-3 0a3 3 0 1 0 6 0a3 3 0 1 0 -6 0" /><path d="M12 3v3" /><path d="M12 18v3" />',
+	video: '<path d="M15 10l4.553 -2.276a1 1 0 0 1 1.447 .894v6.764a1 1 0 0 1 -1.447 .894l-4.553 -2.276v-4z" /><path d="M3 6m0 2a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2z" />',
+	list: '<path d="M9 6h11" /><path d="M9 12h11" /><path d="M9 18h11" /><path d="M5 6v.01" /><path d="M5 12v.01" /><path d="M5 18v.01" />',
+	download: '<path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2" /><path d="M7 11l5 5l5 -5" /><path d="M12 4v12" />',
 }
 
 export default {

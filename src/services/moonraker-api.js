@@ -2,6 +2,34 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
 const base = () => generateUrl('/apps/nc_print/api/printer')
+const proxyBase = () => generateUrl('/apps/nc_print/api/moonraker')
+
+/**
+ * Read-only GET through the Moonraker proxy allowlist (Part B reads).
+ * @param {string} path Moonraker path (e.g. 'server/temperature_store')
+ * @param {object} [params] query params
+ * @param {string} [printerId]
+ * @returns {Promise<object>}
+ */
+export async function moonrakerGet(path, params = {}, printerId) {
+	const q = printerId ? { ...params, printer_id: printerId } : params
+	const { data } = await axios.get(`${proxyBase()}/${path}`, { params: q })
+	return data
+}
+
+/**
+ * POST through the Moonraker proxy allowlist (e.g. job_queue add/remove).
+ * Never used for gcode — those go through guarded PrinterController actions.
+ * @param {string} path
+ * @param {object} [body]
+ * @param {string} [printerId]
+ * @returns {Promise<object>}
+ */
+export async function moonrakerProxyPost(path, body = {}, printerId) {
+	const params = printerId ? { printer_id: printerId } : {}
+	const { data } = await axios.post(`${proxyBase()}/${path}`, body, { params })
+	return data
+}
 
 function printerParams(printerId, extra = {}) {
 	const params = { ...extra }
@@ -116,6 +144,50 @@ export async function jogAxis(axis, distanceMm, printerId) {
 
 export async function disableSteppers(printerId) {
 	return gcodeAction({ action: 'disable_steppers' }, printerId)
+}
+
+// Part B guarded write actions (WS12/WS13/WS14/WS10). Each maps to a fixed,
+// parameterised script server-side — never a raw passthrough.
+
+export async function bedMeshCalibrate(printerId) {
+	return gcodeAction({ action: 'bed_mesh_calibrate' }, printerId)
+}
+
+export async function excludeObject(name, printerId) {
+	return gcodeAction({ action: 'exclude_object', name }, printerId)
+}
+
+export async function filamentLoad(printerId) {
+	return gcodeAction({ action: 'filament_load' }, printerId)
+}
+
+export async function filamentUnload(printerId) {
+	return gcodeAction({ action: 'filament_unload' }, printerId)
+}
+
+export async function filamentPurge(printerId) {
+	return gcodeAction({ action: 'filament_purge' }, printerId)
+}
+
+export async function setHeaterTemp(heater, target, printerId) {
+	return gcodeAction({ action: 'set_heater_temp', heater, target }, printerId)
+}
+
+export async function pidCalibrate(heater, target, printerId) {
+	return gcodeAction({ action: 'pid_calibrate', heater, target }, printerId)
+}
+
+/**
+ * WS11: arbitrary G-code console send. Server rejects with 403 unless the
+ * admin has enabled the console (`console_enabled`).
+ * @param {string} command single-line printable-ASCII command (<=256 chars)
+ * @param {string} [printerId]
+ * @returns {Promise<object>}
+ */
+export async function consoleCommand(command, printerId) {
+	const params = printerId ? { printer_id: printerId } : {}
+	const { data } = await axios.post(`${base()}/console`, { command }, { params })
+	return data
 }
 
 export async function emergencyStop(printerId) {

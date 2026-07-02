@@ -1,0 +1,102 @@
+<script>
+import { mapStores } from 'pinia'
+import { usePrintStore, TABS } from '@/store/print.js'
+import { formatPrintTime } from '@/services/slicer-utils.js'
+import SliceSummaryCard from './SliceSummaryCard.vue'
+import ProfileSummaryChip from './ProfileSummaryChip.vue'
+import NcPrintIcon from './NcPrintIcon.vue'
+
+export default {
+	name: 'SliceHandoffCard',
+	components: { SliceSummaryCard, ProfileSummaryChip, NcPrintIcon },
+	computed: {
+		...mapStores(usePrintStore),
+		done() {
+			return this.printStore.sliceComplete
+		},
+		stats() {
+			return this.printStore.lastCompletedSliceStats
+		},
+		checklistProgress() {
+			const rows = this.printStore.prepareChecklist || []
+			const ready = rows.filter(r => r.ok).length
+			return { ready, total: rows.length }
+		},
+		timeLabel() {
+			return this.stats ? formatPrintTime(this.stats.estimatedTimeS) : '—'
+		},
+		filamentLabel() {
+			if (!this.stats) {
+				return '—'
+			}
+			return `${Math.round(this.stats.filamentUsedG)} g`
+		},
+		supportLabel() {
+			const g = this.stats?.supportFilamentG
+			return g != null ? `${Math.round(g)} g` : null
+		},
+	},
+	methods: {
+		goPrint() {
+			this.printStore.setActiveTab(TABS.PRINT)
+		},
+	},
+}
+</script>
+
+<template>
+	<div class="nc-print-card nc-print-handoff">
+		<div class="nc-print-card__header">
+			<h2 class="nc-print-card__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="cube" :size="18" />
+					{{ done ? 'Slice result' : 'Ready to slice' }}
+				</span>
+			</h2>
+			<span
+				class="nc-print-badge"
+				:class="done ? 'nc-print-badge--ok' : 'nc-print-badge--info'">
+				{{ done ? 'Complete' : `${checklistProgress.ready}/${checklistProgress.total} ready` }}
+			</span>
+		</div>
+
+		<template v-if="done">
+			<dl class="nc-print-slice-result__list">
+				<div>
+					<dt>Time</dt>
+					<dd>{{ timeLabel }}</dd>
+				</div>
+				<div>
+					<dt>Filament</dt>
+					<dd>{{ filamentLabel }}</dd>
+				</div>
+				<div v-if="supportLabel">
+					<dt>Support</dt>
+					<dd>{{ supportLabel }}</dd>
+				</div>
+				<div>
+					<dt>Profiles</dt>
+					<dd><ProfileSummaryChip /></dd>
+				</div>
+			</dl>
+			<div class="nc-print-actions">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrint">
+					Monitor on Print →
+				</button>
+			</div>
+		</template>
+
+		<SliceSummaryCard v-else class="nc-print-handoff__summary" />
+	</div>
+</template>
+
+<style scoped>
+.nc-print-handoff__summary {
+	/* SliceSummaryCard is itself a card; flatten it inside the handoff card. */
+	backdrop-filter: none;
+	background: transparent;
+	border: none;
+	box-shadow: none;
+	padding: 0;
+}
+</style>

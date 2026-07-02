@@ -37,10 +37,10 @@ export default {
 	min-height: 0;
 	min-width: 0;
 	position: sticky;
-	top: 0;
+	top: var(--nc-print-chrome-h, 0px);
 }
 
-@media (max-width: 1024px) {
+@media (max-width: 1200px) {
 	.nc-print-workspace {
 		grid-template-columns: 1fr;
 	}

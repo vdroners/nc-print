@@ -15,6 +15,16 @@ import ManualMotionPanel from './ManualMotionPanel.vue'
 import EmergencyStopButton from './EmergencyStopButton.vue'
 import PrintCompletionBanner from './PrintCompletionBanner.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
+import ReopenMenu from './ReopenMenu.vue'
+import JobHistoryPanel from './JobHistoryPanel.vue'
+import TemperatureGraph from './TemperatureGraph.vue'
+import HistoryPanel from './HistoryPanel.vue'
+import GcodeThumbnail from './GcodeThumbnail.vue'
+import GcodeConsole from './GcodeConsole.vue'
+import BedMeshPanel from './BedMeshPanel.vue'
+import QueuePanel from './QueuePanel.vue'
+import FilamentPanel from './FilamentPanel.vue'
+import TimelapsePanel from './TimelapsePanel.vue'
 
 export default {
 	name: 'PrintTab',
@@ -27,6 +37,16 @@ export default {
 		EmergencyStopButton,
 		PrintCompletionBanner,
 		NcPrintIcon,
+		ReopenMenu,
+		JobHistoryPanel,
+		TemperatureGraph,
+		HistoryPanel,
+		GcodeThumbnail,
+		GcodeConsole,
+		BedMeshPanel,
+		QueuePanel,
+		FilamentPanel,
+		TimelapsePanel,
 	},
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
@@ -35,6 +55,7 @@ export default {
 			uploadBusy: false,
 			startAfterUpload: true,
 			cancelConfirmOpen: false,
+			cameraFullscreen: false,
 		}
 	},
 	computed: {
@@ -165,7 +186,11 @@ export default {
 	},
 	mounted() {
 		void this.consumePendingPrintUpload()
-		void this.printStore.requestPrintNotifications()
+		// Notification permission is now prompted explicitly via the chrome bell (WS3).
+		window.addEventListener('keydown', this.onGlobalKeydown)
+	},
+	beforeDestroy() {
+		window.removeEventListener('keydown', this.onGlobalKeydown)
 	},
 	watch: {
 		'printStore.pendingPrintUpload'() {
@@ -173,6 +198,17 @@ export default {
 		},
 	},
 	methods: {
+		openCameraFullscreen() {
+			this.cameraFullscreen = true
+		},
+		closeCameraFullscreen() {
+			this.cameraFullscreen = false
+		},
+		onGlobalKeydown(e) {
+			if (e.key === 'Escape' && this.cameraFullscreen) {
+				this.closeCameraFullscreen()
+			}
+		},
 		async consumePendingPrintUpload() {
 			const pending = this.printStore.pendingPrintUpload
 			if (!pending?.blob) {
@@ -296,13 +332,14 @@ export default {
 			<p class="nc-print-banner__body">
 				Slice a model and send G-code from the <strong>Slice</strong> tab, or upload G-code below.
 			</p>
-			<div class="nc-print-actions" style="margin-top: 0;">
+			<div class="nc-print-actions">
 				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goSlice">
 					Go to Slice
 				</button>
 				<button type="button" class="nc-print-btn" @click="goPrepare">
 					Go to Prepare
 				</button>
+				<ReopenMenu />
 			</div>
 		</div>
 
@@ -317,9 +354,12 @@ export default {
 				<span class="nc-print-badge nc-print-badge--info">{{ printStore.printerStatusLabel }}</span>
 			</div>
 
-			<p v-if="printStore.printerState.filename" class="nc-print-print-meta">
-				<strong>{{ printStore.printerState.filename }}</strong>
-			</p>
+			<div v-if="printStore.printerState.filename" class="nc-print-print-jobhead">
+				<GcodeThumbnail :filename="printStore.printerState.filename" :size="72" />
+				<p class="nc-print-print-meta">
+					<strong>{{ printStore.printerState.filename }}</strong>
+				</p>
+			</div>
 			<p v-if="printStore.printerState.message" class="nc-print-print-meta nc-print-print-meta--muted">
 				{{ printStore.printerState.message }}
 			</p>
@@ -404,6 +444,18 @@ export default {
 
 		<TemperatureControl />
 
+		<TemperatureGraph />
+
+		<BedMeshPanel />
+
+		<FilamentPanel />
+
+		<TimelapsePanel />
+
+		<QueuePanel />
+
+		<GcodeConsole v-if="printStore.consoleEnabled" />
+
 		<ManualMotionPanel />
 
 		<div class="nc-print-card">
@@ -452,18 +504,30 @@ export default {
 
 		<template #rail>
 			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">
-					<span class="nc-print-card__title-row">
-						<NcPrintIcon name="camera" :size="18" />
-						Camera
-					</span>
-				</h2>
+				<div class="nc-print-card__header">
+					<h2 class="nc-print-card__title">
+						<span class="nc-print-card__title-row">
+							<NcPrintIcon name="camera" :size="18" />
+							Camera
+						</span>
+					</h2>
+					<button
+						v-if="cameraFrameUrl && !cameraError"
+						type="button"
+						class="nc-print-btn nc-print-btn--sm"
+						title="Fullscreen camera"
+						@click="openCameraFullscreen">
+						<NcPrintIcon name="maximize" :size="14" />
+						Expand
+					</button>
+				</div>
 				<div class="nc-print-camera-panel">
 					<img
 						v-if="cameraFrameUrl && !cameraError"
 						:src="cameraFrameUrl"
 						alt="Printer camera stream"
-						@error="onCameraError">
+						@error="onCameraError"
+						@click="openCameraFullscreen">
 					<div v-else class="nc-print-camera-placeholder">
 						<p>{{ cameraPlaceholderText }}</p>
 						<button v-if="cameraError && streamUrl" type="button" class="nc-print-btn" @click="retryCamera">
@@ -472,7 +536,34 @@ export default {
 					</div>
 				</div>
 			</div>
+
+			<JobHistoryPanel compact :limit="5" />
+
+			<HistoryPanel />
 		</template>
+
+		<teleport to="body">
+			<div
+				v-if="cameraFullscreen"
+				class="nc-print-camera-fullscreen"
+				role="dialog"
+				aria-label="Printer camera fullscreen"
+				@click.self="closeCameraFullscreen">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-camera-fullscreen__close"
+					@click="closeCameraFullscreen">
+					<NcPrintIcon name="close" :size="16" />
+					Close
+				</button>
+				<img
+					v-if="cameraFrameUrl && !cameraError"
+					:src="cameraFrameUrl"
+					alt="Printer camera stream (fullscreen)"
+					@error="onCameraError">
+				<p v-else class="nc-print-camera-fullscreen__placeholder">{{ cameraPlaceholderText }}</p>
+			</div>
+		</teleport>
 	</WorkspaceRail>
 </template>
 
@@ -480,6 +571,17 @@ export default {
 .nc-print-print-meta {
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0 0 8px;
+}
+
+.nc-print-print-jobhead {
+	align-items: center;
+	display: flex;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.nc-print-print-jobhead .nc-print-print-meta {
+	margin: 0;
 }
 
 .nc-print-print-meta--muted {
@@ -524,5 +626,38 @@ export default {
 
 .nc-print-camera-placeholder p {
 	margin: 0 0 8px;
+}
+
+.nc-print-camera-panel img {
+	cursor: zoom-in;
+}
+
+.nc-print-camera-fullscreen {
+	align-items: center;
+	background: rgba(0, 0, 0, 0.88);
+	display: flex;
+	inset: 0;
+	justify-content: center;
+	padding: 24px;
+	position: fixed;
+	z-index: 9999;
+}
+
+.nc-print-camera-fullscreen img {
+	cursor: zoom-out;
+	max-height: 100%;
+	max-width: 100%;
+	object-fit: contain;
+}
+
+.nc-print-camera-fullscreen__close {
+	position: absolute;
+	right: 16px;
+	top: 16px;
+	z-index: 1;
+}
+
+.nc-print-camera-fullscreen__placeholder {
+	color: #fff;
 }
 </style>

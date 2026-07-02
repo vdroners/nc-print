@@ -28,6 +28,15 @@ class MoonrakerProxyController extends Controller
 		'server/files/',
 		'printer/objects/',
 		'printer/print/',
+		// Part B (WS10-WS16) read-only prefixes. Writes still go through
+		// PrinterController guarded actions — never a raw gcode passthrough.
+		'server/temperature_store', // WS10 temp graph
+		'server/history/', // WS15 history/statistics
+		'server/job_queue/', // WS13 print/job queue
+		'machine/timelapse/', // WS16 timelapse
+		'server/timelapse', // WS16 timelapse (settings)
+		'machine/device_power/', // WS10/WS14 optional power/fan/LED
+		'server/spoolman/', // WS14 filament (Spoolman)
 	];
 
 	private const CONNECT_TIMEOUT_SECONDS = 5;

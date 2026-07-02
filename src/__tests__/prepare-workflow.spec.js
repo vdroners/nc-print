@@ -1,36 +1,10 @@
 import { describe, it, expect } from 'vitest'
-
-function isPrepareComplete(state) {
-	const slicerOk = state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok
-	return !!state.model.file
-		&& !!state.selection.printerId
-		&& !!state.selection.filamentId
-		&& !!state.selection.processId
-		&& slicerOk
-}
-
-function slicerReady(state) {
-	return state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok
-}
-
-function sliceBlockReason(state) {
-	if (!state.model.file) {
-		return 'Load a model on Prepare first'
-	}
-	if (!state.selection.printerId || !state.selection.filamentId || !state.selection.processId) {
-		return 'Select printer, filament, and process on Prepare'
-	}
-	if (!state.appStatus.loaded) {
-		return 'Checking slicer status…'
-	}
-	if (!state.appStatus.slicer_enabled) {
-		return 'Slicer disabled in Admin settings'
-	}
-	if (!state.appStatus.slicer_ok) {
-		return 'Slicer service offline'
-	}
-	return ''
-}
+import {
+	isPrepareComplete,
+	slicerReady,
+	sliceBlockReason,
+	previewBlocked,
+} from '@/utils/workflow-gates.js'
 
 const base = {
 	model: { file: null },
@@ -97,5 +71,42 @@ describe('prepare workflow gates (G19)', () => {
 			...ready,
 			appStatus: { loaded: true, slicer_enabled: true, slicer_ok: false },
 		})).toMatch(/offline/)
+	})
+
+	// G33a / G32a — preview-skipped blind-slice guard
+	it('previewBlocked is true when preview skipped and no slice blob', () => {
+		expect(previewBlocked({
+			modelMeta: { previewSkipped: true },
+			meshState: { sliceBlob: null },
+		})).toBe(true)
+	})
+
+	it('previewBlocked is false once a slice blob exists (3MF extraction ok)', () => {
+		expect(previewBlocked({
+			modelMeta: { previewSkipped: true },
+			meshState: { sliceBlob: { name: 'x.stl' } },
+		})).toBe(false)
+	})
+
+	it('sliceBlockReason blocks a preview-skipped model with no mesh', () => {
+		const reason = sliceBlockReason({
+			...base,
+			model: { file: {}, name: 'part.step' },
+			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			modelMeta: { previewSkipped: true },
+			meshState: { sliceBlob: null, dirty: false },
+		})
+		expect(reason).not.toBe('')
+		expect(reason).toMatch(/mesh preview/i)
+	})
+
+	it('prepareComplete is false when the mesh preview is unavailable', () => {
+		expect(isPrepareComplete({
+			...base,
+			model: { file: {}, name: 'part.step' },
+			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			modelMeta: { previewSkipped: true },
+			meshState: { sliceBlob: null, dirty: false },
+		})).toBe(false)
 	})
 })

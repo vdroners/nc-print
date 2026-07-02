@@ -25,6 +25,18 @@ export default {
 			}
 			return formatPrintTime(row.estimatedS)
 		},
+		// WS4: filament usage from the slice that produced this job (session only).
+		filamentLabel() {
+			const s = this.printStore.lastCompletedSliceStats
+			if (!s || !s.filamentUsedG) {
+				return null
+			}
+			const total = `${Math.round(s.filamentUsedG)} g`
+			if (s.supportFilamentG != null && s.supportFilamentG > 0) {
+				return `${total} (incl. ${Math.round(s.supportFilamentG)} g support)`
+			}
+			return total
+		},
 	},
 	methods: {
 		onPrintAgain() {
@@ -56,6 +68,9 @@ export default {
 			<span v-if="printStore.printerState.progress > 0">
 				· {{ Math.round(printStore.printerState.progress * 100) }}%
 			</span>
+		</p>
+		<p v-if="filamentLabel" style="margin: 0 0 8px; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-secondary);">
+			Filament: {{ filamentLabel }}
 		</p>
 		<div class="nc-print-actions">
 			<button type="button" class="nc-print-btn nc-print-btn--primary" @click="onPrintAgain">

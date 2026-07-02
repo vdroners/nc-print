@@ -2,7 +2,6 @@
 import { mapStores } from 'pinia'
 import { usePrintStore, TABS } from '@/store/print.js'
 import ModelViewport from './ModelViewport.vue'
-import CameraPip from './CameraPip.vue'
 import ProfilePicker from './ProfilePicker.vue'
 import PrepareChecklist from './PrepareChecklist.vue'
 import PrepareOverrides from './PrepareOverrides.vue'
@@ -10,6 +9,7 @@ import ViewportToolbar from './ViewportToolbar.vue'
 import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
 import RecentModelsStrip from './RecentModelsStrip.vue'
+import NcPrintCollapsible from './NcPrintCollapsible.vue'
 import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import PrepareEmptyState from './PrepareEmptyState.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
@@ -23,7 +23,6 @@ export default {
 	name: 'PrepareTab',
 	components: {
 		ModelViewport,
-		CameraPip,
 		ProfilePicker,
 		PrepareChecklist,
 		PrepareOverrides,
@@ -31,6 +30,7 @@ export default {
 		MeshHealthPanel,
 		ThreeMfObjectPicker,
 		RecentModelsStrip,
+		NcPrintCollapsible,
 		PrepareStudioLayout,
 		PrepareEmptyState,
 		SliceSummaryCard,
@@ -178,37 +178,47 @@ export default {
 				</button>
 			</div>
 
-			<RecentModelsStrip @select="onRecentSelect" />
+			<NcPrintCollapsible id="prepare-model-profiles" title="Model & profiles" icon="layers">
+				<RecentModelsStrip @select="onRecentSelect" />
 
-			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">
-					<span class="nc-print-card__title-row">
-						<NcPrintIcon name="layers" :size="18" />
-						Profiles
-					</span>
-				</h2>
-				<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
-					Loading profiles from forge-slicer…
-				</p>
-				<ProfilePicker v-else ref="profilePicker" />
-			</div>
+				<div class="nc-print-card">
+					<h2 class="nc-print-card__title">
+						<span class="nc-print-card__title-row">
+							<NcPrintIcon name="layers" :size="18" />
+							Profiles
+						</span>
+					</h2>
+					<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
+						Loading profiles from forge-slicer…
+					</p>
+					<ProfilePicker v-else ref="profilePicker" />
+				</div>
 
-			<PrepareOverrides v-if="printStore.profiles.loaded" />
+				<ThreeMfObjectPicker @selection-change="on3mfSelectionChange" />
+			</NcPrintCollapsible>
 
-			<ThreeMfObjectPicker @selection-change="on3mfSelectionChange" />
+			<NcPrintCollapsible id="prepare-mesh-health" title="Mesh & health" icon="cube">
+				<PrepareOverrides v-if="printStore.profiles.loaded" />
 
-			<div ref="meshHealth">
-				<MeshHealthPanel
+				<div ref="meshHealth">
+					<MeshHealthPanel
+						:disabled="!canTransform"
+						@analyze="onAnalyzeMesh"
+						@repair="onRepairMesh"
+						@auto-orient="onAutoOrient" />
+				</div>
+			</NcPrintCollapsible>
+
+			<NcPrintCollapsible
+				id="prepare-transform"
+				title="Transform"
+				icon="bolt"
+				:default-open="canTransform">
+				<PreciseTransformPanel
 					:disabled="!canTransform"
-					@analyze="onAnalyzeMesh"
-					@repair="onRepairMesh"
-					@auto-orient="onAutoOrient" />
-			</div>
-
-			<PreciseTransformPanel
-				:disabled="!canTransform"
-				@scale-percent="onScalePercent"
-				@rotate-degrees="onRotateDegrees" />
+					@scale-percent="onScalePercent"
+					@rotate-degrees="onRotateDegrees" />
+			</NcPrintCollapsible>
 		</template>
 
 		<template #center>
@@ -245,11 +255,6 @@ export default {
 					ref="viewport"
 					:file="printStore.model.file"
 					:build-volume="buildVolume" />
-				<CameraPip
-					v-if="printStore.activeTab === 'prepare'"
-					:config="printStore.config"
-					:printer-id="printStore.selectedPrinterId"
-					draggable />
 			</div>
 		</template>
 
@@ -293,12 +298,12 @@ export default {
 }
 
 .nc-print-viewport-wrap--studio {
-	min-height: 420px;
+	min-height: clamp(360px, 52vh, 640px);
 }
 
 .nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {
-	height: 420px;
-	min-height: 420px;
+	height: clamp(360px, 52vh, 640px);
+	min-height: clamp(360px, 52vh, 640px);
 }
 
 .nc-print-prepare-footer {

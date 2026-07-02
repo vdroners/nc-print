@@ -19,6 +19,7 @@ import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
+import { previewBlocked, printMonitorReachable, sliceBlockReason as computeSliceBlockReason } from '@/utils/workflow-gates.js'
 
 export const TABS = {
 	PREPARE: 'prepare',
@@ -152,6 +153,15 @@ export const usePrintStore = defineStore('print', {
 			slicer_error: null,
 			moonraker_error: null,
 			printer_display_name: '',
+			// Part B (WS10-WS16) feature detection + console toggle.
+			console_enabled: false,
+			moonraker_features: {
+				history: false,
+				job_queue: false,
+				timelapse: false,
+				spoolman: false,
+				power: false,
+			},
 			loaded: false,
 		},
 		model: {
@@ -286,12 +296,18 @@ export const usePrintStore = defineStore('print', {
 		_statusTimer: null,
 		_wsClient: null,
 		printerProgressSource: 'poll',
+		// WS11: G-code console scrollback (capped ring buffer).
+		consoleLog: [],
 		_sliceAbort: null,
 	}),
 
 	getters: {
 		hasModel: (s) => !!s.model.file,
 		slicerReady: (s) => s.appStatus.loaded && s.appStatus.slicer_enabled && s.appStatus.slicer_ok,
+		// Part B: admin console toggle + Moonraker feature detection.
+		consoleEnabled: (s) => !!s.appStatus.console_enabled,
+		printerFeatures: (s) => s.appStatus.moonraker_features || {},
+		hasFeature: (s) => (name) => !!(s.appStatus.moonraker_features || {})[name],
 		profilesReady: (s) => s.selection.printerId && s.selection.filamentId && s.selection.processId,
 		buildVolume(state) {
 			const p = state.profiles.printers.find(x => String(x.id) === String(state.selection.printerId))
@@ -404,6 +420,7 @@ export const usePrintStore = defineStore('print', {
 					&& !state.meshState.dirty
 				)
 			return !!state.model.file
+				&& !previewBlocked(state)
 				&& meshReady
 				&& !!state.selection.printerId
 				&& !!state.selection.filamentId
@@ -412,6 +429,22 @@ export const usePrintStore = defineStore('print', {
 		},
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done'
+		},
+		// WS4/WS5: filament + time rollup from the last completed slice in this
+		// session. Null until a slice finishes.
+		lastCompletedSliceStats(state) {
+			if (state.sliceJob.status !== 'done') {
+				return null
+			}
+			const j = state.sliceJob
+			return {
+				estimatedTimeS: j.estimatedTimeS || 0,
+				filamentUsedG: j.filamentUsedG || 0,
+				modelFilamentG: j.modelFilamentG ?? null,
+				supportFilamentG: j.supportFilamentG ?? null,
+				gcodeFilename: j.gcodeFilename || '',
+				gcodeSizeBytes: j.gcodeSizeBytes || 0,
+			}
 		},
 		prepareChecklist(state) {
 			const rows = [
@@ -434,6 +467,13 @@ export const usePrintStore = defineStore('print', {
 					hint: state.model.convertError
 						|| (state.meshState.dirty ? 'Apply viewport transform to slice mesh' : 'Waiting for 3MF mesh extraction…'),
 					action: 'mesh',
+				},
+				{
+					id: 'preview',
+					label: 'Mesh preview available',
+					ok: !state.model.file || !previewBlocked(state),
+					hint: 'No mesh preview — re-import or wait for 3MF extraction',
+					action: 'model',
 				},
 				{
 					id: 'watertight',
@@ -508,6 +548,13 @@ export const usePrintStore = defineStore('print', {
 				|| (state.printerState.state || '').toLowerCase().includes('print')
 				|| (state.printerState.state || '').toLowerCase().includes('pause')
 		},
+		// WS8: the Print tab is always a live monitor when a printer is
+		// reachable, independent of slice status. Navigation is gated on
+		// (printMonitorReachable || printStepEnabled); printStepEnabled keeps
+		// the "next step / done ✓" progress semantics only.
+		printMonitorReachable(state) {
+			return printMonitorReachable(state)
+		},
 		workflowStepSubtitle(state) {
 			return (stepId) => {
 				const profileNames = (() => {
@@ -567,28 +614,9 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 		sliceBlockReason(state) {
-			if (!state.model.file) {
-				return 'Load a model on Prepare first'
-			}
-			if (state.model.name?.toLowerCase().endsWith('.3mf') && !state.model.sliceFile) {
-				return state.model.convertError || '3MF mesh extraction in progress or failed'
-			}
-			if (state.meshState.dirty) {
-				return 'Apply viewport transform before slicing'
-			}
-			if (!state.selection.printerId || !state.selection.filamentId || !state.selection.processId) {
-				return 'Select printer, filament, and process on Prepare'
-			}
-			if (!state.appStatus.loaded) {
-				return 'Checking slicer status…'
-			}
-			if (!state.appStatus.slicer_enabled) {
-				return 'Slicer disabled in Admin settings'
-			}
-			if (!state.appStatus.slicer_ok) {
-				return 'Slicer service offline'
-			}
-			return ''
+			// Delegate to the shared pure helper so the store getter and unit
+			// tests never drift (WS7).
+			return computeSliceBlockReason(state)
 		},
 		configuredPrinters(state) {
 			const rows = state.config?.multi_printers
@@ -1191,6 +1219,9 @@ export const usePrintStore = defineStore('print', {
 					this._applyPrinterState(mapPrinterState(data, data.lastError))
 					this.printerProgressSource = this._wsClient?.usingWebSocket ? 'ws' : 'poll'
 				},
+				onGcodeResponse: (line) => {
+					this.appendConsoleLine(line, 'response')
+				},
 			})
 			void this._wsClient.start({
 				printer,
@@ -1202,6 +1233,39 @@ export const usePrintStore = defineStore('print', {
 					void this.refreshPrinterState()
 				}
 			}, intervalMs)
+		},
+
+		// WS11: append a line to the console scrollback (capped at 500 rows).
+		appendConsoleLine(text, kind = 'response') {
+			if (typeof text !== 'string' || text === '') {
+				return
+			}
+			this.consoleLog.push({ id: `${Date.now()}-${this.consoleLog.length}`, kind, text })
+			if (this.consoleLog.length > 500) {
+				this.consoleLog.splice(0, this.consoleLog.length - 500)
+			}
+		},
+
+		clearConsoleLog() {
+			this.consoleLog = []
+		},
+
+		// WS11: send an arbitrary console command (server rejects unless the
+		// admin enabled the console). Echoes the command locally first.
+		async sendConsoleCommand(command) {
+			const cmd = String(command || '').trim()
+			if (!cmd) {
+				return
+			}
+			this.appendConsoleLine(`> ${cmd}`, 'command')
+			try {
+				const { consoleCommand } = await import('@/services/moonraker-api.js')
+				await consoleCommand(cmd, this.selectedPrinterId || undefined)
+			} catch (e) {
+				const msg = e?.response?.data?.message || e?.message || 'Console command failed'
+				this.appendConsoleLine(`!! ${msg}`, 'error')
+				throw e
+			}
 		},
 
 		stopPrinterPolling() {

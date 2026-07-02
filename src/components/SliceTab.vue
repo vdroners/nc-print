@@ -10,6 +10,8 @@ import PrePrintModal from './PrePrintModal.vue'
 import WorkspaceRail from './WorkspaceRail.vue'
 import ToolpathScrubber from './ToolpathScrubber.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
+import SliceHandoffCard from './SliceHandoffCard.vue'
+import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 import { previewUrl } from '@/services/slicer-api.js'
 
 export default {
@@ -24,6 +26,8 @@ export default {
 		WorkspaceRail,
 		ToolpathScrubber,
 		NcPrintIcon,
+		SliceHandoffCard,
+		ErrorRecoveryCard,
 	},
 	data() {
 		return {
@@ -133,8 +137,14 @@ export default {
 	<WorkspaceRail class="nc-print-slice">
 		<PrePrintModal />
 
-		<div v-if="!printStore.hasModel" class="nc-print-card">
-			<p>No model loaded.</p>
+		<div v-if="!printStore.hasModel" class="nc-print-card nc-print-slice-empty">
+			<div class="nc-print-slice-empty__icon" aria-hidden="true">
+				<NcPrintIcon name="cube" :size="40" />
+			</div>
+			<h2 class="nc-print-card__title">No model to slice</h2>
+			<p class="nc-print-slice-hint">
+				Import and prepare a model first, then return here to slice and send.
+			</p>
 			<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrepare">
 				Go to Prepare
 			</button>
@@ -143,15 +153,17 @@ export default {
 		<template v-else>
 			<PrepareChecklist @action="onChecklistAction" />
 
-			<div class="nc-print-card">
-				<h2 class="nc-print-card__title">
-					<span class="nc-print-card__title-row">
-						<NcPrintIcon name="layers" :size="18" />
-						Profiles
-					</span>
-				</h2>
-				<ProfileSummaryChip />
-			</div>
+			<ErrorRecoveryCard
+				v-if="slicerDisabled"
+				kind="slicer_offline"
+				:detail="printStore.appStatus.slicer_error || ''"
+				@retry="reloadProfiles" />
+
+			<p v-else-if="sliceBlockReason && !slicing" class="nc-print-banner nc-print-banner--warn">
+				{{ sliceBlockReason }}
+			</p>
+
+			<SliceHandoffCard />
 
 			<SliceReviewPanel />
 
@@ -243,12 +255,6 @@ export default {
 
 			<SliceResultTabs />
 
-			<div v-if="printStore.sliceComplete" class="nc-print-actions nc-print-slice-handoff">
-				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrint">
-					Monitor on Print →
-				</button>
-			</div>
-
 			<JobHistoryPanel />
 		</template>
 
@@ -302,8 +308,16 @@ export default {
 	text-decoration: underline;
 }
 
-.nc-print-slice-handoff {
-	margin-top: var(--nc-gcs-space-md);
+.nc-print-slice-empty {
+	align-items: center;
+	display: flex;
+	flex-direction: column;
+	gap: var(--nc-gcs-space-sm);
+	text-align: center;
+}
+
+.nc-print-slice-empty__icon {
+	color: var(--nc-gcs-text-muted);
 }
 
 .nc-print-slice-preview-img {

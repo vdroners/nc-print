@@ -21,6 +21,7 @@ return [
 		['name' => 'printer#setTemperature', 'url' => '/api/printer/temperature', 'verb' => 'POST'],
 		['name' => 'printer#emergencyStop', 'url' => '/api/printer/emergency-stop', 'verb' => 'POST'],
 		['name' => 'printer#gcodeAction', 'url' => '/api/printer/gcode-action', 'verb' => 'POST'],
+		['name' => 'printer#consoleCommand', 'url' => '/api/printer/console', 'verb' => 'POST'],
 		['name' => 'printer#upload', 'url' => '/api/printer/upload', 'verb' => 'POST'],
 
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'GET', 'requirements' => ['path' => '.+']],

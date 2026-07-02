@@ -7,6 +7,8 @@ module.exports = defineConfig({
 		environmentMatchGlobs: [
 			['src/__tests__/mesh-convert.spec.js', 'happy-dom'],
 			['src/__tests__/mesh-state.spec.js', 'happy-dom'],
+			['src/__tests__/print-monitor.spec.js', 'happy-dom'],
+			['src/__tests__/console.spec.js', 'happy-dom'],
 		],
 		include: ['src/__tests__/**/*.spec.js'],
 		clearMocks: true,
