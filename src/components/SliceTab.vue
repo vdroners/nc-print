@@ -152,7 +152,7 @@ export default {
 		</div>
 
 		<template v-else>
-			<PrepareChecklist @action="onChecklistAction" />
+			<PrepareChecklist blocking-only @action="onChecklistAction" />
 
 			<ErrorRecoveryCard
 				v-if="slicerDisabled"

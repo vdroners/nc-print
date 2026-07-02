@@ -4,10 +4,26 @@ import { usePrintStore } from '@/store/print.js'
 
 export default {
 	name: 'PrepareChecklist',
+	props: {
+		// When true (used on the Slice tab, where readiness is already summarised
+		// by SliceHandoffCard's "N/N ready" chip), show only the rows that are
+		// still blocking. If everything passes, collapse to a single success line
+		// instead of repeating eight green rows.
+		blockingOnly: { type: Boolean, default: false },
+	},
 	computed: {
 		...mapStores(usePrintStore),
 		items() {
 			return this.printStore.prepareChecklist
+		},
+		displayItems() {
+			if (!this.blockingOnly) {
+				return this.items
+			}
+			return this.items.filter(row => !row.ok && !row.pending)
+		},
+		allClear() {
+			return this.blockingOnly && this.displayItems.length === 0
 		},
 	},
 	methods: {
@@ -37,9 +53,13 @@ export default {
 <template>
 	<div class="nc-print-card nc-print-checklist">
 		<h2 class="nc-print-card__title">Ready to slice</h2>
-		<ul class="nc-print-checklist__list">
+		<p v-if="allClear" class="nc-print-checklist__all-clear">
+			<span class="nc-print-checklist__mark" aria-hidden="true">✓</span>
+			All checks passed — ready to slice.
+		</p>
+		<ul v-else class="nc-print-checklist__list">
 			<li
-				v-for="row in items"
+				v-for="row in displayItems"
 				:key="row.id"
 				class="nc-print-checklist__row"
 				:class="rowClass(row)">
@@ -67,6 +87,19 @@ export default {
 	list-style: none;
 	margin: 0;
 	padding: 0;
+}
+
+.nc-print-checklist__all-clear {
+	align-items: center;
+	color: var(--nc-gcs-text-muted);
+	display: flex;
+	font-size: var(--nc-gcs-text-sm);
+	gap: 6px;
+	margin: 0;
+}
+
+.nc-print-checklist__all-clear .nc-print-checklist__mark {
+	color: var(--nc-app-accent);
 }
 
 .nc-print-checklist__row {

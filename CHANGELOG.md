@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.10.3] - 2026-07-02
+
+Follow-up UI polish from a second live audit.
+
+### Fixed
+
+- **Temperature sparklines rendered an invisible empty state.** The
+  "collecting data" baseline set the canvas `strokeStyle` to a CSS
+  `color-mix(var(--…))` string, which Canvas 2D cannot parse — it silently fell
+  back to black and vanished on the dark surface. It now uses a concrete muted
+  colour, a dashed baseline, and a "Collecting…" label so the pre-data state
+  reads as intentional.
+
+### Changed
+
+- **Slice tab no longer repeats the full 8-row readiness checklist.**
+  `PrepareChecklist` gains a `blocking-only` mode (used on Slice, where
+  `SliceHandoffCard` already shows the "N/N ready" summary): it lists only the
+  rows still blocking and collapses to a single "All checks passed" line when
+  everything is green, cutting the triple-redundant readiness display.
+
 ## [1.10.2] - 2026-07-01
 
 Critical production fixes uncovered during a live UI audit of the deployed app,

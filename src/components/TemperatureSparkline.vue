@@ -48,11 +48,21 @@ export default {
 				.sort((a, b) => a.t - b.t)
 
 			if (points.length < 2) {
-				ctx.strokeStyle = 'color-mix(in srgb, var(--nc-gcs-text-muted) 40%, transparent)'
+				// Canvas 2D does not understand CSS var()/color-mix(); use a concrete
+				// muted colour so the "collecting" baseline is actually visible on the
+				// dark surface, and label it so the empty state reads as intentional.
+				ctx.strokeStyle = 'rgba(148, 163, 184, 0.35)'
+				ctx.setLineDash([4, 4])
 				ctx.beginPath()
 				ctx.moveTo(0, height / 2)
 				ctx.lineTo(width, height / 2)
 				ctx.stroke()
+				ctx.setLineDash([])
+				ctx.fillStyle = 'rgba(148, 163, 184, 0.7)'
+				ctx.font = '11px sans-serif'
+				ctx.textAlign = 'center'
+				ctx.textBaseline = 'middle'
+				ctx.fillText('Collecting…', width / 2, height / 2 - 8)
 				return
 			}
 
