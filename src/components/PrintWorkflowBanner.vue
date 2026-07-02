@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore, TABS } from '@/store/print.js'
+import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 import { toastInfo } from '@/services/toast.js'
 
 const STEPS = [
@@ -74,6 +75,15 @@ export default {
 			}
 			this.printStore.setActiveTab(stepId)
 		},
+		// Module-scope constants like TABS are NOT visible to template
+		// expressions (those resolve against the component instance), so the
+		// disabled-step tooltip is computed in a method instead of inline.
+		stepTitle(stepId) {
+			if (!this.isEnabled(stepId) && stepId === TABS.SLICE) {
+				return this.printStore.firstPrepareBlocker
+			}
+			return ''
+		},
 	},
 }
 </script>
@@ -91,7 +101,7 @@ export default {
 						class="nc-print-workflow__btn"
 						:aria-current="printStore.activeTab === step.id ? 'step' : null"
 						:disabled="!isEnabled(step.id)"
-						:title="!isEnabled(step.id) && step.id === TABS.SLICE ? printStore.firstPrepareBlocker : ''"
+						:title="stepTitle(step.id)"
 						@click="onStepClick(step.id)">
 						<span class="nc-print-workflow__num">{{ stepDisplay(step, index) }}</span>
 						<span class="nc-print-workflow__text">

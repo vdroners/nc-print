@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore, TABS } from '@/store/print.js'
+import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 import PrepareChecklist from './PrepareChecklist.vue'
 import SliceReviewPanel from './SliceReviewPanel.vue'
 import SliceResultTabs from './SliceResultTabs.vue'

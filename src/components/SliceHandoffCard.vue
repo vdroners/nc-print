@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore, TABS } from '@/store/print.js'
+import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import ProfileSummaryChip from './ProfileSummaryChip.vue'

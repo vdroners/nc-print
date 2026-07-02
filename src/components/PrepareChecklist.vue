@@ -18,9 +18,17 @@ export default {
 		},
 		rowClass(row) {
 			return [
-				row.ok ? 'nc-print-checklist__row--ok' : 'nc-print-checklist__row--missing',
+				row.pending
+					? 'nc-print-checklist__row--pending'
+					: (row.ok ? 'nc-print-checklist__row--ok' : 'nc-print-checklist__row--missing'),
 				row.action ? 'nc-print-checklist__row--clickable' : '',
 			]
+		},
+		rowMark(row) {
+			if (row.pending) {
+				return '–'
+			}
+			return row.ok ? '✓' : '✗'
 		},
 	},
 }
@@ -40,14 +48,14 @@ export default {
 					type="button"
 					class="nc-print-checklist__btn"
 					@click="onRowClick(row)">
-					<span class="nc-print-checklist__mark" aria-hidden="true">{{ row.ok ? '✓' : '✗' }}</span>
+					<span class="nc-print-checklist__mark" aria-hidden="true">{{ rowMark(row) }}</span>
 					<span class="nc-print-checklist__label">{{ row.label }}</span>
-					<span v-if="!row.ok && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
+					<span v-if="!row.ok && !row.pending && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
 				</button>
 				<template v-else>
-					<span class="nc-print-checklist__mark" aria-hidden="true">{{ row.ok ? '✓' : '✗' }}</span>
+					<span class="nc-print-checklist__mark" aria-hidden="true">{{ rowMark(row) }}</span>
 					<span class="nc-print-checklist__label">{{ row.label }}</span>
-					<span v-if="!row.ok && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
+					<span v-if="!row.ok && !row.pending && row.hint" class="nc-print-checklist__hint">{{ row.hint }}</span>
 				</template>
 			</li>
 		</ul>
@@ -113,6 +121,14 @@ export default {
 
 .nc-print-checklist__row--missing .nc-print-checklist__mark {
 	color: var(--nc-gcs-danger-soft);
+}
+
+.nc-print-checklist__row--pending .nc-print-checklist__mark {
+	color: var(--nc-gcs-text-muted);
+}
+
+.nc-print-checklist__row--pending .nc-print-checklist__label {
+	color: var(--nc-gcs-text-muted);
 }
 
 .nc-print-checklist__hint {

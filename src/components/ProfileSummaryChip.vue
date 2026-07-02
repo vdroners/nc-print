@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
-import { usePrintStore, TABS } from '@/store/print.js'
+import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 
 export default {
 	name: 'ProfileSummaryChip',

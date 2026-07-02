@@ -20,12 +20,11 @@ import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
 import { previewBlocked, printMonitorReachable, sliceBlockReason as computeSliceBlockReason } from '@/utils/workflow-gates.js'
+import { TABS } from '@/constants/tabs.js'
 
-export const TABS = {
-	PREPARE: 'prepare',
-	SLICE: 'slice',
-	PRINT: 'print',
-}
+// Re-exported for backward compatibility; the source of truth is the leaf
+// module @/constants/tabs.js (see that file for why).
+export { TABS }
 
 const PREFS_KEY = 'nc_print_prefs_v1'
 const JOB_HISTORY_KEY = 'nc_print_job_history_v1'
@@ -458,6 +457,9 @@ export const usePrintStore = defineStore('print', {
 				{
 					id: 'mesh',
 					label: 'Slice-ready mesh',
+					// Mesh checks are not applicable until a model is loaded —
+					// show them as pending (neutral) rather than a misleading ✓.
+					pending: !state.model.file,
 					ok: !state.model.file
 						|| (
 							(!state.model.name?.toLowerCase().endsWith('.3mf') || !!state.model.sliceFile)
@@ -471,6 +473,7 @@ export const usePrintStore = defineStore('print', {
 				{
 					id: 'preview',
 					label: 'Mesh preview available',
+					pending: !state.model.file,
 					ok: !state.model.file || !previewBlocked(state),
 					hint: 'No mesh preview — re-import or wait for 3MF extraction',
 					action: 'model',
@@ -478,6 +481,7 @@ export const usePrintStore = defineStore('print', {
 				{
 					id: 'watertight',
 					label: 'Mesh watertight',
+					pending: !state.model.file,
 					ok: !state.model.file
 						|| (state.meshHealth.analyzed && state.meshHealth.watertight),
 					hint: state.meshHealth.analyzed

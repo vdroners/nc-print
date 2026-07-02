@@ -1,7 +1,7 @@
 <script>
 import { NcModal } from '@nextcloud/vue'
 import SlicerStatusCard from './SlicerStatusCard.vue'
-import { TABS } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 
 const CALIBRATION_LINKS = [
 	{

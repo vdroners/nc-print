@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.10.2] - 2026-07-01
+
+Critical production fixes uncovered during a live UI audit of the deployed app,
+plus a checklist honesty improvement. The app was shipping with a broken
+workflow tab bar and a whole layer of styling missing.
+
+### Fixed
+
+- **Workflow tab bar no longer crashes the render.** `PrintWorkflowBanner`
+  referenced the `TABS` constant directly in its template (`TABS.SLICE`), which
+  resolves against the component instance in Vue 2 and threw
+  `TypeError: Cannot read properties of undefined (reading 'SLICE')`, silently
+  collapsing the Prepare/Slice/Print stepper to an empty node. The lookup now
+  goes through a `stepTitle()` method.
+- **App stylesheet was never enqueued.** Only `nc-print-theme.css` (design
+  tokens + app-shell base) was loaded; the compiled `css/style.css` (built from
+  `style.scss`, holding every `nc-print-*` component/layout rule — workflow
+  stepper, viewport toolbar, status chips, checklist, etc.) was not. It is now
+  enqueued on the app page in `PageController`, restoring the intended layout.
+- **Checklist trust (WYSIWYG).** The "Slice-ready mesh", "Mesh preview
+  available", and "Mesh watertight" rows rendered a misleading green ✓ when no
+  model was loaded. They now show a neutral pending state (`–`) until a model
+  exists, so the checklist never claims a check passed that was never run.
+
+### Added
+
+- `src/constants/tabs.js` — dependency-free leaf module exporting `TABS`, imported
+  by both the store and the components (breaks a webpack module-init order hazard
+  where `TABS` could resolve to `undefined` in the production bundle). The store
+  re-exports it for backward compatibility.
+- Production-safe global Vue error handler (`src/main.js`) that logs component
+  render errors with a stable prefix and retains the most recent few on
+  `window.__ncPrintErrors` for support/diagnostics instead of silently rendering
+  an empty subtree.
+
 ## [1.9.0] - 2026-07-01
 
 UX cohesion, trust/WYSIWYG, and a Mainsail/Fluidd-class monitoring foundation
