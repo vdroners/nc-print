@@ -11,6 +11,7 @@ $keys = [
 	ConfigService::KEY_MULTI_PRINTERS,
 	ConfigService::KEY_SLICER_ENABLED,
 	ConfigService::KEY_MOONRAKER_ENABLED,
+	ConfigService::KEY_CONSOLE_ENABLED,
 ];
 $settings = [];
 foreach ($keys as $key) {
@@ -65,6 +66,13 @@ $saveUrl = htmlspecialchars((string)($_['save_url'] ?? ''), ENT_QUOTES, 'UTF-8')
 			<input type="checkbox" name="<?php echo ConfigService::KEY_MOONRAKER_ENABLED; ?>" value="yes" <?php echo !empty($_['moonraker_enabled']) ? 'checked' : ''; ?>>
 			<span>Moonraker enabled</span>
 		</label>
+		<label class="checkbox">
+			<input type="checkbox" name="<?php echo ConfigService::KEY_CONSOLE_ENABLED; ?>" value="yes" <?php echo !empty($_['console_enabled']) ? 'checked' : ''; ?>>
+			<span>G-code console send (advanced)</span>
+		</label>
+		<p class="settings-hint">
+			<strong>Off by default.</strong> When enabled, trusted operators can send raw G-code from the Print monitor. Sends are still length/charset-validated and refused while a print is active; there is no raw <code>printer/gcode/script</code> passthrough. Leave unchecked unless you trust every user in the allowed groups.
+		</p>
 		<button type="submit" class="primary">Save</button>
 		<p id="nc-print-admin-status" class="settings-hint" aria-live="polite"></p>
 	</form>

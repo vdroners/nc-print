@@ -44,7 +44,8 @@ backend actions — never a raw G-code passthrough.
 - All write actions (bed mesh calibrate, filament, heater/PID, exclude-object) go
   through guarded `PrinterController` actions with parameter validation and
   idle/motion guards
-- G-code console send disabled by default and admin-gated (`console_enabled`)
+- G-code console send disabled by default and admin-gated (`console_enabled`),
+  exposed as an explicit opt-in toggle in **Settings → NC 3D Print**
 
 ### Gates
 

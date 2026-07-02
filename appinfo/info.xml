@@ -11,6 +11,9 @@ Moonraker printer control, and live camera monitoring. No NC-GCS dependency requ
 	<author>NC-GCS Program</author>
 	<namespace>NcPrint</namespace>
 	<category>tools</category>
+	<website>https://github.com/vdroners/nc-print</website>
+	<bugs>https://github.com/vdroners/nc-print/issues</bugs>
+	<repository type="git">https://github.com/vdroners/nc-print.git</repository>
 	<dependencies>
 		<nextcloud min-version="28" max-version="33"/>
 	</dependencies>

@@ -15,7 +15,8 @@ safety it is **disabled by default**: the read-only response log always renders,
 but the command **input is hidden** and the backend `printer#consoleCommand`
 endpoint returns **403** until an admin explicitly opts in.
 
-Enable it only for trusted operators:
+Enable it only for trusted operators. Either toggle **"G-code console send
+(advanced)"** in **Settings → NC 3D Print**, or use `occ`:
 
 ```bash
 # inside cloud_app

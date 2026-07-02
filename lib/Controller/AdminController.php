@@ -46,7 +46,7 @@ class AdminController extends Controller
 			}
 		}
 
-		foreach ([ConfigService::KEY_SLICER_ENABLED, ConfigService::KEY_MOONRAKER_ENABLED] as $boolKey) {
+		foreach ([ConfigService::KEY_SLICER_ENABLED, ConfigService::KEY_MOONRAKER_ENABLED, ConfigService::KEY_CONSOLE_ENABLED] as $boolKey) {
 			if (array_key_exists($boolKey, $params)) {
 				$raw = $params[$boolKey];
 				$enabled = ($raw === true || $raw === 1 || $raw === '1'
