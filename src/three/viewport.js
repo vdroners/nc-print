@@ -35,6 +35,7 @@ function loadThree() {
 export async function createViewport(canvas, wrap) {
 	const THREE = await loadThree()
 	const { OrbitControls } = await import(/* webpackChunkName: "nc-print-three" */ 'three/examples/jsm/controls/OrbitControls.js')
+	const { TransformControls } = await import(/* webpackChunkName: "nc-print-three" */ 'three/examples/jsm/controls/TransformControls.js')
 
 	const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -61,6 +62,111 @@ export async function createViewport(canvas, wrap) {
 	let bedVolume = [220, 220, 220]
 	let modelMeta = null
 	let animId = null
+
+	// Interactive gizmo (TransformControls) state.
+	let gizmo = null
+	let gizmoHelper = null
+	let gizmoMode = null
+	let onGizmoChange = null
+	// Non-destructive view state re-applied whenever modelMesh is rebuilt.
+	let wireframe = false
+	const clipState = { enabled: false, axis: 'z', offset: 0, flip: false }
+	let clipPlane = null
+	let cutPlaneHelper = null
+	const raycaster = new THREE.Raycaster()
+
+	function ensureGizmo() {
+		if (gizmo) {
+			return gizmo
+		}
+		gizmo = new TransformControls(camera, canvas)
+		gizmo.setSize(0.85)
+		gizmo.setTranslationSnap(1)
+		gizmo.setRotationSnap(THREE.MathUtils.degToRad(15))
+		gizmo.setScaleSnap(0.05)
+		gizmo.addEventListener('dragging-changed', (event) => {
+			controls.enabled = !event.value
+			if (!event.value && typeof onGizmoChange === 'function') {
+				// Drag finished: push a final sync.
+				onGizmoChange()
+			}
+		})
+		gizmo.addEventListener('objectChange', () => {
+			if (modelMesh) {
+				modelMesh.updateMatrixWorld(true)
+			}
+			applyClipPlane()
+			if (typeof onGizmoChange === 'function') {
+				onGizmoChange()
+			}
+		})
+		gizmoHelper = gizmo.getHelper ? gizmo.getHelper() : gizmo
+		scene.add(gizmoHelper)
+		return gizmo
+	}
+
+	function detachGizmo() {
+		if (gizmo) {
+			gizmo.detach()
+		}
+	}
+
+	function disposeGizmo() {
+		if (gizmo) {
+			gizmo.detach()
+			gizmo.dispose()
+		}
+		if (gizmoHelper) {
+			scene.remove(gizmoHelper)
+		}
+		gizmo = null
+		gizmoHelper = null
+		gizmoMode = null
+	}
+
+	function planeNormalForAxis(axis, flip) {
+		const s = flip ? 1 : -1
+		if (axis === 'x') {
+			return new THREE.Vector3(s, 0, 0)
+		}
+		if (axis === 'y') {
+			return new THREE.Vector3(0, s, 0)
+		}
+		return new THREE.Vector3(0, 0, s)
+	}
+
+	function applyClipPlane() {
+		if (!modelMesh) {
+			return
+		}
+		const mat = modelMesh.material
+		if (!clipState.enabled) {
+			mat.clippingPlanes = []
+			mat.needsUpdate = true
+			return
+		}
+		renderer.localClippingEnabled = true
+		if (!clipPlane) {
+			clipPlane = new THREE.Plane()
+		}
+		const normal = planeNormalForAxis(clipState.axis, clipState.flip)
+		// Plane constant so that normal·p + constant = 0 passes through offset.
+		clipPlane.set(normal, -normal.dot(new THREE.Vector3(
+			clipState.axis === 'x' ? clipState.offset : 0,
+			clipState.axis === 'y' ? clipState.offset : 0,
+			clipState.axis === 'z' ? clipState.offset : 0,
+		)))
+		mat.clippingPlanes = [clipPlane]
+		mat.clipShadows = false
+		mat.needsUpdate = true
+	}
+
+	function applyMaterialState(mat) {
+		mat.wireframe = wireframe
+		if (clipState.enabled) {
+			applyClipPlane()
+		}
+	}
 
 	function resize() {
 		const w = Math.max(wrap.clientWidth, 1)
@@ -163,14 +269,26 @@ export async function createViewport(canvas, wrap) {
 
 	function addMeshFromGeometry(geom) {
 		geom.computeVertexNormals()
-		const mat = new THREE.MeshLambertMaterial({ color: 0x22c55e, transparent: true, opacity: 0.85 })
+		const mat = new THREE.MeshLambertMaterial({
+			color: 0x22c55e,
+			transparent: true,
+			opacity: 0.85,
+			clippingPlanes: [],
+		})
 		modelMesh = new THREE.Mesh(geom, mat)
 		centerMesh(modelMesh)
 		scene.add(modelMesh)
+		applyMaterialState(mat)
+		if (gizmoMode) {
+			ensureGizmo()
+			gizmo.attach(modelMesh)
+			gizmo.setMode(gizmoMode)
+		}
 		return modelMeta
 	}
 
 	function clearModelMesh() {
+		detachGizmo()
 		if (modelMesh) {
 			scene.remove(modelMesh)
 			modelMesh.geometry.dispose()
@@ -258,6 +376,13 @@ export async function createViewport(canvas, wrap) {
 				cancelAnimationFrame(animId)
 			}
 			ro.disconnect()
+			if (cutPlaneHelper) {
+				scene.remove(cutPlaneHelper)
+				cutPlaneHelper.geometry.dispose()
+				cutPlaneHelper.material.dispose()
+				cutPlaneHelper = null
+			}
+			disposeGizmo()
 			clearModelMesh()
 			renderer.dispose()
 		},
@@ -297,9 +422,14 @@ export async function createViewport(canvas, wrap) {
 			const dist = modelMesh
 				? Math.max(...new THREE.Box3().setFromObject(modelMesh).getSize(new THREE.Vector3()).toArray(), 40) * 2.4
 				: Math.max(bx, by, bz) * 1.6
+			if (name === 'fit') {
+				frameCamera()
+				return
+			}
 			const presets = {
 				top: () => camera.position.set(target.x, target.y, target.z + dist),
 				front: () => camera.position.set(target.x, target.y - dist, target.z + dist * 0.15),
+				right: () => camera.position.set(target.x + dist, target.y, target.z + dist * 0.15),
 				iso: () => camera.position.set(target.x + dist * 0.65, target.y + dist * 0.65, target.z + dist * 0.45),
 				bed: () => camera.position.set(bx / 2 + dist * 0.55, by / 2 + dist * 0.55, dist * 0.35),
 			}
@@ -308,6 +438,200 @@ export async function createViewport(canvas, wrap) {
 			camera.up.set(0, 0, 1)
 			camera.lookAt(target)
 			controls.update()
+		},
+		setGizmoMode(mode) {
+			const valid = mode === 'translate' || mode === 'rotate' || mode === 'scale'
+			if (!valid) {
+				gizmoMode = null
+				detachGizmo()
+				return
+			}
+			gizmoMode = mode
+			if (!modelMesh) {
+				return
+			}
+			ensureGizmo()
+			gizmo.attach(modelMesh)
+			gizmo.setMode(mode)
+		},
+		setGizmoChangeHandler(fn) {
+			onGizmoChange = typeof fn === 'function' ? fn : null
+		},
+		resetTransform() {
+			if (!modelMesh) {
+				return
+			}
+			modelMesh.rotation.set(0, 0, 0)
+			modelMesh.scale.set(1, 1, 1)
+			centerMesh(modelMesh)
+		},
+		resetRotation() {
+			if (!modelMesh) {
+				return
+			}
+			modelMesh.rotation.set(0, 0, 0)
+			centerMesh(modelMesh)
+		},
+		resetScale() {
+			if (!modelMesh) {
+				return
+			}
+			modelMesh.scale.set(1, 1, 1)
+			centerMesh(modelMesh)
+		},
+		scaleModelAxis(vec) {
+			if (!modelMesh || !Array.isArray(vec) || vec.length !== 3) {
+				return
+			}
+			const [sx, sy, sz] = vec.map((v) => (Number.isFinite(v) && v > 0 ? v : 1))
+			modelMesh.scale.set(
+				modelMesh.scale.x * sx,
+				modelMesh.scale.y * sy,
+				modelMesh.scale.z * sz,
+			)
+			centerMesh(modelMesh)
+		},
+		translateModel(vec) {
+			if (!modelMesh || !Array.isArray(vec) || vec.length !== 3) {
+				return
+			}
+			modelMesh.position.x += Number.isFinite(vec[0]) ? vec[0] : 0
+			modelMesh.position.y += Number.isFinite(vec[1]) ? vec[1] : 0
+			modelMesh.position.z += Number.isFinite(vec[2]) ? vec[2] : 0
+			modelMesh.updateMatrixWorld(true)
+		},
+		setPosition(vec) {
+			if (!modelMesh || !Array.isArray(vec) || vec.length !== 3) {
+				return
+			}
+			modelMesh.position.set(
+				Number.isFinite(vec[0]) ? vec[0] : modelMesh.position.x,
+				Number.isFinite(vec[1]) ? vec[1] : modelMesh.position.y,
+				Number.isFinite(vec[2]) ? vec[2] : modelMesh.position.z,
+			)
+			modelMesh.updateMatrixWorld(true)
+		},
+		dropToBed() {
+			if (!modelMesh) {
+				return
+			}
+			modelMesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(modelMesh)
+			modelMesh.position.z -= box.min.z
+			modelMesh.updateMatrixWorld(true)
+		},
+		getWorldBounds() {
+			if (!modelMesh) {
+				return null
+			}
+			modelMesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(modelMesh)
+			const center = box.getCenter(new THREE.Vector3())
+			const size = box.getSize(new THREE.Vector3())
+			return {
+				min: [box.min.x, box.min.y, box.min.z],
+				max: [box.max.x, box.max.y, box.max.z],
+				center: [center.x, center.y, center.z],
+				size: [size.x, size.y, size.z],
+			}
+		},
+		isOnBed() {
+			if (!modelMesh) {
+				return true
+			}
+			modelMesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(modelMesh)
+			const [bx, by] = bedVolume
+			return box.min.x >= -0.5 && box.min.y >= -0.5 && box.min.z >= -0.5
+				&& box.max.x <= bx + 0.5 && box.max.y <= by + 0.5
+		},
+		pickFaceNormal(clientX, clientY) {
+			if (!modelMesh) {
+				return null
+			}
+			const rect = canvas.getBoundingClientRect()
+			const ndc = new THREE.Vector2(
+				((clientX - rect.left) / rect.width) * 2 - 1,
+				-((clientY - rect.top) / rect.height) * 2 + 1,
+			)
+			raycaster.setFromCamera(ndc, camera)
+			const hits = raycaster.intersectObject(modelMesh, false)
+			if (!hits.length || !hits[0].face) {
+				return null
+			}
+			const normalMatrix = new THREE.Matrix3().getNormalMatrix(modelMesh.matrixWorld)
+			const worldNormal = hits[0].face.normal.clone().applyMatrix3(normalMatrix).normalize()
+			return { x: worldNormal.x, y: worldNormal.y, z: worldNormal.z }
+		},
+		setWireframe(on) {
+			wireframe = !!on
+			if (modelMesh) {
+				modelMesh.material.wireframe = wireframe
+			}
+		},
+		setSectionClip(state) {
+			if (state && typeof state === 'object') {
+				if (typeof state.enabled === 'boolean') {
+					clipState.enabled = state.enabled
+				}
+				if (state.axis === 'x' || state.axis === 'y' || state.axis === 'z') {
+					clipState.axis = state.axis
+				}
+				if (Number.isFinite(state.offset)) {
+					clipState.offset = state.offset
+				}
+				if (typeof state.flip === 'boolean') {
+					clipState.flip = state.flip
+				}
+			}
+			applyClipPlane()
+		},
+		showCutPlane(axis, position01) {
+			if (!modelMesh) {
+				return null
+			}
+			modelMesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(modelMesh)
+			const size = box.getSize(new THREE.Vector3())
+			const ci = axis === 'x' ? 'x' : axis === 'y' ? 'y' : 'z'
+			const min = box.min[ci]
+			const max = box.max[ci]
+			const t = Math.min(Math.max(position01, 0), 1)
+			const offset = min + t * (max - min)
+			if (!cutPlaneHelper) {
+				const geo = new THREE.PlaneGeometry(1, 1)
+				const mat = new THREE.MeshBasicMaterial({
+					color: 0xf87171,
+					transparent: true,
+					opacity: 0.28,
+					side: THREE.DoubleSide,
+					depthWrite: false,
+				})
+				cutPlaneHelper = new THREE.Mesh(geo, mat)
+				scene.add(cutPlaneHelper)
+			}
+			cutPlaneHelper.visible = true
+			const w = Math.max(size.x, size.y, size.z, 40) * 1.4
+			cutPlaneHelper.scale.set(w, w, 1)
+			cutPlaneHelper.rotation.set(0, 0, 0)
+			const cx = (box.min.x + box.max.x) / 2
+			const cy = (box.min.y + box.max.y) / 2
+			const cz = (box.min.z + box.max.z) / 2
+			if (axis === 'x') {
+				cutPlaneHelper.rotation.y = Math.PI / 2
+				cutPlaneHelper.position.set(offset, cy, cz)
+			} else if (axis === 'y') {
+				cutPlaneHelper.rotation.x = Math.PI / 2
+				cutPlaneHelper.position.set(cx, offset, cz)
+			} else {
+				cutPlaneHelper.position.set(cx, cy, offset)
+			}
+			return { offset, min, max }
+		},
+		hideCutPlane() {
+			if (cutPlaneHelper) {
+				cutPlaneHelper.visible = false
+			}
 		},
 		getTransform() {
 			if (!modelMesh) {

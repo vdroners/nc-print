@@ -13,7 +13,8 @@ import RecentModelsStrip from './RecentModelsStrip.vue'
 import NcPrintCollapsible from './NcPrintCollapsible.vue'
 import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
-import PreciseTransformPanel from './PreciseTransformPanel.vue'
+import PrepareToolRail from './PrepareToolRail.vue'
+import PrepareToolPanel from './PrepareToolPanel.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { resolveFile } from '@/services/files-api.js'
@@ -33,8 +34,16 @@ export default {
 		NcPrintCollapsible,
 		PrepareStudioLayout,
 		SliceSummaryCard,
-		PreciseTransformPanel,
+		PrepareToolRail,
+		PrepareToolPanel,
 		NcPrintIcon,
+	},
+	data() {
+		return {
+			activeTool: '',
+			worldBounds: null,
+			facePickActive: false,
+		}
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -48,9 +57,21 @@ export default {
 			return this.printStore.hasModel && !this.printStore.modelMeta.previewSkipped
 		},
 	},
+	watch: {
+		'printStore.model.file'() {
+			this.activeTool = ''
+			this.facePickActive = false
+			this.worldBounds = null
+			this.$refs.viewport?.setGizmoMode?.(null)
+		},
+		'printStore.meshState.appliedAt'() {
+			this.refreshBounds()
+		},
+	},
 	async mounted() {
 		this._onRecenter = () => this.onCenter()
 		this._onChecklistAction = (e) => this.onChecklistAction(e.detail?.action)
+		this._onCanvasClick = (e) => this.onCanvasClick(e)
 		window.addEventListener('nc-print-recenter', this._onRecenter)
 		window.addEventListener('nc-print-checklist-action', this._onChecklistAction)
 	},
@@ -64,18 +85,23 @@ export default {
 		},
 		onCenter() {
 			this.$refs.viewport?.recenter()
+			this.refreshBounds()
 		},
 		onRotate(axis) {
 			this.$refs.viewport?.rotateModel(axis, 90)
+			this.refreshBounds()
 		},
-		onLayFlat() {
-			void this.$refs.viewport?.layFlatMesh()
+		async onLayFlat() {
+			await this.$refs.viewport?.layFlatMesh()
+			this.refreshBounds()
 		},
-		onScaleToFit() {
-			void this.$refs.viewport?.scaleToFitMesh()
+		async onScaleToFit() {
+			await this.$refs.viewport?.scaleToFitMesh()
+			this.refreshBounds()
 		},
-		onAutoOrient() {
-			void this.$refs.viewport?.autoOrientMesh()
+		async onAutoOrient() {
+			await this.$refs.viewport?.autoOrientMesh()
+			this.refreshBounds()
 		},
 		onAnalyzeMesh() {
 			void this.$refs.viewport?.analyzeCurrentMesh()
@@ -88,9 +114,108 @@ export default {
 		},
 		onScalePercent(factor) {
 			this.$refs.viewport?.applyScalePercent(factor)
+			this.refreshBounds()
 		},
 		onRotateDegrees(deg) {
 			this.$refs.viewport?.applyRotationDegrees(deg)
+			this.refreshBounds()
+		},
+		refreshBounds() {
+			this.$nextTick(() => {
+				this.worldBounds = this.$refs.viewport?.getWorldBounds?.() || null
+			})
+		},
+		onToolChange(id) {
+			this.activeTool = id || ''
+			this.applyToolMode()
+		},
+		applyToolMode() {
+			const gizmoMap = { move: 'translate', rotate: 'rotate', scale: 'scale' }
+			this.$refs.viewport?.setGizmoMode?.(gizmoMap[this.activeTool] || null)
+			if (this.activeTool !== 'face' && this.facePickActive) {
+				this.setFacePick(false)
+			}
+			if (this.activeTool === 'cut') {
+				this.refreshBounds()
+				this.$refs.viewport?.showCutPlane?.('z', 0.5)
+			} else {
+				this.$refs.viewport?.hideCutPlane?.()
+			}
+			this.refreshBounds()
+		},
+		onMoveDelta({ dx, dy, dz }) {
+			this.$refs.viewport?.translateBy?.([dx, dy, dz])
+			this.refreshBounds()
+		},
+		onDropToBed() {
+			this.$refs.viewport?.dropToBed?.()
+			this.refreshBounds()
+		},
+		onResetRotation() {
+			this.$refs.viewport?.resetRotation?.()
+			this.refreshBounds()
+		},
+		onResetScale() {
+			this.$refs.viewport?.resetScale?.()
+			this.refreshBounds()
+		},
+		onScaleAxis(vec) {
+			this.$refs.viewport?.scaleAxis?.(vec)
+			this.refreshBounds()
+		},
+		onScaleToSize(payload) {
+			this.$refs.viewport?.scaleToSize?.(payload)
+			this.refreshBounds()
+		},
+		async onMirror(axis) {
+			await this.$refs.viewport?.mirrorMeshAxis?.(axis)
+			this.refreshBounds()
+		},
+		onCutPreview({ axis, position01 }) {
+			this.$refs.viewport?.showCutPlane?.(axis, position01)
+		},
+		async onCutApply(payload) {
+			const ok = await this.$refs.viewport?.cutMesh?.(payload)
+			if (ok) {
+				this.$refs.viewport?.hideCutPlane?.()
+				this.activeTool = ''
+			}
+			this.refreshBounds()
+		},
+		onCamera(name) {
+			this.$refs.viewport?.cameraPreset?.(name)
+		},
+		onWireframe(on) {
+			this.$refs.viewport?.setWireframe?.(on)
+		},
+		onSection(state) {
+			this.$refs.viewport?.setSectionClip?.(state)
+		},
+		onFacePickToggle(on) {
+			this.setFacePick(on)
+		},
+		setFacePick(on) {
+			this.facePickActive = !!on
+			const el = this.$refs.viewportWrap
+			if (!el) {
+				return
+			}
+			if (on) {
+				el.addEventListener('click', this._onCanvasClick)
+			} else {
+				el.removeEventListener('click', this._onCanvasClick)
+			}
+		},
+		async onCanvasClick(e) {
+			if (!this.facePickActive || e.target?.tagName !== 'CANVAS') {
+				return
+			}
+			await this.$refs.viewport?.placeOnFaceAt?.(e.clientX, e.clientY)
+			this.refreshBounds()
+		},
+		onCloseTool() {
+			this.activeTool = ''
+			this.applyToolMode()
 		},
 		async on3mfSelectionChange() {
 			await this.$refs.viewport?.reloadModelPreview()
@@ -207,17 +332,6 @@ export default {
 						@auto-orient="onAutoOrient" />
 				</div>
 			</NcPrintCollapsible>
-
-			<NcPrintCollapsible
-				id="prepare-transform"
-				title="Transform"
-				icon="bolt"
-				:default-open="canTransform">
-				<PreciseTransformPanel
-					:disabled="!canTransform"
-					@scale-percent="onScalePercent"
-					@rotate-degrees="onRotateDegrees" />
-			</NcPrintCollapsible>
 		</template>
 
 		<template #center>
@@ -236,11 +350,42 @@ export default {
 					@apply="onApplyMesh" />
 			</div>
 
-			<div class="nc-print-viewport-wrap nc-print-viewport-wrap--studio">
+			<div ref="viewportWrap" class="nc-print-viewport-wrap nc-print-viewport-wrap--studio">
 				<ModelViewport
 					ref="viewport"
 					:file="printStore.model.file"
 					:build-volume="buildVolume" />
+				<PrepareToolRail
+					v-if="canTransform"
+					:active-tool="activeTool"
+					:disabled="!canTransform"
+					@tool-change="onToolChange" />
+				<PrepareToolPanel
+					v-if="canTransform && activeTool"
+					:tool="activeTool"
+					:bounds="worldBounds"
+					:disabled="!canTransform"
+					:face-pick-active="facePickActive"
+					@close="onCloseTool"
+					@move-delta="onMoveDelta"
+					@drop-to-bed="onDropToBed"
+					@center="onCenter"
+					@rotate-degrees="onRotateDegrees"
+					@lay-flat="onLayFlat"
+					@auto-orient="onAutoOrient"
+					@reset-rotation="onResetRotation"
+					@scale-uniform="onScalePercent"
+					@scale-axis="onScaleAxis"
+					@scale-to-size="onScaleToSize"
+					@scale-to-fit="onScaleToFit"
+					@reset-scale="onResetScale"
+					@face-pick-toggle="onFacePickToggle"
+					@mirror="onMirror"
+					@cut-preview="onCutPreview"
+					@cut-apply="onCutApply"
+					@camera="onCamera"
+					@wireframe="onWireframe"
+					@section="onSection" />
 			</div>
 		</template>
 
@@ -285,6 +430,7 @@ export default {
 
 .nc-print-viewport-wrap--studio {
 	min-height: clamp(360px, 52vh, 640px);
+	position: relative;
 }
 
 .nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {

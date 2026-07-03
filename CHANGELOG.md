@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.11.0] - 2026-07-02
+
+Prepare tab grows a Creality/Orca-style tool palette: interactive 3D gizmos
+plus an extensive grouped tool listing instead of a thin toolbar.
+
+### Added
+
+- **Interactive transform gizmos.** Three.js `TransformControls` drive
+  translate / rotate / scale directly in the 3D viewport. Dragging a handle
+  gates OrbitControls, snaps (1 mm / 15° / 5%), and syncs into the slice mesh
+  via the existing auto-apply path.
+- **Tool rail + contextual panel.** A vertical grouped rail
+  (`PrepareToolRail`) overlays the studio viewport — Transform (Move / Rotate /
+  Scale), Orient (Place on face / Mirror), Modify (Plane cut), View. Selecting a
+  tool opens a floating contextual panel (`PrepareToolPanel`) with the relevant
+  controls.
+- **Move** — translate gizmo + numeric X/Y/Z position, Drop to bed, Center, and
+  an off-bed warning.
+- **Rotate** — rotate gizmo + numeric per-axis degrees, +90° X/Y/Z, Lay flat,
+  Auto-orient, and Reset rotation.
+- **Scale** — scale gizmo + uniform %, per-axis %, To-size (mm) with lock-aspect,
+  Scale to fit bed, and Reset scale.
+- **Place on face** — click any facet and that face rotates flat onto the plate
+  (raycast pick + geometry bake).
+- **Mirror X/Y/Z** — reflects the mesh and flips triangle winding so normals
+  stay outward (baked).
+- **Plane cut** — axis + live plane preview + keep top/bottom + optional
+  cross-section cap (baked). New `src/services/mesh-cut.js`.
+- **View aids (non-destructive)** — camera presets (Top / Front / Right / Iso /
+  Fit), wireframe toggle, and a renderer-level section clip plane.
+
+### Changed
+
+- Retired the standalone "Precise transform" collapsible; its scale/rotate
+  numeric controls now live inside the Move / Rotate / Scale tool panels.
+- `mesh-analyze.js` gains `applyScaleVector` (per-axis scale) and `mirrorMesh`
+  (axis reflection + winding fix).
+
 ## [1.10.4] - 2026-07-02
 
 Prepare-tab declutter from continued live UX review — the empty chamber now sits

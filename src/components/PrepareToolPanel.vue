@@ -1,0 +1,452 @@
+<script>
+import { mapStores } from 'pinia'
+import { usePrintStore } from '@/store/print.js'
+
+const TITLES = {
+	move: 'Move',
+	rotate: 'Rotate',
+	scale: 'Scale',
+	face: 'Place on face',
+	mirror: 'Mirror',
+	cut: 'Plane cut',
+	view: 'View & section',
+}
+
+export default {
+	name: 'PrepareToolPanel',
+	props: {
+		tool: { type: String, default: '' },
+		bounds: { type: Object, default: null },
+		disabled: { type: Boolean, default: false },
+		facePickActive: { type: Boolean, default: false },
+	},
+	data() {
+		return {
+			move: { x: 0, y: 0, z: 0 },
+			rotate: { x: 0, y: 0, z: 0 },
+			scaleUniform: 100,
+			scaleAxis: { x: 100, y: 100, z: 100 },
+			toSize: { axis: 'x', value: 0 },
+			lockAspect: true,
+			cut: { axis: 'z', pos: 50, keep: 'bottom', cap: true },
+			wireframe: false,
+			section: { enabled: false, axis: 'z', offset: 0, flip: false },
+		}
+	},
+	computed: {
+		...mapStores(usePrintStore),
+		title() {
+			return TITLES[this.tool] || ''
+		},
+		bbox() {
+			return this.printStore.modelMeta.bbox
+		},
+		offBed() {
+			return !!this.bounds && (
+				this.bounds.min[0] < -0.5 || this.bounds.min[1] < -0.5 || this.bounds.min[2] < -0.5
+			)
+		},
+		axisRange() {
+			const idx = this.section.axis === 'x' ? 0 : this.section.axis === 'y' ? 1 : 2
+			if (!this.bounds) {
+				return { min: 0, max: 100 }
+			}
+			return { min: this.bounds.min[idx], max: this.bounds.max[idx] }
+		},
+	},
+	watch: {
+		tool() {
+			this.syncFromBounds()
+		},
+		bounds() {
+			this.syncFromBounds()
+		},
+	},
+	mounted() {
+		this.syncFromBounds()
+	},
+	methods: {
+		syncFromBounds() {
+			if (this.bounds) {
+				this.move = {
+					x: Math.round(this.bounds.center[0] * 10) / 10,
+					y: Math.round(this.bounds.center[1] * 10) / 10,
+					z: Math.round(this.bounds.min[2] * 10) / 10,
+				}
+				const idx = this.section.axis === 'x' ? 0 : this.section.axis === 'y' ? 1 : 2
+				this.section.offset = Math.round(((this.bounds.min[idx] + this.bounds.max[idx]) / 2) * 10) / 10
+				if (!this.toSize.value) {
+					const ti = this.toSize.axis === 'x' ? 0 : this.toSize.axis === 'y' ? 1 : 2
+					this.toSize.value = Math.round(this.bounds.size[ti] * 10) / 10
+				}
+			}
+		},
+		emitMove() {
+			// Convert desired center (x,y) + min-z into a world delta.
+			if (!this.bounds) {
+				return
+			}
+			const dx = Number(this.move.x) - this.bounds.center[0]
+			const dy = Number(this.move.y) - this.bounds.center[1]
+			const dz = Number(this.move.z) - this.bounds.min[2]
+			this.$emit('move-delta', { dx, dy, dz })
+		},
+		emitRotate() {
+			this.$emit('rotate-degrees', {
+				x: Number(this.rotate.x) || 0,
+				y: Number(this.rotate.y) || 0,
+				z: Number(this.rotate.z) || 0,
+			})
+			this.rotate = { x: 0, y: 0, z: 0 }
+		},
+		emitScaleUniform() {
+			const pct = Number(this.scaleUniform)
+			if (pct > 0) {
+				this.$emit('scale-uniform', pct / 100)
+				this.scaleUniform = 100
+			}
+		},
+		emitScaleAxis() {
+			const vec = [
+				(Number(this.scaleAxis.x) || 100) / 100,
+				(Number(this.scaleAxis.y) || 100) / 100,
+				(Number(this.scaleAxis.z) || 100) / 100,
+			]
+			this.$emit('scale-axis', vec)
+			this.scaleAxis = { x: 100, y: 100, z: 100 }
+		},
+		emitToSize() {
+			const value = Number(this.toSize.value)
+			if (value > 0) {
+				this.$emit('scale-to-size', { axis: this.toSize.axis, value, lockAspect: this.lockAspect })
+			}
+		},
+		emitCutPreview() {
+			this.$emit('cut-preview', { axis: this.cut.axis, position01: this.cut.pos / 100 })
+		},
+		emitCutApply() {
+			this.$emit('cut-apply', {
+				axis: this.cut.axis,
+				position01: this.cut.pos / 100,
+				keep: this.cut.keep,
+				cap: this.cut.cap,
+			})
+		},
+		emitWireframe() {
+			this.$emit('wireframe', this.wireframe)
+		},
+		emitSection() {
+			this.$emit('section', { ...this.section, offset: Number(this.section.offset) })
+		},
+		onSectionAxis() {
+			this.syncFromBounds()
+			this.emitSection()
+		},
+	},
+}
+</script>
+
+<template>
+	<div v-if="tool" class="nc-print-tool-panel" :class="{ 'nc-print-tool-panel--disabled': disabled }">
+		<header class="nc-print-tool-panel__header">
+			<h3 class="nc-print-tool-panel__title">{{ title }}</h3>
+			<button type="button" class="nc-print-tool-panel__close" title="Close" @click="$emit('close')">✕</button>
+		</header>
+
+		<!-- Move -->
+		<div v-if="tool === 'move'" class="nc-print-tool-panel__body">
+			<p v-if="offBed" class="nc-print-tool-panel__warn">Model is off the bed.</p>
+			<div class="nc-print-tool-panel__grid">
+				<label>X <input v-model.number="move.x" type="number" step="1" :disabled="disabled"></label>
+				<label>Y <input v-model.number="move.y" type="number" step="1" :disabled="disabled"></label>
+				<label>Z <input v-model.number="move.z" type="number" step="1" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitMove">Set position</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('drop-to-bed')">Drop to bed</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('center')">Center</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Drag the on-screen arrows to move; snaps to 1 mm.</p>
+		</div>
+
+		<!-- Rotate -->
+		<div v-else-if="tool === 'rotate'" class="nc-print-tool-panel__body">
+			<div class="nc-print-tool-panel__grid">
+				<label>X° <input v-model.number="rotate.x" type="number" step="1" :disabled="disabled"></label>
+				<label>Y° <input v-model.number="rotate.y" type="number" step="1" :disabled="disabled"></label>
+				<label>Z° <input v-model.number="rotate.z" type="number" step="1" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitRotate">Apply rotation</button>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { x: 90 })">+90 X</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { y: 90 })">+90 Y</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { z: 90 })">+90 Z</button>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('lay-flat')">Lay flat</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('auto-orient')">Auto-orient</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('reset-rotation')">Reset</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Drag the on-screen rings to rotate; snaps to 15°.</p>
+		</div>
+
+		<!-- Scale -->
+		<div v-else-if="tool === 'scale'" class="nc-print-tool-panel__body">
+			<div class="nc-print-tool-panel__row">
+				<label>Uniform % <input v-model.number="scaleUniform" type="number" min="1" step="1" :disabled="disabled"></label>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitScaleUniform">Apply</button>
+			</div>
+			<div class="nc-print-tool-panel__grid">
+				<label>X % <input v-model.number="scaleAxis.x" type="number" min="1" step="1" :disabled="disabled"></label>
+				<label>Y % <input v-model.number="scaleAxis.y" type="number" min="1" step="1" :disabled="disabled"></label>
+				<label>Z % <input v-model.number="scaleAxis.z" type="number" min="1" step="1" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitScaleAxis">Apply per-axis</button>
+			</div>
+			<div class="nc-print-tool-panel__row">
+				<label>To size
+					<select v-model="toSize.axis" :disabled="disabled">
+						<option value="x">X</option>
+						<option value="y">Y</option>
+						<option value="z">Z</option>
+					</select>
+				</label>
+				<label>mm <input v-model.number="toSize.value" type="number" min="0" step="0.5" :disabled="disabled"></label>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitToSize">Apply</button>
+			</div>
+			<label class="nc-print-tool-panel__check">
+				<input v-model="lockAspect" type="checkbox" :disabled="disabled"> Lock aspect ratio
+			</label>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('scale-to-fit')">Scale to fit bed</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('reset-scale')">Reset</button>
+			</div>
+			<p v-if="bbox" class="nc-print-tool-panel__hint">
+				Current: {{ Math.round(bbox.x) }}×{{ Math.round(bbox.y) }}×{{ Math.round(bbox.z) }} mm
+			</p>
+		</div>
+
+		<!-- Place on face -->
+		<div v-else-if="tool === 'face'" class="nc-print-tool-panel__body">
+			<button
+				type="button"
+				class="nc-print-btn"
+				:class="{ 'nc-print-btn--primary': facePickActive }"
+				:disabled="disabled"
+				@click="$emit('face-pick-toggle', !facePickActive)">
+				{{ facePickActive ? 'Picking… click a face' : 'Pick a face' }}
+			</button>
+			<p class="nc-print-tool-panel__hint">Click any facet on the model; that face rotates flat onto the plate.</p>
+		</div>
+
+		<!-- Mirror -->
+		<div v-else-if="tool === 'mirror'" class="nc-print-tool-panel__body">
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('mirror', 'x')">Mirror X</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('mirror', 'y')">Mirror Y</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('mirror', 'z')">Mirror Z</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Reflects the mesh and flips winding so normals stay outward.</p>
+		</div>
+
+		<!-- Cut -->
+		<div v-else-if="tool === 'cut'" class="nc-print-tool-panel__body">
+			<div class="nc-print-tool-panel__row">
+				<label>Axis
+					<select v-model="cut.axis" :disabled="disabled" @change="emitCutPreview">
+						<option value="x">X</option>
+						<option value="y">Y</option>
+						<option value="z">Z</option>
+					</select>
+				</label>
+				<label>Keep
+					<select v-model="cut.keep" :disabled="disabled">
+						<option value="bottom">Bottom</option>
+						<option value="top">Top</option>
+					</select>
+				</label>
+			</div>
+			<label class="nc-print-tool-panel__slider">
+				Position {{ cut.pos }}%
+				<input v-model.number="cut.pos" type="range" min="1" max="99" step="1" :disabled="disabled" @input="emitCutPreview">
+			</label>
+			<label class="nc-print-tool-panel__check">
+				<input v-model="cut.cap" type="checkbox" :disabled="disabled"> Cap cross-section
+			</label>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" :disabled="disabled" @click="emitCutApply">Apply cut</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Caps are exact for convex sections, best-effort otherwise.</p>
+		</div>
+
+		<!-- View -->
+		<div v-else-if="tool === 'view'" class="nc-print-tool-panel__body">
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'top')">Top</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'front')">Front</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'right')">Right</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'iso')">Iso</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'fit')">Fit</button>
+			</div>
+			<label class="nc-print-tool-panel__check">
+				<input v-model="wireframe" type="checkbox" @change="emitWireframe"> Wireframe
+			</label>
+			<label class="nc-print-tool-panel__check">
+				<input v-model="section.enabled" type="checkbox" :disabled="disabled" @change="emitSection"> Section clip
+			</label>
+			<div v-if="section.enabled" class="nc-print-tool-panel__row">
+				<label>Axis
+					<select v-model="section.axis" :disabled="disabled" @change="onSectionAxis">
+						<option value="x">X</option>
+						<option value="y">Y</option>
+						<option value="z">Z</option>
+					</select>
+				</label>
+				<label class="nc-print-tool-panel__check">
+					<input v-model="section.flip" type="checkbox" :disabled="disabled" @change="emitSection"> Flip
+				</label>
+			</div>
+			<label v-if="section.enabled" class="nc-print-tool-panel__slider">
+				Offset {{ Math.round(section.offset) }} mm
+				<input
+					v-model.number="section.offset"
+					type="range"
+					:min="axisRange.min"
+					:max="axisRange.max"
+					step="0.5"
+					:disabled="disabled"
+					@input="emitSection">
+			</label>
+		</div>
+	</div>
+</template>
+
+<style scoped>
+.nc-print-tool-panel {
+	background: color-mix(in srgb, var(--nc-gcs-bg-elevated, #1b2027) 94%, transparent);
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: var(--nc-gcs-radius-md, 8px);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+	max-width: 280px;
+	padding: 10px 12px;
+	position: absolute;
+	right: 8px;
+	top: 8px;
+	width: 260px;
+	z-index: 5;
+}
+
+.nc-print-tool-panel__header {
+	align-items: center;
+	display: flex;
+	justify-content: space-between;
+	margin-bottom: 8px;
+}
+
+.nc-print-tool-panel__title {
+	font-size: var(--nc-gcs-text-sm);
+	font-weight: 600;
+	margin: 0;
+}
+
+.nc-print-tool-panel__close {
+	appearance: none;
+	background: none;
+	border: none;
+	color: var(--nc-gcs-text-muted);
+	cursor: pointer;
+	font-size: 13px;
+	line-height: 1;
+	padding: 2px 4px;
+}
+
+.nc-print-tool-panel__close:hover {
+	color: var(--nc-gcs-text-primary);
+}
+
+.nc-print-tool-panel__body {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+.nc-print-tool-panel__grid {
+	display: grid;
+	gap: 6px;
+	grid-template-columns: repeat(3, 1fr);
+}
+
+.nc-print-tool-panel__row {
+	align-items: end;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nc-print-tool-panel__grid label,
+.nc-print-tool-panel__row label {
+	color: var(--nc-gcs-text-muted);
+	display: flex;
+	flex-direction: column;
+	font-size: 11px;
+	gap: 3px;
+}
+
+.nc-print-tool-panel__grid input,
+.nc-print-tool-panel__row input[type="number"],
+.nc-print-tool-panel__row select {
+	max-width: 100%;
+	width: 100%;
+}
+
+.nc-print-tool-panel__actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+
+.nc-print-tool-panel__slider {
+	color: var(--nc-gcs-text-muted);
+	display: flex;
+	flex-direction: column;
+	font-size: 11px;
+	gap: 4px;
+}
+
+.nc-print-tool-panel__slider input[type="range"] {
+	width: 100%;
+}
+
+.nc-print-tool-panel__check {
+	align-items: center;
+	color: var(--nc-gcs-text-secondary);
+	display: flex;
+	font-size: 12px;
+	gap: 6px;
+}
+
+.nc-print-tool-panel__hint {
+	color: var(--nc-gcs-text-muted);
+	font-size: 11px;
+	margin: 0;
+}
+
+.nc-print-tool-panel__warn {
+	color: var(--nc-gcs-danger-soft, #f87171);
+	font-size: 11px;
+	margin: 0;
+}
+
+.nc-print-btn--sm {
+	font-size: 11px;
+	padding: 3px 8px;
+}
+
+.nc-print-tool-panel--disabled {
+	opacity: 0.6;
+	pointer-events: none;
+}
+</style>

@@ -12,7 +12,11 @@ import {
 	layFlat,
 	scaleToFitBed,
 	applyUniformScale,
+	mirrorMesh,
+	rotationMatrixFromTo,
+	applyRotationMatrix,
 } from '@/services/mesh-analyze.js'
+import { cutMeshByPlane } from '@/services/mesh-cut.js'
 
 export default {
 	name: 'ModelViewport',
@@ -84,6 +88,7 @@ export default {
 		try {
 			this.viewport = await createViewport(canvas, wrap)
 			this.viewport.setBedVolume(this.buildVolume)
+			this.viewport.setGizmoChangeHandler?.(() => this._scheduleTransformSync())
 			this.viewportReady = true
 			this.viewportError = ''
 			this._restoreSavedTransform()
@@ -323,6 +328,123 @@ export default {
 			const result = analyzeMesh(scaled, mesh.indices)
 			this.printStore.setMeshHealth(result)
 			toastSuccess(`Scaled to ${Math.round(factor * 100)}% to fit bed`)
+			return true
+		},
+		setGizmoMode(mode) {
+			this.viewport?.setGizmoMode?.(mode)
+		},
+		cameraPreset(name) {
+			this.viewport?.setCameraPreset?.(name)
+		},
+		setWireframe(on) {
+			this.viewport?.setWireframe?.(on)
+		},
+		setSectionClip(state) {
+			this.viewport?.setSectionClip?.(state)
+		},
+		showCutPlane(axis, position01) {
+			return this.viewport?.showCutPlane?.(axis, position01) || null
+		},
+		hideCutPlane() {
+			this.viewport?.hideCutPlane?.()
+		},
+		getWorldBounds() {
+			return this.viewport?.getWorldBounds?.() || null
+		},
+		isOnBed() {
+			return this.viewport?.isOnBed?.() !== false
+		},
+		resetTransform() {
+			this.viewport?.resetTransform?.()
+			this._scheduleTransformSync()
+		},
+		resetRotation() {
+			this.viewport?.resetRotation?.()
+			this._scheduleTransformSync()
+		},
+		resetScale() {
+			this.viewport?.resetScale?.()
+			this._scheduleTransformSync()
+		},
+		moveTo(vec) {
+			this.viewport?.setPosition?.(vec)
+			this._scheduleTransformSync()
+		},
+		translateBy(vec) {
+			this.viewport?.translateModel?.(vec)
+			this._scheduleTransformSync()
+		},
+		dropToBed() {
+			this.viewport?.dropToBed?.()
+			this._scheduleTransformSync()
+		},
+		scaleAxis(vec) {
+			this.viewport?.scaleModelAxis?.(vec)
+			this._scheduleTransformSync()
+		},
+		scaleToSize({ axis = 'x', value = 0, lockAspect = true } = {}) {
+			const bounds = this.getWorldBounds()
+			if (!bounds || !(value > 0)) {
+				return
+			}
+			const idx = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+			const current = bounds.size[idx]
+			if (!(current > 0)) {
+				return
+			}
+			const factor = value / current
+			if (lockAspect) {
+				this.applyScalePercent(factor)
+			} else {
+				const vec = [1, 1, 1]
+				vec[idx] = factor
+				this.scaleAxis(vec)
+			}
+		},
+		async mirrorMeshAxis(axis) {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const mirrored = mirrorMesh(mesh.positions, mesh.indices, axis)
+			await this.applyMeshSnapshot(mirrored)
+			const result = analyzeMesh(mirrored.positions, mirrored.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess(`Mirrored across ${axis.toUpperCase()} axis`)
+			return true
+		},
+		async placeOnFaceAt(clientX, clientY) {
+			const normal = this.viewport?.pickFaceNormal?.(clientX, clientY)
+			if (!normal) {
+				toastInfo('Click directly on a model face')
+				return false
+			}
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const matrix = rotationMatrixFromTo(normal, { x: 0, y: 0, z: -1 })
+			const rotated = applyRotationMatrix(mesh.positions, matrix)
+			await this.applyMeshSnapshot({ positions: rotated, indices: mesh.indices })
+			const result = analyzeMesh(rotated, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess('Selected face placed on bed')
+			return true
+		},
+		async cutMesh({ axis = 'z', position01 = 0.5, keep = 'bottom', cap = true } = {}) {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const result = cutMeshByPlane(mesh.positions, mesh.indices, { axis, position01, keep, cap })
+			if (!result || !result.positions.length) {
+				toastInfo('Cut removed the whole model — adjust the plane')
+				return false
+			}
+			await this.applyMeshSnapshot({ positions: result.positions, indices: result.indices })
+			const analysis = analyzeMesh(result.positions, result.indices)
+			this.printStore.setMeshHealth(analysis)
+			toastSuccess(`Cut applied — kept ${keep} half`)
 			return true
 		},
 		onDrop(e) {

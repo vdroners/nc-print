@@ -357,6 +357,57 @@ export function applyUniformScale(positions, scale) {
 }
 
 /**
+ * Per-axis (non-uniform) scale of a position buffer.
+ * @param {Float32Array} positions
+ * @param {number[]} scale [sx, sy, sz]
+ * @returns {Float32Array}
+ */
+export function applyScaleVector(positions, scale) {
+	const sx = Number.isFinite(scale?.[0]) ? scale[0] : 1
+	const sy = Number.isFinite(scale?.[1]) ? scale[1] : 1
+	const sz = Number.isFinite(scale?.[2]) ? scale[2] : 1
+	const out = new Float32Array(positions.length)
+	for (let i = 0; i < positions.length; i += 3) {
+		out[i] = positions[i] * sx
+		out[i + 1] = positions[i + 1] * sy
+		out[i + 2] = positions[i + 2] * sz
+	}
+	return out
+}
+
+/**
+ * Mirror a mesh across an axis-aligned plane through the bbox center, flipping
+ * triangle winding so outward normals are preserved.
+ * @param {Float32Array} positions
+ * @param {Uint32Array|number[]} indices
+ * @param {'x'|'y'|'z'} axis
+ * @returns {{ positions: Float32Array, indices: Uint32Array }}
+ */
+export function mirrorMesh(positions, indices, axis) {
+	const ci = axis === 'x' ? 0 : axis === 'y' ? 1 : 2
+	const bbox = computeBbox(positions)
+	const center = ci === 0 ? (bbox.minX + bbox.maxX) / 2
+		: ci === 1 ? (bbox.minY + bbox.maxY) / 2
+			: (bbox.minZ + bbox.maxZ) / 2
+	const out = new Float32Array(positions.length)
+	for (let i = 0; i < positions.length; i += 3) {
+		out[i] = positions[i]
+		out[i + 1] = positions[i + 1]
+		out[i + 2] = positions[i + 2]
+		out[i + ci] = 2 * center - positions[i + ci]
+	}
+	// Reflection inverts orientation; reverse each triangle's winding.
+	const src = indices
+	const flipped = new Uint32Array(src.length)
+	for (let f = 0; f < src.length; f += 3) {
+		flipped[f] = src[f]
+		flipped[f + 1] = src[f + 2]
+		flipped[f + 2] = src[f + 1]
+	}
+	return { positions: out, indices: flipped }
+}
+
+/**
  * Weld coincident vertices and drop degenerate triangles.
  * @param {Float32Array} positions
  * @param {Uint32Array|number[]} indices
