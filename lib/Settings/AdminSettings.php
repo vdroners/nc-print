@@ -57,10 +57,6 @@ class AdminSettings implements ISettings
 				ConfigService::KEY_MOONRAKER_ENABLED,
 				true,
 			),
-			ConfigService::KEY_CONSOLE_ENABLED => $this->isEnabled(
-				ConfigService::KEY_CONSOLE_ENABLED,
-				false,
-			),
 			'save_url' => $this->urlGenerator->linkToRoute(
 				'nc_print.admin.saveSettings',
 			),

@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.16.1] - 2026-07-03
+
+Production-readiness: documentation refresh + a small security hardening.
+
+### Changed
+
+- **Docs rewritten for the self-contained architecture** (v1.16.x): `README.md`,
+  `docs/ARCHITECTURE.md`, `docs/INSTALL.md`, `docs/ADMIN.md`,
+  `docs/LIMITATIONS.md`, `docs/TROUBLESHOOTING.md` now describe the owned
+  `nc-print-slicer` sidecar (setup via `make slicer-fetch`/`slicer-up`, tuning
+  knobs, hardening), the full feature set (3D toolpath preview, supports,
+  multi-object arrange, calibration), and the current security model. The stale
+  "forge-slicer at :8766" references are gone.
+
+### Security
+
+- **G-code console can no longer be enabled from the admin UI.** The toggle was
+  removed from Settings → NC 3D Print; the (dangerous) raw-command input is now
+  enabled deliberately via `occ config:app:set nc_print console_enabled --value=1`
+  only. The default remains OFF, and all existing server-side guards
+  (length/charset validation, motion-refused-while-printing, no raw
+  `printer/gcode/script` passthrough) are unchanged.
+
 ## [1.16.0] - 2026-07-03
 
 Phase 5 (final roadmap phase): **calibration suite**. One-click calibration

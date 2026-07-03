@@ -1,40 +1,68 @@
 # NC 3D Print
 
-**Version 1.9.0** · Nextcloud 28–33 · License AGPL-3.0-or-later
+**Version 1.16.1** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
-A standalone Nextcloud app for the full **prepare → slice → print** workflow.
-It pairs a headless [Orca / forge-slicer](https://github.com/) REST backend with
+A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
+**ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
+the `nc-print-slicer` sidecar container) and pairs it with
 [Moonraker](https://moonraker.readthedocs.io/)/Klipper for a Mainsail/Fluidd-class
-monitoring and control experience — without leaving your Nextcloud.
+monitoring and control experience — without leaving your Nextcloud, and with **no
+external slicer service** and no NC-GCS dependency.
 
-No NC-GCS dependency is required.
-
-## Features
+## What it does
 
 **Prepare**
-- Three.js model viewport (STL / OBJ / 3MF) with bed grid, bounding-box overlay,
-  and a WYSIWYG mesh transform that is applied before slicing (no "blind" slices)
-- Profile pickers (printer / filament / process) with a collapsible, low-density
-  studio layout
+- Three.js model viewport (STL / OBJ / 3MF) with a Z-up bed grid and
+  bounding-box overlay
+- Interactive transform gizmos (move / rotate / scale) plus lay-flat,
+  auto-orient, place-on-face, mirror, and plane-cut tools — the mesh you see is
+  the mesh that slices (WYSIWYG, no "blind" slices)
+- Printer / filament / process profile pickers with quick-edit override settings
+- Mesh health check (triangles, open edges, watertight)
 
-**Slice**
-- Headless Orca slicing over the forge-slicer REST proxy (SSE progress stream)
-- Slice handoff card: filament/time summary and a one-click "Monitor on Print"
+**Slice** (self-contained — no external slicer)
+- Real headless slicing in the owned `nc-print-slicer` sidecar, streamed to the
+  browser over SSE with live progress
+- Override settings (layer height, line width, perimeters, infill, speeds,
+  temps, retraction, supports, brim/raft/skirt) that **actually take effect**
+- **3D toolpath preview** — inspect the printed paths after slicing with
+  per-feature colours, a layer slider, and toggleable travel moves
+- **Multi-object plates** — add several models and auto-arrange them on one plate
+- **Calibration suite** — one-click flow-rate models and a parametric
+  temperature tower
+- Save G-code beside the model in Nextcloud Files
 
 **Print monitor (Moonraker)**
-- Live telemetry over the Moonraker WebSocket with automatic polling fallback
-- Live camera with fullscreen view
-- Live multi-series **temperature graph** + presets + PID tuning
-- **Bed mesh** heatmap + calibrate (idle-only)
-- Print/**job queue** and mid-print **exclude-object**
-- **Filament** management: Spoolman spool + runout sensors, load/unload/purge,
-  and last-slice cost estimate
-- Moonraker **history/statistics** + embedded G-code thumbnails
-- moonraker-**timelapse**: rendered-video list, in-app playback, and download
-- Read-only **G-code console** log, with an optional admin-gated command input
+- Live telemetry with camera, multi-series temperature graph + PID tuning
+- Bed-mesh heatmap + calibrate (idle-only), print/job queue, mid-print
+  exclude-object
+- Filament management (Spoolman + runout sensors, load/unload/purge)
+- Moonraker history/statistics with embedded thumbnails, timelapse playback
+- Read-only G-code console log with an optional admin-gated command input
 
-All Part B monitoring panels feature-detect from Moonraker `/server/info`
-components and hide automatically when the corresponding plugin is absent.
+All Part B monitoring panels feature-detect from Moonraker `/server/info` and
+hide when the corresponding plugin is absent.
+
+## Architecture
+
+```
+Browser (Vue 2 + Pinia + Three.js)
+   │  same-origin
+   ▼
+Nextcloud app  (OCA\NcPrint, PHP)
+   ├─ SlicerProxyController   ──▶ nc-print-slicer sidecar  :8080   (OWNED)
+   ├─ MoonrakerProxyController──▶ Moonraker / Klipper  (read-only allowlist)
+   └─ PrinterController        ──▶ Moonraker  (guarded writes)
+                                        │
+      nc-print-slicer (Ubuntu 24.04 container on nc-print-net):
+        Xvfb + Mesa software GL → OrcaSlicer-fork CLI (headless)
+        FastAPI adapter :8080 — slice (SSE), profiles, toolpath,
+        mesh-analyze, arrange, calibration
+```
+
+The Nextcloud container and the sidecar share the `nc-print-net` Docker network;
+PHP reaches the engine by container DNS (`http://nc-print-slicer:8080`). See
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Requirements
 
@@ -42,20 +70,30 @@ components and hide automatically when the corresponding plugin is absent.
 |-----------|-------------|
 | Nextcloud | 28 – 33 |
 | PHP | 8.1+ (matches your Nextcloud) |
-| forge-slicer | Reachable REST endpoint (default `http://127.0.0.1:8766`) |
-| Moonraker | Reachable API (default `http://10.0.0.210:7125`) |
-| Node.js | 18+ (build only) |
+| Docker | for the `nc-print-slicer` sidecar (Ubuntu 24.04 base — the engine needs glibc ≥ 2.38) |
+| Slicing engine | 3DPrintForge Slicer (OrcaSlicer fork) — staged at build time, **not** committed to git |
+| Moonraker | Reachable Klipper API (default `http://10.0.0.210:7125`) |
+| Node.js | 18+ (frontend build only) |
 
 ## Quick start
 
 ```bash
-make build          # sass + webpack production build
-make deploy         # copies into the running cloud_app container + occ upgrade
-make gate-preflight # lint/static + phpunit + vitest + build
+# 1. Stage the engine binary + resources into slicer/ (kept out of git)
+make slicer-fetch            # from /media/4TB/3dprintforge by default; override ENGINE_SRC
+
+# 2. Build + run the owned slicing engine sidecar, join cloud_app to its network
+make slicer-up
+
+# 3. Build the frontend and deploy the app into the running cloud_app container
+make deploy                  # sass + webpack, docker cp, occ upgrade (also ensures the sidecar is up)
+
+# 4. Enable + verify
+docker exec -u www-data cloud_app php /var/www/html/occ app:enable nc_print
+make gate-preflight          # preflight + phpunit + vitest + build + API gates
 ```
 
 See [docs/INSTALL.md](docs/INSTALL.md) for a from-scratch install and
-[docs/VERIFY.md](docs/VERIFY.md) for the full gate/acceptance matrix.
+[docs/VERIFY.md](docs/VERIFY.md) for the gate/acceptance matrix.
 
 ## Configuration
 
@@ -63,69 +101,81 @@ Configure in **Settings → NC 3D Print** (admin):
 
 | Setting | Purpose |
 |---------|---------|
-| Slicer internal URL | forge-slicer REST endpoint |
+| Slicer internal URL | Owned sidecar (default `http://nc-print-slicer:8080`); can point at an external engine for back-compat |
 | Moonraker internal URL | Klipper/Moonraker API |
-| Camera snapshot URL | live camera |
+| Camera snapshot URL | Live camera for PiP / Print monitor |
 | Printer display name | UI label |
-| Allowed groups | comma-separated Nextcloud groups gate |
+| Allowed groups | Comma-separated Nextcloud groups gate |
 | Multi-printer config | JSON array for multiple printers |
-| Slicer / Moonraker enabled | independent feature toggles |
-| **G-code console send** | **advanced, off by default** — see Security |
+| Slicer / Moonraker enabled | Independent feature toggles |
 
-Docker (`cloud_app`) networking notes and the forge-slicer relay are documented
-in [docs/ADMIN.md](docs/ADMIN.md).
+The **G-code console send** input is off by default and, for safety, is **not**
+exposed in the admin UI — it is enabled deliberately via `occ` only (see
+Security). Docker networking, the sidecar, and its tuning knobs are documented in
+[docs/ADMIN.md](docs/ADMIN.md).
 
 ## Security model
 
 NC 3D Print is designed so that **no browser can push arbitrary G-code at your
-printer**:
+printer**, and the slicing engine — which parses untrusted uploaded meshes — runs
+sandboxed:
 
-- The Moonraker proxy is a strict **read-only allowlist** (`server/info`,
-  `server/files/`, `printer/objects/`, `printer/print/`, and the Part B read
-  prefixes). Raw `printer/gcode/script` passthrough is **blocked**.
-- Every write (temperature, tuning, bed-mesh calibrate, filament load/unload/
-  purge, exclude-object, PID) goes through guarded `PrinterController` actions
-  with parameter validation, an action allowlist, and idle/motion guards
-  (motion is refused while a print is active).
-- The **G-code console** command input is **disabled by default**. It requires an
-  explicit admin opt-in (`console_enabled`); even then, commands are length- and
-  charset-validated and motion is refused during a print. The response log is
-  read-only.
-- App access is gated to the configured Nextcloud groups.
+- The Moonraker proxy is a strict **read-only allowlist**; raw
+  `printer/gcode/script` passthrough is **blocked**. Every write (temperature,
+  tuning, bed-mesh calibrate, filament load/unload/purge, exclude-object, PID)
+  goes through guarded `PrinterController` actions with parameter validation and
+  idle/motion guards (motion refused while printing).
+- The **G-code console** command input is **disabled by default** and can only be
+  enabled via `occ` (`console_enabled`), not the admin UI; commands are
+  length/charset validated and motion is refused during a print. The response log
+  is read-only.
+- The **slicing sidecar** is internal-only (no host port published; reachable
+  only from `cloud_app` on `nc-print-net`), runs with `cap_drop: ALL`,
+  `no-new-privileges`, a read-only root filesystem + tmpfs scratch, and
+  memory/PID caps. Uploads over `MAX_MESH_TRIANGLES` are rejected, slices are
+  concurrency-limited, and job scratch is garbage-collected.
+- Slicer/Moonraker URLs are **admin-configured only** — user paths cannot
+  retarget upstream hosts. App access is gated to the configured Nextcloud groups.
 
-## Architecture
-
-- **Frontend:** Vue 2.7 + Pinia, Three.js viewport, webpack build.
-- **Backend:** Nextcloud PHP app (`OCA\NcPrint`) — `ApiController` (status /
-  feature detection), `MoonrakerProxyController` (read-only allowlist),
-  `PrinterController` (guarded writes + console), `AdminController` / settings.
-- **Services:** forge-slicer REST (slicing), Moonraker (control + telemetry).
-
-More detail in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+More detail in [SECURITY.md](SECURITY.md).
 
 ## Development & testing
 
 ```bash
 npm ci
-npm run dev     # webpack watch
-npm run test    # vitest (unit)
-make run-phpunit # PHPUnit in a php:8.2-cli container
+npm run dev            # webpack watch
+npm run test           # vitest (frontend unit tests)
+make run-phpunit       # PHPUnit (host PHP, or php:8.2-cli container)
+make slicer-test       # sidecar adapter unit tests (STL→3MF, overrides, toolpath, calibration)
+make gate-preflight    # full gate: preflight + phpunit + vitest + build + API gates
+
+# sidecar end-to-end smoke test (STL → gcode through the adapter)
+docker exec nc-print-slicer python3 /opt/adapter/smoke_test.py
 ```
 
-CI/acceptance gates (G00–G45) are enforced by
-[`tools/print-api-gates.php`](tools/print-api-gates.php); results are tracked in
-[docs/VERIFY.md](docs/VERIFY.md). Changelog: [CHANGELOG.md](CHANGELOG.md).
+CI/acceptance gates are enforced by
+[`tools/print-api-gates.php`](tools/print-api-gates.php). Changelog:
+[CHANGELOG.md](CHANGELOG.md).
+
+## Licensing note (AGPL)
+
+The slicing engine is a fork of OrcaSlicer (AGPL-3.0); this app is
+AGPL-3.0-or-later, so the licences are compatible. The engine binary + resources
+(~380 MB) are **staged at build time** and kept out of this repository; the
+image bakes the engine's `LICENSE.txt`. If you distribute the built image you
+must also offer the corresponding source of the engine fork.
 
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
-| [docs/INSTALL.md](docs/INSTALL.md) | Install & enable |
-| [docs/ADMIN.md](docs/ADMIN.md) | Admin config, Docker networking, console toggle |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component overview |
+| [docs/INSTALL.md](docs/INSTALL.md) | Install, sidecar setup & enable |
+| [docs/ADMIN.md](docs/ADMIN.md) | Admin config, Docker networking, sidecar tuning, console toggle |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component & sidecar overview |
 | [docs/VERIFY.md](docs/VERIFY.md) | Gate & acceptance matrix |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Known limitations |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
+| [slicer/README.md](slicer/README.md) | The owned slicing engine sidecar |
 
 ## License
 
