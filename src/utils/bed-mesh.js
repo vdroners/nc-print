@@ -34,9 +34,11 @@ export function parseBedMesh(payload) {
 	if (!mesh) {
 		return null
 	}
-	const raw = Array.isArray(mesh.probed_matrix) && mesh.probed_matrix.length
-		? mesh.probed_matrix
-		: Array.isArray(mesh.mesh_matrix) ? mesh.mesh_matrix : []
+	// Prefer Klipper's interpolated mesh_matrix (finer grid) over the coarse
+	// raw probed_matrix, so the heatmap shows more detail.
+	const raw = Array.isArray(mesh.mesh_matrix) && mesh.mesh_matrix.length
+		? mesh.mesh_matrix
+		: Array.isArray(mesh.probed_matrix) ? mesh.probed_matrix : []
 	const matrix = raw
 		.filter(Array.isArray)
 		.map((row) => row.map(Number).filter(Number.isFinite))
@@ -74,6 +76,51 @@ export function parseBedMesh(payload) {
 		profileName: String(mesh.profile_name ?? ''),
 		profiles,
 	}
+}
+
+/**
+ * Bilinearly upsample a mesh matrix to a finer display grid so the heatmap
+ * reads as a smooth surface rather than a few big blocks. A coarse N×M probe
+ * grid becomes roughly `targetPerAxis` cells on its longest axis.
+ * @param {number[][]} matrix
+ * @param {number} [targetPerAxis] desired cells along the larger dimension
+ * @returns {number[][]}
+ */
+export function interpolateMatrix(matrix, targetPerAxis = 24) {
+	if (!Array.isArray(matrix) || matrix.length === 0 || !Array.isArray(matrix[0])) {
+		return matrix
+	}
+	const rows = matrix.length
+	const cols = matrix[0].length
+	if (rows < 2 || cols < 2) {
+		return matrix
+	}
+	// Only upsample; never downsample below the source resolution.
+	const outRows = Math.max(rows, Math.min(targetPerAxis, Math.round((rows / Math.max(rows, cols)) * targetPerAxis) || rows))
+	const outCols = Math.max(cols, Math.min(targetPerAxis, Math.round((cols / Math.max(rows, cols)) * targetPerAxis) || cols))
+	const out = []
+	for (let r = 0; r < outRows; r++) {
+		const fr = (r / (outRows - 1)) * (rows - 1)
+		const r0 = Math.floor(fr)
+		const r1 = Math.min(rows - 1, r0 + 1)
+		const dr = fr - r0
+		const rowOut = []
+		for (let c = 0; c < outCols; c++) {
+			const fc = (c / (outCols - 1)) * (cols - 1)
+			const c0 = Math.floor(fc)
+			const c1 = Math.min(cols - 1, c0 + 1)
+			const dc = fc - c0
+			const v00 = matrix[r0][c0]
+			const v01 = matrix[r0][c1]
+			const v10 = matrix[r1][c0]
+			const v11 = matrix[r1][c1]
+			const top = v00 + (v01 - v00) * dc
+			const bot = v10 + (v11 - v10) * dc
+			rowOut.push(top + (bot - top) * dr)
+		}
+		out.push(rowOut)
+	}
+	return out
 }
 
 /**

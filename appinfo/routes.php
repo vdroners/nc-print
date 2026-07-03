@@ -13,6 +13,7 @@ return [
 		['name' => 'camera#frame', 'url' => '/api/camera/frame.jpeg', 'verb' => 'GET'],
 		['name' => 'ws_ticket#issue', 'url' => '/api/ws-ticket', 'verb' => 'GET'],
 		['name' => 'admin#saveSettings', 'url' => '/api/admin/settings', 'verb' => 'PUT'],
+		['name' => 'admin#discoverPrinters', 'url' => '/api/admin/discover-printers', 'verb' => 'POST'],
 
 		['name' => 'printer#state', 'url' => '/api/printer/state', 'verb' => 'GET'],
 		['name' => 'printer#pause', 'url' => '/api/printer/pause', 'verb' => 'POST'],

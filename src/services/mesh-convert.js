@@ -113,6 +113,85 @@ function meshFromObject(objectEl, transform, outPositions, outIndices) {
 }
 
 /**
+ * Build an id→object map for a parsed model document (own resources only).
+ * @param {Document} doc
+ * @returns {Map<string, Element>}
+ */
+function objectMapFromDoc(doc) {
+	const map = new Map()
+	const objects = doc.getElementsByTagNameNS(CORE_NS, 'object')
+	for (let i = 0; i < objects.length; i++) {
+		map.set(objects[i].getAttribute('id'), objects[i])
+	}
+	return map
+}
+
+/**
+ * Emit the triangles of an object, resolving inline mesh AND components.
+ * Components with a `path` cross into another model part (walkModel); components
+ * without a path reference another object in the SAME document by objectid, so
+ * we resolve them against `objectById` (this is the common Orca/Bambu shape:
+ * a component-wrapper object in <build> that points at the real mesh object).
+ * @param {Element} objectEl
+ * @param {Map<string, Element>} objectById same-document object map
+ * @param {typeof IDENTITY} transform
+ * @param {number[]} outPositions
+ * @param {number[]} outIndices
+ * @param {JSZip} zip
+ * @param {string} modelPath current model part path (for cross-part components)
+ * @param {Set<string>} seen cycle guard on object ids
+ */
+async function emitObjectMesh(objectEl, objectById, transform, outPositions, outIndices, zip, modelPath, seen) {
+	const oid = objectEl.getAttribute('id') || ''
+	if (oid && seen.has(oid)) {
+		return
+	}
+	if (oid) {
+		seen.add(oid)
+	}
+	// Direct children only: a component-wrapper's descendant <mesh> belongs to a
+	// referenced object, not this one, so restrict to this object's own mesh.
+	const ownMesh = directChildMesh(objectEl)
+	if (ownMesh) {
+		meshFromObject(objectEl, transform, outPositions, outIndices)
+	}
+	const components = objectEl.getElementsByTagNameNS(CORE_NS, 'component')
+	for (let c = 0; c < components.length; c++) {
+		const comp = components[c]
+		const childT = multiplyTransform(transform, parse3mfTransform(comp.getAttribute('transform')))
+		const path = comp.getAttributeNS(PROD_NS, 'path')
+			|| comp.getAttribute('p:path')
+			|| comp.getAttribute('path')
+		if (path) {
+			await walkModel(zip, resolveZipPath(modelPath, path), childT, outPositions, outIndices)
+			continue
+		}
+		// Same-document reference by objectid.
+		const refId = comp.getAttribute('objectid')
+		const refObj = refId ? objectById.get(refId) : null
+		if (refObj) {
+			await emitObjectMesh(refObj, objectById, childT, outPositions, outIndices, zip, modelPath, seen)
+		}
+	}
+}
+
+/**
+ * The object's own direct-child <mesh> (not a descendant belonging to a
+ * referenced component object).
+ * @param {Element} objectEl
+ * @returns {Element|null}
+ */
+function directChildMesh(objectEl) {
+	for (let i = 0; i < objectEl.childNodes.length; i++) {
+		const n = objectEl.childNodes[i]
+		if (n.nodeType === 1 && (n.localName === 'mesh')) {
+			return n
+		}
+	}
+	return null
+}
+
+/**
  * @param {JSZip} zip
  * @param {string} modelPath
  * @param {typeof IDENTITY} transform
@@ -125,25 +204,28 @@ async function walkModel(zip, modelPath, transform, outPositions, outIndices) {
 		throw new Error(`3MF missing part: ${modelPath}`)
 	}
 	const doc = parseModelXml(await entry.async('text'))
-	const objects = doc.getElementsByTagNameNS(CORE_NS, 'object')
-	for (let i = 0; i < objects.length; i++) {
-		const obj = objects[i]
-		const meshEl = obj.getElementsByTagNameNS(CORE_NS, 'mesh')[0]
-		const components = obj.getElementsByTagNameNS(CORE_NS, 'component')
-		if (meshEl) {
-			meshFromObject(obj, transform, outPositions, outIndices)
-		}
-		for (let c = 0; c < components.length; c++) {
-			const comp = components[c]
-			const path = comp.getAttributeNS(PROD_NS, 'path')
-				|| comp.getAttribute('p:path')
-				|| comp.getAttribute('path')
-			if (!path) {
+	const objectById = objectMapFromDoc(doc)
+	// Prefer build items when present so we honour transforms/printable flags;
+	// otherwise emit every object that carries geometry.
+	const buildItems = doc.getElementsByTagNameNS(CORE_NS, 'item')
+	if (buildItems.length > 0) {
+		for (let i = 0; i < buildItems.length; i++) {
+			const item = buildItems[i]
+			if (item.getAttribute('printable') === '0') {
 				continue
 			}
-			const childT = multiplyTransform(transform, parse3mfTransform(comp.getAttribute('transform')))
-			await walkModel(zip, resolveZipPath(modelPath, path), childT, outPositions, outIndices)
+			const obj = objectById.get(item.getAttribute('objectid'))
+			if (!obj) {
+				continue
+			}
+			const itemT = multiplyTransform(transform, parse3mfTransform(item.getAttribute('transform')))
+			await emitObjectMesh(obj, objectById, itemT, outPositions, outIndices, zip, modelPath, new Set())
 		}
+		return
+	}
+	const objects = doc.getElementsByTagNameNS(CORE_NS, 'object')
+	for (let i = 0; i < objects.length; i++) {
+		await emitObjectMesh(objects[i], objectById, transform, outPositions, outIndices, zip, modelPath, new Set())
 	}
 }
 
@@ -205,12 +287,7 @@ export async function parse3mfMesh(arrayBuffer, options = {}) {
 	const buildItems = rootDoc.getElementsByTagNameNS(CORE_NS, 'item')
 
 	if (buildItems.length > 0) {
-		const objectById = new Map()
-		const resourceObjects = rootDoc.getElementsByTagNameNS(CORE_NS, 'object')
-		for (let i = 0; i < resourceObjects.length; i++) {
-			const obj = resourceObjects[i]
-			objectById.set(obj.getAttribute('id'), obj)
-		}
+		const objectById = objectMapFromDoc(rootDoc)
 		for (let i = 0; i < buildItems.length; i++) {
 			const item = buildItems[i]
 			const itemId = item.getAttribute('id') || String(i + 1)
@@ -226,22 +303,8 @@ export async function parse3mfMesh(arrayBuffer, options = {}) {
 			if (!topObj) {
 				continue
 			}
-			const components = topObj.getElementsByTagNameNS(CORE_NS, 'component')
-			if (components.length) {
-				for (let c = 0; c < components.length; c++) {
-					const comp = components[c]
-					const path = comp.getAttributeNS(PROD_NS, 'path')
-						|| comp.getAttribute('p:path')
-						|| comp.getAttribute('path')
-					if (!path) {
-						continue
-					}
-					const childT = multiplyTransform(itemT, parse3mfTransform(comp.getAttribute('transform')))
-					await walkModel(zip, resolveZipPath(rootPath, path), childT, positions, indices)
-				}
-			} else if (topObj.getElementsByTagNameNS(CORE_NS, 'mesh')[0]) {
-				meshFromObject(topObj, itemT, positions, indices)
-			}
+			// Resolve inline mesh AND same-document/cross-part components.
+			await emitObjectMesh(topObj, objectById, itemT, positions, indices, zip, rootPath, new Set())
 		}
 	} else {
 		await walkModel(zip, rootPath, { ...IDENTITY }, positions, indices)

@@ -1,5 +1,53 @@
 # Changelog
 
+## [1.17.0] - 2026-07-03
+
+Bug fixes from live testing, plus printer autodetect.
+
+### Fixed
+
+- **3MF files that wrap their mesh in a component failed to import**
+  ("3MF contains no triangle mesh"). Real Orca/Bambu exports (e.g. tbar.3MF)
+  put a component-wrapper object in `<build>` that references the actual mesh
+  object in the same document via `<component objectid="…">` with no `path`.
+  The parser now resolves same-document component references (recursively, with
+  transforms and cycle protection) in both `parse3mfMesh` and `walkModel`
+  (`src/services/mesh-convert.js`).
+- **Mesh "Repair" appeared to do nothing on non-watertight STLs.** It was
+  welding hundreds of thousands of duplicate vertices but leaving a few genuine
+  boundary holes, so the panel still said "needs repair." `autoRepair` now also
+  **fills small boundary holes** (chains boundary edges into loops and caps them
+  with triangle fans), and the toast reports exactly what changed (welded /
+  filled / removed) and whether the mesh is now watertight. The AS150U test
+  model now repairs to fully watertight.
+- **Workflow-bar step content clipped out of its container.** Steps were
+  fixed-width and long subtitles (filenames, profile chips) overflowed the box.
+  Steps now shrink to share the row and subtitles truncate within their own step
+  (`css/style.scss`).
+
+### Added
+
+- **Printer autodetect.** A **Discover printers** button in admin settings scans
+  the LAN (the /24 around the configured Moonraker host, or an explicit
+  host/subnet) for Moonraker `/server/info` responders and lets you add them to
+  the multi-printer config in one click. New admin-only, server-side
+  `POST /api/admin/discover-printers` (`AdminController::discoverPrinters`,
+  parallel cURL probe with short timeouts).
+
+### Changed
+
+- **Bed-mesh heatmap is much finer.** It now prefers Klipper's interpolated
+  `mesh_matrix` over the coarse `probed_matrix`, and bilinearly upsamples the
+  grid (~24 cells/axis) so the map reads as a smooth surface instead of a few
+  big blocks. Colours are still normalized to the true probed min/max
+  (`src/utils/bed-mesh.js` `interpolateMatrix`).
+
+### Tests
+
+- New: 3MF component-wrapper regression (+ real tbar.3MF fixture), autoRepair
+  hole-fill → watertight, bed-mesh `interpolateMatrix` + `mesh_matrix`
+  preference. Full suite green: 171 vitest, 31 phpunit, 16 adapter.
+
 ## [1.16.1] - 2026-07-03
 
 Production-readiness: documentation refresh + a small security hardening.

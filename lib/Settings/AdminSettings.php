@@ -60,6 +60,9 @@ class AdminSettings implements ISettings
 			'save_url' => $this->urlGenerator->linkToRoute(
 				'nc_print.admin.saveSettings',
 			),
+			'discover_url' => $this->urlGenerator->linkToRoute(
+				'nc_print.admin.discoverPrinters',
+			),
 		];
 
 		return new TemplateResponse(Application::APP_ID, 'admin_settings', $params);

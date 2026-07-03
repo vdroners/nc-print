@@ -468,6 +468,10 @@ export function autoRepair(positions, indices, epsilon = 1e-5) {
 		newIndices.push(a, b, c)
 	}
 
+	// Fill small boundary holes: any edge used by exactly one triangle is a
+	// boundary edge; chain them into loops and cap each loop with a triangle fan.
+	const filledTris = fillBoundaryHoles(newPositions, newIndices)
+
 	const welded = positions.length / 3 - newPositions.length / 3
 	return {
 		positions: new Float32Array(newPositions),
@@ -475,8 +479,77 @@ export function autoRepair(positions, indices, epsilon = 1e-5) {
 		stats: {
 			weldedVertices: Math.max(0, welded),
 			removedDegenerate,
+			filledTriangles: filledTris,
 		},
 	}
+}
+
+/**
+ * Close boundary holes in an indexed mesh in place (mutates `indices`).
+ * Directed boundary edges (used once) are chained into loops and each loop is
+ * capped with a triangle fan. Large/complex loops are skipped to avoid
+ * self-intersecting fills. Returns the number of triangles added.
+ * @param {number[]} positions
+ * @param {number[]} indices
+ * @param {number} [maxLoop] largest hole (in edges) to attempt
+ * @returns {number}
+ */
+export function fillBoundaryHoles(positions, indices, maxLoop = 200) {
+	// Directed edge count: +1 for (a,b), so a boundary edge has net use 1 in one
+	// direction. Track directed boundary edges as next[from] = to.
+	const dirCount = new Map()
+	const triCount = indices.length / 3
+	const dkey = (a, b) => a * 0x100000000 + b
+	for (let f = 0; f < triCount; f++) {
+		const a = indices[3 * f]
+		const b = indices[3 * f + 1]
+		const c = indices[3 * f + 2]
+		for (const [e0, e1] of [[a, b], [b, c], [c, a]]) {
+			// undirected pairing: a boundary edge appears once total
+			const kFwd = dkey(e0, e1)
+			const kRev = dkey(e1, e0)
+			if (dirCount.has(kRev)) {
+				dirCount.delete(kRev) // interior edge — cancels out
+			} else {
+				dirCount.set(kFwd, [e0, e1])
+			}
+		}
+	}
+	if (dirCount.size === 0) {
+		return 0
+	}
+	// Build adjacency from the leftover boundary (directed) edges.
+	const next = new Map()
+	for (const [, [from, to]] of dirCount) {
+		next.set(from, to)
+	}
+	const visited = new Set()
+	let added = 0
+	for (const start of next.keys()) {
+		if (visited.has(start)) {
+			continue
+		}
+		const loop = []
+		let cur = start
+		let guard = 0
+		while (cur !== undefined && !visited.has(cur) && guard <= maxLoop + 1) {
+			visited.add(cur)
+			loop.push(cur)
+			cur = next.get(cur)
+			guard++
+			if (cur === start) {
+				break
+			}
+		}
+		// Only cap a genuine closed loop of manageable size.
+		if (cur === start && loop.length >= 3 && loop.length <= maxLoop) {
+			for (let i = 1; i < loop.length - 1; i++) {
+				indices.push(loop[0], loop[i], loop[i + 1])
+				added++
+			}
+		}
+	}
+	return added
 }
 
 /**

@@ -295,7 +295,23 @@ export default {
 			await this.applyMeshSnapshot(repaired)
 			const result = analyzeMesh(repaired.positions, repaired.indices)
 			this.printStore.setMeshHealth(result)
-			toastSuccess(`Repair welded ${repaired.stats.weldedVertices} verts, removed ${repaired.stats.removedDegenerate} tris`)
+			const s = repaired.stats
+			const parts = []
+			if (s.weldedVertices) {
+				parts.push(`welded ${s.weldedVertices} verts`)
+			}
+			if (s.filledTriangles) {
+				parts.push(`filled ${s.filledTriangles} hole tris`)
+			}
+			if (s.removedDegenerate) {
+				parts.push(`removed ${s.removedDegenerate} bad tris`)
+			}
+			const detail = parts.length ? parts.join(', ') : 'no changes needed'
+			if (result.watertight) {
+				toastSuccess(`Repaired — now watertight (${detail})`)
+			} else {
+				toastSuccess(`Repair improved mesh (${detail}); ${result.openEdgeCount} open edge(s) remain`)
+			}
 			return true
 		},
 		async autoOrientMesh() {

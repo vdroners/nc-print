@@ -22,11 +22,12 @@ $settingsJson = htmlspecialchars(
 	'UTF-8',
 );
 $saveUrl = htmlspecialchars((string)($_['save_url'] ?? ''), ENT_QUOTES, 'UTF-8');
+$discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 'UTF-8');
 ?>
-<div id="nc-print-admin-settings" class="section" data-settings="<?php echo $settingsJson; ?>" data-save-url="<?php echo $saveUrl; ?>">
+<div id="nc-print-admin-settings" class="section" data-settings="<?php echo $settingsJson; ?>" data-save-url="<?php echo $saveUrl; ?>" data-discover-url="<?php echo $discoverUrl; ?>">
 	<h2>NC 3D Print</h2>
 	<p class="settings-hint">
-		Configure forge-slicer REST, Moonraker printer access, camera snapshot URL, and group gate.
+		Configure the owned slicing engine (nc-print-slicer), Moonraker printer access, camera snapshot URL, and group gate.
 	</p>
 
 	<form id="nc-print-admin-form" class="nc-print-admin-form">
@@ -57,6 +58,11 @@ $saveUrl = htmlspecialchars((string)($_['save_url'] ?? ''), ENT_QUOTES, 'UTF-8')
 		<p class="settings-hint">
 			Each entry: <code>id</code>, <code>name</code>, <code>moonraker_url</code>, optional <code>moonraker_ws_url</code>, <code>camera_url</code>, <code>default</code>.
 		</p>
+		<div class="nc-print-admin-discover">
+			<button type="button" id="nc-print-discover-btn" class="secondary">Discover printers on network</button>
+			<p id="nc-print-discover-status" class="settings-hint" aria-live="polite"></p>
+			<div id="nc-print-discover-results"></div>
+		</div>
 		<label class="checkbox">
 			<input type="checkbox" name="<?php echo ConfigService::KEY_SLICER_ENABLED; ?>" value="yes" <?php echo !empty($_['slicer_enabled']) ? 'checked' : ''; ?>>
 			<span>Slicer enabled</span>

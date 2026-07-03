@@ -114,6 +114,28 @@ describe('mesh-analyze', () => {
 		expect(repaired.stats.weldedVertices).toBeGreaterThan(0)
 	})
 
+	it('autoRepair fills a boundary hole to watertight', () => {
+		// Tetrahedron (4 verts) missing its base face → one triangular hole.
+		const positions = new Float32Array([
+			0, 0, 0,
+			1, 0, 0,
+			0, 1, 0,
+			0, 0, 1,
+		])
+		// three side faces, base (0,1,2) intentionally omitted → open
+		const indices = new Uint32Array([
+			0, 1, 3,
+			1, 2, 3,
+			2, 0, 3,
+		])
+		const before = analyzeMesh(positions, indices)
+		expect(before.watertight).toBe(false)
+		const repaired = autoRepair(positions, indices)
+		expect(repaired.stats.filledTriangles).toBeGreaterThan(0)
+		const after = analyzeMesh(repaired.positions, repaired.indices)
+		expect(after.watertight).toBe(true)
+	})
+
 	it('applyRotationMatrix preserves vector length', () => {
 		const positions = new Float32Array([1, 2, 3])
 		const matrix = [

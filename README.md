@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.16.1** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.17.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -106,7 +106,7 @@ Configure in **Settings → NC 3D Print** (admin):
 | Camera snapshot URL | Live camera for PiP / Print monitor |
 | Printer display name | UI label |
 | Allowed groups | Comma-separated Nextcloud groups gate |
-| Multi-printer config | JSON array for multiple printers |
+| Multi-printer config | JSON array for multiple printers (with a **Discover printers** button that scans the LAN for Moonraker instances) |
 | Slicer / Moonraker enabled | Independent feature toggles |
 
 The **G-code console send** input is off by default and, for safety, is **not**

@@ -1,8 +1,47 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
+import JSZip from 'jszip'
 import { parse3mfMesh, convert3mfToStlBuffer, parse3mfTransform, multiplyTransform, transformPoint, list3mfBuildItems } from '../services/mesh-convert.js'
 
 const SERVOHOLD_3MF = '/media/4TB/3dprints/lib_1782856946964_servohold_test.3mf'
+// Real-world file that broke parsing: build references a component-wrapper object
+// whose <component objectid="2"> points at an in-document mesh object (no path).
+const TBAR_3MF = '/media/4TB/nc-print/docs/tbar.3MF'
+
+const CT_XML = '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/></Types>'
+const RELS_XML = '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Target="/3D/3dmodel.model" Id="rel0" Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>'
+
+// A 3MF where <build> points at a component-wrapper object that references the
+// real mesh object in the SAME document by objectid (the tbar.3MF shape).
+async function makeComponentWrapper3mf() {
+	const model = `<?xml version="1.0"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" unit="millimeter">
+<resources>
+<object id="2" type="model"><mesh>
+<vertices>
+<vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="10" y="10" z="0"/><vertex x="0" y="10" z="0"/>
+<vertex x="0" y="0" z="10"/><vertex x="10" y="0" z="10"/><vertex x="10" y="10" z="10"/><vertex x="0" y="10" z="10"/>
+</vertices>
+<triangles>
+<triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/>
+<triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/>
+<triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/>
+<triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/>
+<triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/>
+<triangle v1="3" v2="0" v3="4"/><triangle v1="3" v2="4" v3="7"/>
+</triangles>
+</mesh></object>
+<object id="1" type="model"><components><component objectid="2"/></components></object>
+</resources>
+<build><item objectid="1"/></build>
+</model>`
+	const zip = new JSZip()
+	zip.file('[Content_Types].xml', CT_XML)
+	zip.file('_rels/.rels', RELS_XML)
+	zip.file('3D/3dmodel.model', model)
+	const u8 = await zip.generateAsync({ type: 'uint8array' })
+	return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
+}
 
 describe('mesh-convert 3MF', () => {
 	it('parses 3MF transform identity', () => {
@@ -28,6 +67,29 @@ describe('mesh-convert 3MF', () => {
 		expect(mesh.triangleCount).toBeGreaterThan(100)
 		expect(mesh.bbox.x).toBeGreaterThan(0)
 		expect(mesh.bbox.y).toBeGreaterThan(0)
+		expect(mesh.bbox.z).toBeGreaterThan(0)
+	})
+
+	it('resolves a same-document component-wrapper build object (regression: tbar.3MF)', async () => {
+		const ab = await makeComponentWrapper3mf()
+		const mesh = await parse3mfMesh(ab)
+		// The build item points at the wrapper (object 1) whose component
+		// references the mesh (object 2); we must follow it and get the cube.
+		expect(mesh.triangleCount).toBe(12)
+		expect(mesh.bbox.x).toBeCloseTo(10, 3)
+		expect(mesh.bbox.y).toBeCloseTo(10, 3)
+		expect(mesh.bbox.z).toBeCloseTo(10, 3)
+	})
+
+	it('parses the real tbar.3MF fixture when present', async () => {
+		let buf
+		try {
+			buf = readFileSync(TBAR_3MF)
+		} catch {
+			return // skip when fixture absent
+		}
+		const mesh = await parse3mfMesh(buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength))
+		expect(mesh.triangleCount).toBeGreaterThan(1000)
 		expect(mesh.bbox.z).toBeGreaterThan(0)
 	})
 

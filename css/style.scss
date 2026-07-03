@@ -641,7 +641,10 @@
 }
 
 .nc-print-workflow__step {
-	flex: 0 0 auto;
+	/* Steps share the row and shrink so long subtitles truncate inside their
+	   own step instead of overflowing the container box. */
+	flex: 1 1 0;
+	min-width: 0;
 }
 
 .nc-print-workflow__btn {
@@ -659,6 +662,13 @@
 	gap: 8px;
 	padding: 6px 12px;
 	transition: background 0.15s, color 0.15s;
+	min-width: 0;
+	width: 100%;
+	text-align: left;
+}
+
+.nc-print-workflow__num {
+	flex: 0 0 auto;
 }
 
 .nc-print-workflow__text {
@@ -667,6 +677,14 @@
 	flex-direction: column;
 	gap: 2px;
 	min-width: 0;
+	flex: 1 1 auto;
+}
+
+.nc-print-workflow__label {
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .nc-print-workflow__sub {
@@ -675,7 +693,9 @@
 	font-size: 10px;
 	font-weight: 400;
 	line-height: 1.3;
-	max-width: 320px;
+	/* Truncate within the (now shrinkable) step rather than hard-clipping past
+	   the container box. Line-clamp keeps it to a single line (see G37a). */
+	max-width: 100%;
 	overflow: hidden;
 	-webkit-box-orient: vertical;
 	-webkit-line-clamp: 1;
@@ -698,10 +718,6 @@
 @media (max-width: 1200px) {
 	.nc-print-workflow__list {
 		max-width: 100%;
-	}
-
-	.nc-print-workflow__sub {
-		max-width: 220px;
 	}
 
 	.nc-print-viewport-wrap--studio {
@@ -793,10 +809,6 @@
 	.nc-print-workflow__list {
 		max-width: 100%;
 		overflow-x: auto;
-	}
-
-	.nc-print-workflow__sub {
-		max-width: 160px;
 	}
 
 	.nc-print-profile-picker {

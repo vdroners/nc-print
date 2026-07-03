@@ -4,7 +4,7 @@ import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet, bedMeshCalibrate } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import NcPrintIcon from './NcPrintIcon.vue'
-import { parseBedMesh, normalizeMeshCells } from '@/utils/bed-mesh.js'
+import { parseBedMesh, normalizeMeshCells, interpolateMatrix } from '@/utils/bed-mesh.js'
 
 export default {
 	name: 'BedMeshPanel',
@@ -30,11 +30,15 @@ export default {
 			return !this.printStore.printerControls.isActive
 		},
 		// Display rows back-to-front so the front of the bed is at the bottom.
+		// The matrix is bilinearly upsampled so the heatmap reads as a smooth
+		// surface instead of a few large blocks; colours are normalized against
+		// the original probed min/max so the scale stays truthful.
 		displayRows() {
 			if (!this.mesh) {
 				return []
 			}
-			const cells = normalizeMeshCells(this.mesh.matrix, { min: this.mesh.min, max: this.mesh.max })
+			const fine = interpolateMatrix(this.mesh.matrix, 24)
+			const cells = normalizeMeshCells(fine, { min: this.mesh.min, max: this.mesh.max })
 			const byRow = []
 			for (const cell of cells) {
 				byRow[cell.row] = byRow[cell.row] || []
@@ -150,20 +154,24 @@ export default {
 .nc-print-bedmesh__grid {
 	display: flex;
 	flex-direction: column;
-	gap: 2px;
+	gap: 1px;
 	margin-bottom: 12px;
+	/* Keep the (now finer) heatmap square-ish and compact. */
+	max-width: 100%;
+	aspect-ratio: 1;
 }
 
 .nc-print-bedmesh__row {
 	display: flex;
-	gap: 2px;
+	gap: 1px;
+	flex: 1;
+	min-height: 0;
 }
 
 .nc-print-bedmesh__cell {
-	aspect-ratio: 1;
-	border-radius: 2px;
+	border-radius: 1px;
 	flex: 1;
-	min-height: 14px;
+	min-width: 0;
 }
 
 .nc-print-bedmesh__stats {
