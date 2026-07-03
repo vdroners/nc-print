@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.16.0] - 2026-07-03
+
+Phase 5 (final roadmap phase): **calibration suite**. One-click calibration
+prints sliced for the selected printer.
+
+### Added
+
+- **Calibration endpoints** — `GET /api/calibration/list` (catalog) and
+  `POST /api/calibration/{id}/slice` (`slicer/adapter/calibration.py`). Two
+  sources: shipped `resources/calib/` models verified to slice against an
+  arbitrary printer (the flow-rate models), and a **parametric temperature
+  tower** generated on the fly as a stepped 3MF with configurable
+  start/end/step temperatures. Calibration reuses the normal slice pipeline
+  (preset resolution, overrides, gcode retrieval). Verified end-to-end: temp
+  tower → 523 KB gcode; shipped flow model → 771 KB gcode.
+- **`src/services/calibration-api.js`** (`fetchCalibrations`,
+  `sliceCalibration`) and **`CalibrationPanel.vue`** (in the Slice tab) — pick a
+  calibration, set the tower temperature range, one-click slice. Results flow
+  into the normal slice result panel + 3D preview + Send-to-printer.
+
+### Notes
+
+- Some shipped calibration models (temperature/retraction/input-shaping) are
+  Draco `.drc` assets meant for the GUI's calibration menu and embed
+  printer-specific presets; those are handled by the self-generated tower rather
+  than raw slicing, so the suite works on any configured printer.
+
+### Tests
+
+- Adapter: `test_calibration_list_includes_temp_tower`,
+  `test_temp_tower_generation` (16 adapter tests total).
+
 ## [1.15.0] - 2026-07-03
 
 Phase 4: **multi-object plates with auto-arrange**. Slice several models together

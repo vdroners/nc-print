@@ -36,6 +36,11 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from calibration import (
+    generate_temp_tower_3mf,
+    list_calibrations,
+    shipped_model_path,
+)
 from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf, stls_to_multiobject_3mf
 from mesh_analyze import analyze_stl
@@ -462,6 +467,87 @@ async def job_gcode(job_id: str, request: Request) -> Response:
                 fh.seek(0)
         data = fh.read()
     return Response(data, media_type="text/plain")
+
+
+@app.get("/api/calibration/list")
+async def calibration_list() -> JSONResponse:
+    """Catalog of available calibration prints (shipped models + parametric)."""
+    return JSONResponse({"calibrations": list_calibrations()})
+
+
+@app.post("/api/calibration/{calib_id}/slice")
+async def calibration_slice(calib_id: str, request: Request) -> Response:
+    """Slice a calibration model by id against the chosen printer.
+
+    Body (JSON, all optional except printer_id): {printer_id, process_id,
+    filament_ids, overrides, params}. Reuses the normal slice pipeline.
+    """
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    printer_id = payload.get("printer_id", "")
+    if not printer_id:
+        return JSONResponse({"error": "no_printer",
+                             "message": "printer_id required"}, 400)
+
+    try:
+        await asyncio.wait_for(_slice_slots.acquire(), timeout=0.01)
+    except asyncio.TimeoutError:
+        return JSONResponse({"error": "too_many_jobs",
+                             "message": "slicer busy"}, 503)
+
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOB_ROOT, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    model_3mf = os.path.join(job_dir, "calib.3mf")
+    tower_meta = None
+
+    # Resolve the model: a shipped 3MF (copied in) or a generated tower.
+    shipped = shipped_model_path(calib_id)
+    try:
+        if shipped:
+            shutil.copyfile(shipped, model_3mf)
+        elif calib_id == "temp_tower":
+            p = payload.get("params") or {}
+            tower_meta = generate_temp_tower_3mf(
+                model_3mf,
+                temp_start=int(p.get("temp_start", 220)),
+                temp_end=int(p.get("temp_end", 190)),
+                step=int(p.get("step", 5)))
+        else:
+            _slice_slots.release()
+            return JSONResponse({"error": "unknown_calibration",
+                                 "message": f"no calibration '{calib_id}'"}, 404)
+    except Exception as exc:  # noqa: BLE001
+        _slice_slots.release()
+        return JSONResponse({"error": "model_prep_failed", "message": str(exc)}, 500)
+
+    try:
+        machine, process, filaments, warnings = resolve_triple(
+            _index(), printer_id, payload.get("process_id", ""),
+            payload.get("filament_ids", []))
+    except ValueError as exc:
+        _slice_slots.release()
+        return JSONResponse({"error": "preset_resolve", "message": str(exc)}, 400)
+
+    async def _stream():
+        try:
+            yield _sse("progress", {"stage": "calibration", "pct": 10,
+                                    "job_id": job_id, "calibration": calib_id})
+            if tower_meta:
+                yield _sse("progress", {"stage": "tower", "pct": 15,
+                                        "message": f"{len(tower_meta['steps'])} steps",
+                                        "job_id": job_id})
+            async for chunk in _run_slice(job_id, job_dir, model_3mf,
+                                          machine, process, filaments,
+                                          payload.get("overrides")):
+                yield chunk
+        finally:
+            _slice_slots.release()
+
+    return StreamingResponse(_stream(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @app.post("/api/mesh/analyze")

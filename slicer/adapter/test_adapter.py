@@ -236,6 +236,33 @@ def test_mesh_analyze_open_mesh():
     assert rep["open_edges"] > 0
 
 
+def test_calibration_list_includes_temp_tower():
+    from calibration import list_calibrations
+    items = list_calibrations()
+    ids = [c["id"] for c in items]
+    assert "temp_tower" in ids
+    tower = next(c for c in items if c["id"] == "temp_tower")
+    assert tower["kind"] == "parametric"
+    assert "params" in tower
+
+
+def test_temp_tower_generation():
+    import zipfile
+    from calibration import generate_temp_tower_3mf
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "tower.3mf")
+        meta = generate_temp_tower_3mf(out, temp_start=215, temp_end=195, step=5)
+        # 215,210,205,200,195 -> 5 steps
+        assert len(meta["steps"]) == 5
+        assert meta["steps"][0]["temp"] == 215
+        assert meta["steps"][-1]["temp"] == 195
+        assert meta["height"] == 50.0  # 5 * 10mm
+        assert zipfile.is_zipfile(out)
+        with zipfile.ZipFile(out) as z:
+            model = z.read("3D/3dmodel.model").decode()
+            assert "<vertices>" in model and "<triangle " in model
+
+
 def test_multiobject_3mf_has_all_objects():
     import zipfile
     from mesh3mf import stls_to_multiobject_3mf

@@ -14,6 +14,7 @@ import NcPrintIcon from './NcPrintIcon.vue'
 import SliceHandoffCard from './SliceHandoffCard.vue'
 import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 import ArrangePlate from './ArrangePlate.vue'
+import CalibrationPanel from './CalibrationPanel.vue'
 import { previewUrl } from '@/services/slicer-api.js'
 
 export default {
@@ -31,6 +32,7 @@ export default {
 		SliceHandoffCard,
 		ErrorRecoveryCard,
 		ArrangePlate,
+		CalibrationPanel,
 	},
 	data() {
 		return {
@@ -181,6 +183,10 @@ export default {
 
 			<div class="nc-print-card nc-print-card--inset">
 				<ArrangePlate />
+			</div>
+
+			<div class="nc-print-card nc-print-card--inset">
+				<CalibrationPanel />
 			</div>
 
 			<div class="nc-print-card">
