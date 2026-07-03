@@ -78,13 +78,15 @@ describe('WS4: Print monitor', () => {
 		store.sliceJob.status = 'done'
 		store.sliceJob.estimatedTimeS = 3600
 		store.sliceJob.filamentUsedG = 42.4
-		store.sliceJob.supportFilamentG = 5.2
+		// model/support grams live under materialStats (set by _applyMaterialStats)
+		store.sliceJob.materialStats = { modelFilamentG: 37.2, supportFilamentG: 5.2 }
 		store.sliceJob.gcodeFilename = 'part.gcode'
 		const s = store.lastCompletedSliceStats
 		expect(s).not.toBeNull()
 		expect(s.estimatedTimeS).toBe(3600)
 		expect(Math.round(s.filamentUsedG)).toBe(42)
 		expect(Math.round(s.supportFilamentG)).toBe(5)
+		expect(Math.round(s.modelFilamentG)).toBe(37)
 		expect(s.gcodeFilename).toBe('part.gcode')
 	})
 

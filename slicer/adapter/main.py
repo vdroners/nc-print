@@ -25,6 +25,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -63,6 +64,22 @@ app = FastAPI(title="nc-print-slicer", version="2")
 # Bound the number of engine processes running at once so a burst of uploads
 # can't exhaust CPU/RAM. Excess requests fail fast with 503 rather than piling up.
 _slice_slots = asyncio.Semaphore(MAX_CONCURRENT_SLICES)
+
+# job_id -> running engine subprocess.Popen, so job_cancel can terminate it
+# instead of leaving it to run to completion (holding a slice slot).
+_PROCS: dict[str, "subprocess.Popen"] = {}
+
+
+def _kill_proc(proc: "subprocess.Popen") -> None:
+    """Terminate an engine process, escalating to kill after a short grace."""
+    try:
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+    except Exception:  # noqa: BLE001 - best-effort cleanup
+        pass
 
 _HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -253,22 +270,38 @@ async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
 
     yield _sse("progress", {"stage": "slicing", "pct": 40, "job_id": job_id})
 
-    def _blocking_run() -> subprocess.CompletedProcess:
-        # cwd MUST be the writable job dir: the engine calls
-        # create_directories on a path relative to cwd, which fails ("Invalid
-        # argument") when cwd is the read-only rootfs (/opt/adapter under uvicorn).
-        return subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=SLICE_TIMEOUT_S, env=env, cwd=job_dir)
+    # Launch the engine as a tracked subprocess so job_cancel can terminate it
+    # (cwd MUST be the writable job dir — the engine calls create_directories on
+    # a path relative to cwd, which fails on the read-only rootfs).
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                            text=True, env=env, cwd=job_dir)
+    _PROCS[job_id] = proc
 
-    # Heartbeat while the (blocking) CLI runs so the SSE stream never looks dead.
-    loop = asyncio.get_event_loop()
-    task = loop.run_in_executor(None, _blocking_run)
+    started = time.monotonic()
     pct = 40
-    while not task.done():
-        await asyncio.sleep(2.0)
-        pct = min(90, pct + 3)
-        yield _sse("progress", {"stage": "slicing", "pct": pct, "job_id": job_id})
-    result = await task
+    try:
+        while proc.poll() is None:
+            await asyncio.sleep(2.0)
+            if time.monotonic() - started > SLICE_TIMEOUT_S:
+                _kill_proc(proc)
+                yield _sse("error", {"message": "Slice timed out",
+                                     "code": "ERR_SLICE_TIMEOUT", "job_id": job_id})
+                return
+            pct = min(90, pct + 3)
+            yield _sse("progress", {"stage": "slicing", "pct": pct, "job_id": job_id})
+    finally:
+        _PROCS.pop(job_id, None)
+
+    if getattr(proc, "_ncprint_cancelled", False):
+        yield _sse("error", {"message": "Slice cancelled",
+                             "code": "ERR_CANCELLED", "job_id": job_id})
+        return
+
+    stdout, stderr = "", ""
+    try:
+        stdout, stderr = proc.communicate(timeout=5)
+    except Exception:  # noqa: BLE001
+        pass
 
     # The CLI writes plate_1.gcode to outputdir even when the final .gcode.3mf
     # packaging step fails (-13). Success = a non-empty gcode file exists.
@@ -289,15 +322,22 @@ async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
         })
         return
 
-    # Failure — surface the engine's result.json error if present.
-    err = (result.stderr or result.stdout or "").strip().splitlines()[-1:] or ["slice failed"]
+    # Failure. Log the engine detail server-side; return a generic reason plus
+    # the engine's own result.json error_string (safe, user-facing) if present.
+    detail = (stderr or stdout or "").strip()
+    if detail:
+        print(f"[slice {job_id}] engine failed: {detail[-500:]}", flush=True)
+    message = "Slicing failed"
     rj = os.path.join(job_dir, "result.json")
     if os.path.exists(rj):
         try:
-            err = [json.load(open(rj)).get("error_string") or err[0]]
+            with open(rj) as fh:
+                es = json.load(fh).get("error_string")
+            if es:
+                message = str(es)
         except Exception:  # noqa: BLE001
             pass
-    yield _sse("error", {"message": err[0], "code": "ERR_SLICE_FAILED",
+    yield _sse("error", {"message": message, "code": "ERR_SLICE_FAILED",
                          "job_id": job_id})
 
 
@@ -399,11 +439,19 @@ async def slice_stream(request: Request) -> Response:
             stl_bytes_to_3mf(models[0], model_3mf)
     except Exception as exc:  # noqa: BLE001
         _slice_slots.release()
-        code = "ERR_MESH_TOO_LARGE" if "too large" in str(exc) else "ERR_MODEL_CONVERT"
-        return StreamingResponse(_error_stream(f"model conversion failed: {exc}",
-                                 code), media_type="text/event-stream")
+        # "too large" carries an actionable, safe hint; anything else is scrubbed
+        # to a generic message (details logged server-side, not sent to browser).
+        if "too large" in str(exc):
+            return StreamingResponse(_error_stream(str(exc), "ERR_MESH_TOO_LARGE"),
+                                     media_type="text/event-stream")
+        print(f"[slice] model conversion failed: {exc}", flush=True)
+        return StreamingResponse(_error_stream(
+            "Could not read the model — export a clean STL/3MF and retry.",
+            "ERR_MODEL_CONVERT"), media_type="text/event-stream")
 
-    # 2. Resolve a compatible preset triple.
+    # 2. Resolve a compatible preset triple. resolve_triple's ValueErrors are
+    # user-actionable ("no process compatible with <printer>"), so pass them
+    # through; unexpected errors are scrubbed.
     try:
         machine, process, filaments, warnings = resolve_triple(
             _index(), fields["printer_id"], fields["process_id"],
@@ -412,6 +460,12 @@ async def slice_stream(request: Request) -> Response:
         _slice_slots.release()
         return StreamingResponse(_error_stream(str(exc), "ERR_PRESET_RESOLVE"),
                                  media_type="text/event-stream")
+    except Exception as exc:  # noqa: BLE001
+        _slice_slots.release()
+        print(f"[slice] preset resolve failed: {exc}", flush=True)
+        return StreamingResponse(_error_stream(
+            "Invalid printer/filament/process selection.", "ERR_PRESET_RESOLVE"),
+            media_type="text/event-stream")
 
     async def _full_stream():
         try:
@@ -490,6 +544,10 @@ async def calibration_slice(calib_id: str, request: Request) -> Response:
     if not printer_id:
         return JSONResponse({"error": "no_printer",
                              "message": "printer_id required"}, 400)
+    # calib_id is used to build file paths — constrain it before any use.
+    if not re.fullmatch(r"[A-Za-z0-9_]+", calib_id or ""):
+        return JSONResponse({"error": "bad_calibration",
+                             "message": "invalid calibration id"}, 400)
 
     try:
         await asyncio.wait_for(_slice_slots.acquire(), timeout=0.01)
@@ -518,10 +576,17 @@ async def calibration_slice(calib_id: str, request: Request) -> Response:
         else:
             _slice_slots.release()
             return JSONResponse({"error": "unknown_calibration",
-                                 "message": f"no calibration '{calib_id}'"}, 404)
+                                 "message": "unknown calibration"}, 404)
+    except FileNotFoundError:
+        # Shipped model listed but missing (race / trimmed image).
+        _slice_slots.release()
+        return JSONResponse({"error": "calibration_unavailable",
+                             "message": "Calibration model unavailable"}, 404)
     except Exception as exc:  # noqa: BLE001
         _slice_slots.release()
-        return JSONResponse({"error": "model_prep_failed", "message": str(exc)}, 500)
+        print(f"[calibration {calib_id}] model prep failed: {exc}", flush=True)
+        return JSONResponse({"error": "model_prep_failed",
+                             "message": "Could not prepare the calibration model"}, 500)
 
     try:
         machine, process, filaments, warnings = resolve_triple(
@@ -594,11 +659,20 @@ async def job_toolpath(job_id: str) -> Response:
 
 @app.post("/api/jobs/{job_id}/cancel")
 async def job_cancel(job_id: str) -> JSONResponse:
-    # Single-flight CLI slices are short; best-effort cleanup only.
-    job_dir = os.path.join(JOB_ROOT, job_id)
+    """Cancel a job: terminate its running engine process (freeing the slice
+    slot via the stream's finally), then clean up. Terminating first avoids the
+    race of rmtree'ing a directory the engine is still writing to."""
+    proc = _PROCS.get(job_id)
+    killed = False
+    if proc is not None and proc.poll() is None:
+        proc._ncprint_cancelled = True  # signal the stream loop
+        await asyncio.get_event_loop().run_in_executor(None, _kill_proc, proc)
+        killed = True
     _JOBS.pop(job_id, None)
-    shutil.rmtree(job_dir, ignore_errors=True)
-    return JSONResponse({"ok": True})
+    # Only remove the dir once no live process is writing to it.
+    if job_id not in _PROCS or (proc is not None and proc.poll() is not None):
+        shutil.rmtree(os.path.join(JOB_ROOT, job_id), ignore_errors=True)
+    return JSONResponse({"ok": True, "killed": killed})
 
 
 # ── Pass-through (profiles, printers, version, single profile, …) ─────────

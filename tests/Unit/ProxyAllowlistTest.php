@@ -24,10 +24,53 @@ class ProxyAllowlistTest extends TestCase
 		}
 	}
 
-	public function testSlicerProxyOnlyAllowsApiPrefix(): void
+	public function testSlicerProxyUsesExplicitPrefixAllowlist(): void
 	{
 		$src = (string) file_get_contents(__DIR__ . '/../../lib/Controller/SlicerProxyController.php');
-		$this->assertStringContainsString("return str_starts_with(\$upstreamPath, 'api/');", $src);
+		// Tightened from a blanket api/* to an explicit prefix allowlist.
+		$this->assertStringContainsString('ALLOWED_SLICER_PREFIXES', $src);
+		foreach ([
+			"'api/health'",
+			"'api/profiles'",
+			"'api/slice'",
+			"'api/jobs/'",
+			"'api/mesh/'",
+			"'api/calibration'",
+		] as $needle) {
+			$this->assertStringContainsString($needle, $src, "Missing slicer allowlist prefix: $needle");
+		}
+		// The old blanket allow-all must be gone.
+		$this->assertStringNotContainsString("return str_starts_with(\$upstreamPath, 'api/');", $src);
+	}
+
+	/**
+	 * The tightened allowlist logic actually accepts the used prefixes and
+	 * rejects unrelated engine routes (e.g. api/admin/*). Reproduce the
+	 * matcher here to prove behaviour without bootstrapping OCP.
+	 */
+	public function testSlicerAllowlistAcceptsAndRejects(): void
+	{
+		$prefixes = [
+			'api/health', 'api/version', 'api/profiles', 'api/printers',
+			'api/slice', 'api/jobs/', 'api/mesh/', 'api/calibration',
+		];
+		$allowed = static function (string $p) use ($prefixes): bool {
+			foreach ($prefixes as $prefix) {
+				if ($p === rtrim($prefix, '/') || str_starts_with($p, $prefix)) {
+					return true;
+				}
+			}
+			return false;
+		};
+		foreach (['api/health', 'api/slice/stream', 'api/jobs/abc/gcode',
+			'api/jobs/abc/toolpath', 'api/mesh/analyze', 'api/calibration/list',
+			'api/profiles'] as $ok) {
+			$this->assertTrue($allowed($ok), "should allow $ok");
+		}
+		foreach (['api/admin/reset', 'api/', 'api/system', 'api/debug',
+			'apix/slice', 'admin/settings'] as $bad) {
+			$this->assertFalse($allowed($bad), "should reject $bad");
+		}
 	}
 
 	/**

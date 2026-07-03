@@ -299,6 +299,70 @@ def test_support_type_snug_maps_to_style():
     assert "support_style" not in proc2
 
 
+def test_toolpath_move_cap_truncates():
+    import tempfile as tf
+    import importlib
+    import gcode_toolpath as gt
+    # Force a tiny cap so a small gcode trips it.
+    orig = gt.MAX_TOOLPATH_MOVES
+    gt.MAX_TOOLPATH_MOVES = 3
+    try:
+        lines = [";LAYER_CHANGE", ";Z:0.2", ";TYPE:Outer wall"]
+        for i in range(20):
+            lines.append(f"G1 X{i} Y{i} Z0.2 E{i + 1}")
+        with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+            f.write("\n".join(lines))
+            path = f.name
+        try:
+            tp = gt.parse_toolpath(path)
+        finally:
+            os.unlink(path)
+        assert tp["meta"]["truncated"] is True
+        assert tp["meta"]["moves"] <= 4  # cap + at most one over
+    finally:
+        gt.MAX_TOOLPATH_MOVES = orig
+
+
+def test_toolpath_not_truncated_when_under_cap():
+    import tempfile as tf
+    import gcode_toolpath as gt
+    lines = [";LAYER_CHANGE", ";Z:0.2", ";TYPE:Outer wall",
+             "G1 X0 Y0 Z0.2 E1", "G1 X10 Y0 E2"]
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write("\n".join(lines))
+        path = f.name
+    try:
+        tp = gt.parse_toolpath(path)
+    finally:
+        os.unlink(path)
+    assert tp["meta"]["truncated"] is False
+
+
+def test_calib_id_validation_regex():
+    import re as _re
+    ok = _re.fullmatch(r"[A-Za-z0-9_]+", "temp_tower")
+    bad1 = _re.fullmatch(r"[A-Za-z0-9_]+", "../etc/passwd")
+    bad2 = _re.fullmatch(r"[A-Za-z0-9_]+", "flow-linear")  # hyphen rejected
+    assert ok is not None
+    assert bad1 is None
+    assert bad2 is None
+
+
+def test_kill_proc_terminates_running_process():
+    import subprocess as sp
+    import time as _t
+    from main import _kill_proc
+    proc = sp.Popen(["sleep", "30"])
+    assert proc.poll() is None
+    _kill_proc(proc)
+    # give it a moment to reap
+    for _ in range(30):
+        if proc.poll() is not None:
+            break
+        _t.sleep(0.1)
+    assert proc.poll() is not None
+
+
 if __name__ == "__main__":
     import traceback
     failures = 0

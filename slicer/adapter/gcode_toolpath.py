@@ -15,7 +15,12 @@ gcode — it just uploads typed arrays into the GPU.
 """
 from __future__ import annotations
 
+import os
 import re
+
+# Cap total emitted move-segments so parsing a pathological/huge gcode can't
+# exhaust adapter memory. ~2M segments ≈ tens of MB of floats.
+MAX_TOOLPATH_MOVES = int(os.environ.get("MAX_TOOLPATH_MOVES", "2000000"))
 
 # Engine ;TYPE: label → canonical feature key used by the frontend colour map.
 _FEATURE_MAP = {
@@ -67,16 +72,19 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
     absolute_e = True
     minx = miny = minz = float("inf")
     maxx = maxy = maxz = float("-inf")
+    move_count = 0
+    truncated = False
 
     def _new_layer(zval: float, height: float | None) -> dict:
         return {"z": zval, "height": height, "segments": {}}
 
     def _push(feat: str, x0, y0, z0, x1, y1, z1) -> None:
-        nonlocal minx, miny, minz, maxx, maxy, maxz
+        nonlocal minx, miny, minz, maxx, maxy, maxz, move_count
         if cur_layer is None:
             return
         seg = cur_layer["segments"].setdefault(feat, {"positions": []})
         seg["positions"].extend((x0, y0, z0, x1, y1, z1))
+        move_count += 1
         for vx, vy, vz in ((x0, y0, z0), (x1, y1, z1)):
             minx = min(minx, vx); miny = min(miny, vy); minz = min(minz, vz)
             maxx = max(maxx, vx); maxy = max(maxy, vy); maxz = max(maxz, vz)
@@ -140,6 +148,9 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
                 x, y, z = nx, ny, nz
                 if has_e:
                     e = ne
+                if move_count >= MAX_TOOLPATH_MOVES:
+                    truncated = True
+                    break
             elif head.startswith("G92"):
                 m = _MOVE_RE.search(line)
                 # G92 E0 resets the extruder origin.
@@ -170,5 +181,6 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
         "bbox": bbox,
         "feature_types": FEATURE_TYPES,
         "layers": layers,
-        "meta": {"layer_count": len(layers)},
+        "meta": {"layer_count": len(layers), "moves": move_count,
+                 "truncated": truncated},
     }

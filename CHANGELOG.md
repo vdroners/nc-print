@@ -1,5 +1,61 @@
 # Changelog
 
+## [1.17.1] - 2026-07-03
+
+Audit fixes: correctness bugs, a cancel/resource-leak DoS vector, and sidecar
+hardening. No behaviour change for a normal successful slice.
+
+### Fixed
+
+- **Post-slice filament stats always showed null model/support grams.** The
+  `lastCompletedSliceStats` getter read `sliceJob.modelFilamentG` /
+  `supportFilamentG`, but those live under `sliceJob.materialStats.*` (set by
+  `_applyMaterialStats`). PrintCompletionBanner / FilamentPanel now show the real
+  breakdown. (`src/store/print.js`; a masking test that set the field in the
+  wrong place was corrected.)
+- **Cancelling a slice did not stop the engine.** `_run_slice` ran the CLI via
+  `subprocess.run` in a thread with no handle, so `POST /api/jobs/{id}/cancel`
+  only deleted the job dir while the engine ran to completion — holding a
+  concurrency slot (a DoS vector) and racing the `rmtree`. The engine now runs as
+  a tracked `Popen`; cancel terminates it (SIGTERM → SIGKILL grace), frees the
+  slot, and cleans up only after the process is gone. A manual `SLICE_TIMEOUT_S`
+  now actually kills an over-running slice. (`slicer/adapter/main.py`)
+- **BedMeshPanel leaked a timer.** The post-calibrate `setTimeout(load, 8000)`
+  was untracked — it could fire on an unmounted component or double-load on rapid
+  re-calibrate. Now tracked and cleared on re-calibrate and `beforeDestroy`.
+- **ArrangePlate ignored multi-extruder filament selection** — it sent only
+  `selection.filamentId`; now prefers `selection.filamentIds` when present.
+
+### Security / robustness
+
+- **Slicer proxy path allowlist tightened** from a blanket `api/*` to an explicit
+  endpoint prefix allowlist (`api/health|version|profiles|printers|slice|jobs/|
+  mesh/|calibration`). Unrelated engine routes (e.g. `api/admin/*`) are now 403.
+  (`lib/Controller/SlicerProxyController.php`; G13 gate + `ProxyAllowlistTest`
+  updated.)
+- **Sidecar no longer leaks internals to the browser.** Model-conversion,
+  preset-resolution, and calibration failures now return generic user messages
+  (details logged server-side); the actionable "mesh too large" hint is kept.
+  `calib_id` is validated (`^[A-Za-z0-9_]+$`) before any path use; a missing
+  shipped calibration model returns 404, not 500.
+- **Toolpath parse is bounded** by `MAX_TOOLPATH_MOVES` (default 2M, env-
+  overridable) so a pathological gcode can't exhaust adapter memory; the response
+  meta reports `moves` + `truncated`.
+
+### Cleanup
+
+- Removed dead `_sliceAbort` state and the permanently-false, unused
+  `featureFlags` (`batchSlice`/`forgePreview`); the one `forgePreview` check in
+  SliceTab was simplified with no behaviour change. Slice errors now also reset
+  `pct`/`stage` so a retry doesn't flash stale progress.
+
+### Tests
+
+- Adapter: process-kill, toolpath move-cap (truncate + not-truncate),
+  `calib_id` validation (16→20 adapter tests). Frontend: new `slice-stats.spec.js`
+  for the getter fix (174 vitest). PHP: tightened slicer allowlist accept/reject
+  (32 phpunit).
+
 ## [1.17.0] - 2026-07-03
 
 Bug fixes from live testing, plus printer autodetect.

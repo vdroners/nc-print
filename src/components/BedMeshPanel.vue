@@ -65,6 +65,9 @@ export default {
 			void this.load()
 		}
 	},
+	beforeDestroy() {
+		clearTimeout(this._calibrateTimer)
+	},
 	methods: {
 		async load() {
 			try {
@@ -88,8 +91,11 @@ export default {
 			try {
 				await bedMeshCalibrate(this.printerId)
 				toastSuccess('Bed mesh calibration started')
-				// Refresh after a delay; probing takes time.
-				setTimeout(() => this.load(), 8000)
+				// Refresh after a delay; probing takes time. Track the timer so
+				// it can be cancelled on unmount / re-calibrate (avoids a
+				// this.load() on a destroyed component and stale double-loads).
+				clearTimeout(this._calibrateTimer)
+				this._calibrateTimer = setTimeout(() => this.load(), 8000)
 			} catch (e) {
 				toastError('Bed mesh calibration failed', e)
 			} finally {

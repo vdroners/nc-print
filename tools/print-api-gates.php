@@ -127,7 +127,17 @@ function gate_slicer_upstream_path(string $safePath): string
 
 function gate_slicer_path_allowed(string $upstreamPath): bool
 {
-	return str_starts_with($upstreamPath, 'api/');
+	// Mirrors SlicerProxyController::ALLOWED_SLICER_PREFIXES.
+	$prefixes = [
+		'api/health', 'api/version', 'api/profiles', 'api/printers',
+		'api/slice', 'api/jobs/', 'api/mesh/', 'api/calibration',
+	];
+	foreach ($prefixes as $prefix) {
+		if ($upstreamPath === rtrim($prefix, '/') || str_starts_with($upstreamPath, $prefix)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 function gate_routes_contain(string $routesPhp, string $needle): bool
@@ -259,12 +269,15 @@ try {
 	gate('G12', false, $e->getMessage());
 }
 
-// G13 — slicer proxy only allows api/* upstream paths
+// G13 — slicer proxy allows only the explicit endpoint allowlist
 $slicerBlocks = !gate_slicer_path_allowed('etc/passwd')
 	&& !gate_slicer_path_allowed('server/info')
+	&& !gate_slicer_path_allowed('api/admin/reset')
 	&& gate_slicer_path_allowed('api/health')
+	&& gate_slicer_path_allowed('api/slice/stream')
+	&& gate_slicer_path_allowed('api/jobs/abc/gcode')
 	&& gate_slicer_path_allowed(gate_slicer_upstream_path('profiles'));
-gate('G13', $slicerBlocks, 'slicer api/ prefix gate');
+gate('G13', $slicerBlocks, 'slicer endpoint allowlist gate');
 
 // G14 — internal HTTP GET /apps/nc_print/api/status (cookie + controller fallback)
 $internalBase = rtrim(getenv('NC_PRINT_INTERNAL_BASE') ?: 'http://127.0.0.1', '/');

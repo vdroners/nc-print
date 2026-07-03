@@ -204,9 +204,30 @@ class SlicerProxyController extends Controller
 		return 'api/' . ltrim($safePath, '/');
 	}
 
+	/**
+	 * Explicit prefix allowlist for the owned slicing engine. Restricts the
+	 * proxy to the endpoints the app actually uses, so no unrelated/admin engine
+	 * route can be reached through the app even if one exists.
+	 */
+	private const ALLOWED_SLICER_PREFIXES = [
+		'api/health',
+		'api/version',
+		'api/profiles',
+		'api/printers',
+		'api/slice',        // covers api/slice and api/slice/stream
+		'api/jobs/',
+		'api/mesh/',
+		'api/calibration',  // covers list + calibration/{id}/slice
+	];
+
 	private function isAllowedSlicerPath(string $upstreamPath): bool
 	{
-		return str_starts_with($upstreamPath, 'api/');
+		foreach (self::ALLOWED_SLICER_PREFIXES as $prefix) {
+			if ($upstreamPath === rtrim($prefix, '/') || str_starts_with($upstreamPath, $prefix)) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private function shouldStreamSse(string $upstreamPath, string $safePath, string $method): bool

@@ -63,7 +63,7 @@ export default {
 			return ''
 		},
 		previewImageUrl() {
-			if (!this.printStore.sliceJob.jobId || this.printStore.featureFlags.forgePreview) {
+			if (!this.printStore.sliceJob.jobId) {
 				return ''
 			}
 			return previewUrl(this.printStore.sliceJob.jobId)

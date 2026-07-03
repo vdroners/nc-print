@@ -216,10 +216,6 @@ export const usePrintStore = defineStore('print', {
 		},
 		selectedPrinterId: '',
 		savedPresets: {},
-		featureFlags: {
-			batchSlice: false,
-			forgePreview: false,
-		},
 		overrides: {
 			layerHeight: '',
 			lineWidth: '',
@@ -297,7 +293,6 @@ export const usePrintStore = defineStore('print', {
 		printerProgressSource: 'poll',
 		// WS11: G-code console scrollback (capped ring buffer).
 		consoleLog: [],
-		_sliceAbort: null,
 	}),
 
 	getters: {
@@ -439,8 +434,10 @@ export const usePrintStore = defineStore('print', {
 			return {
 				estimatedTimeS: j.estimatedTimeS || 0,
 				filamentUsedG: j.filamentUsedG || 0,
-				modelFilamentG: j.modelFilamentG ?? null,
-				supportFilamentG: j.supportFilamentG ?? null,
+				// Model/support grams live under materialStats (set by
+				// _applyMaterialStats), not directly on sliceJob.
+				modelFilamentG: j.materialStats?.modelFilamentG ?? null,
+				supportFilamentG: j.materialStats?.supportFilamentG ?? null,
 				gcodeFilename: j.gcodeFilename || '',
 				gcodeSizeBytes: j.gcodeSizeBytes || 0,
 			}
@@ -1449,6 +1446,10 @@ export const usePrintStore = defineStore('print', {
 				}
 				this.sliceJob.status = 'error'
 				this.sliceJob.error = e?.message || String(e)
+				// Clear stale progress so a retry doesn't briefly flash the
+				// previous attempt's percentage/stage.
+				this.sliceJob.pct = 0
+				this.sliceJob.stage = ''
 				toastError('Slice failed', e)
 				throw e
 			}

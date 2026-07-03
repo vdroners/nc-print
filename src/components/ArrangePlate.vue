@@ -105,7 +105,9 @@ export default {
 					models,
 					printerId: sel.printerId,
 					processId: sel.processId,
-					filamentIds: sel.filamentId ? [sel.filamentId] : [],
+					filamentIds: sel.filamentIds?.length
+						? sel.filamentIds
+						: (sel.filamentId ? [sel.filamentId] : []),
 					overrides: buildSliceOverrides(this.printStore.overrides || {}),
 					arrange: true,
 					onEvent: (ev) => {
