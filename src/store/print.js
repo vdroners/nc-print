@@ -1454,6 +1454,37 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
+		/**
+		 * Apply the `done` payload from an arranged multi-model slice
+		 * (sliceStreamMulti) into sliceJob so the result panel, 3D preview, and
+		 * Send-to-printer flow all work exactly like a single-model slice.
+		 * @param {object} done
+		 */
+		async applyArrangedSliceResult(done = {}) {
+			this.sliceJob.jobId = done.job_id || done.jobId || null
+			this.sliceJob.estimatedTimeS = done.estimated_time_s || 0
+			this.sliceJob.filamentBreakdown = done.filament_used_g || []
+			this.sliceJob.filamentUsedG = (done.filament_used_g || []).reduce((a, b) => a + b, 0)
+			this._applyMaterialStats(done)
+			this.sliceJob.backendLabel = 'nc-print-slicer (arranged)'
+			const stem = (this.model.name || 'plate').replace(/\.[^.]+$/, '')
+			this.sliceJob.gcodeFilename = `${stem}-plate.gcode`
+			this.sliceJob.status = 'done'
+			if (this.sliceJob.jobId) {
+				try {
+					this.sliceJob.gcodeBlob = await downloadGcode(this.sliceJob.jobId)
+					this.sliceJob.gcodeSizeBytes = this.sliceJob.gcodeBlob?.size || 0
+					this.sliceJob.error = ''
+					toastSuccess('Arranged slice complete')
+				} catch (e) {
+					this.sliceJob.gcodeBlob = null
+					this.sliceJob.error = 'Arranged slice finished but G-code download failed'
+					toastWarning(this.sliceJob.error)
+				}
+			}
+			return done
+		},
+
 		async sendGcodeToPrinter(gcodeBlob, filename, start = false) {
 			const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
 			await moonrakerUpload(gcodeBlob, filename, start, targetId)

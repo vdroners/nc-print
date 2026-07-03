@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.15.0] - 2026-07-03
+
+Phase 4: **multi-object plates with auto-arrange**. Slice several models together
+on one plate — the engine positions them so they don't overlap.
+
+### Added
+
+- **Multi-object slicing.** `POST /api/slice/stream` now accepts multiple `model`
+  parts plus an `arrange` flag. Multiple models are packed into a single
+  multi-object 3MF (`stls_to_multiobject_3mf` in `slicer/adapter/mesh3mf.py`) and
+  sliced with the engine's `--arrange 1 --ensure-on-bed`, producing one gcode
+  for the whole plate. Verified: 3 cubes uploaded at the origin arrange to a
+  31.6 mm spread (vs 15 mm each). Single-model slices are unchanged.
+- **`sliceStreamMulti()`** in `src/services/slicer-api.js` — sends a real
+  multipart body (repeated `model` parts) so the proxy passes it straight to the
+  sidecar. The SSE reader was extracted into a shared `readSliceSse()` used by
+  both the single- and multi-model paths.
+- **`ArrangePlate.vue`** (in the Slice tab) — add extra models from Nextcloud
+  Files, see them listed, and “Slice N models arranged” in one click. Results
+  flow into the normal slice result panel + 3D preview + Send-to-printer via the
+  new `applyArrangedSliceResult()` store action.
+
+### Tests
+
+- Adapter: `test_multiobject_3mf_has_all_objects`, `test_multiobject_3mf_rejects_empty`
+  (14 adapter tests total).
+
 ## [1.14.0] - 2026-07-03
 
 Phase 3: supports now work end-to-end, plus server-side mesh health.

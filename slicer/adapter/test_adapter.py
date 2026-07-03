@@ -236,6 +236,32 @@ def test_mesh_analyze_open_mesh():
     assert rep["open_edges"] > 0
 
 
+def test_multiobject_3mf_has_all_objects():
+    import zipfile
+    from mesh3mf import stls_to_multiobject_3mf
+    stls = [_binary_cube(), _binary_cube(), _binary_cube()]
+    with tempfile.TemporaryDirectory() as d:
+        out = os.path.join(d, "multi.3mf")
+        n, tris = stls_to_multiobject_3mf(stls, out)
+        assert n == 3
+        assert tris == 36  # 12 tris x 3 cubes
+        with zipfile.ZipFile(out) as z:
+            model = z.read("3D/3dmodel.model").decode()
+            # one <object> per model + one <item> per model
+            assert model.count("<object id=") == 3
+            assert model.count("<item objectid=") == 3
+
+
+def test_multiobject_3mf_rejects_empty():
+    from mesh3mf import stls_to_multiobject_3mf
+    raised = False
+    try:
+        stls_to_multiobject_3mf([], "/tmp/none.3mf")
+    except ValueError:
+        raised = True
+    assert raised
+
+
 def test_support_type_snug_maps_to_style():
     from overrides import split_overrides
     proc, _, _ = split_overrides({"support_type": "snug", "enable_support": True})

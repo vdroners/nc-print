@@ -37,7 +37,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from gcode_toolpath import parse_toolpath
-from mesh3mf import stl_bytes_to_3mf
+from mesh3mf import stl_bytes_to_3mf, stls_to_multiobject_3mf
 from mesh_analyze import analyze_stl
 from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
@@ -170,7 +170,8 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
     """Extract the slice multipart fields (model bytes + ids) without extra deps."""
     hdr = f"Content-Type: {content_type}\r\nMIME-Version: 1.0\r\n\r\n".encode()
     msg = BytesParser(policy=HTTP).parsebytes(hdr + body)
-    fields: dict = {"model": None, "printer_id": "", "process_id": "",
+    fields: dict = {"model": None, "models": [], "arrange": False,
+                    "printer_id": "", "process_id": "",
                     "filament_ids": [], "overrides": {}}
     for part in msg.iter_parts():
         cd = part.get("Content-Disposition", "")
@@ -183,7 +184,17 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
             continue
         payload = part.get_payload(decode=True) or b""
         if name == "model":
-            fields["model"] = payload
+            # First model kept as `model` for single-object back-compat; all
+            # models (incl. repeated `model`/`model[]` parts) collected in list.
+            if fields["model"] is None:
+                fields["model"] = payload
+            fields["models"].append(payload)
+        elif name in ("model[]", "models"):
+            fields["models"].append(payload)
+            if fields["model"] is None:
+                fields["model"] = payload
+        elif name == "arrange":
+            fields["arrange"] = payload.decode(errors="replace").strip() in ("1", "true", "True", "on")
         elif name == "filament_ids":
             try:
                 fields["filament_ids"] = json.loads(payload.decode() or "[]")
@@ -205,7 +216,7 @@ def _sse(event: str, data: dict) -> bytes:
 
 async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
                      machine: str, process: str, filaments: list[str],
-                     overrides: dict | None = None):
+                     overrides: dict | None = None, arrange: bool = False):
     """Async generator yielding SSE bytes while the CLI slices."""
     # Apply the UI's slice overrides by merging them into process/filament
     # preset copies (the CLI has no per-key override flags). Without this, every
@@ -223,8 +234,11 @@ async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
     # boost::filesystem::create_directories that fails ("Invalid argument") and
     # aborts before the gcode is renamed from plate_1.gcode.tmp. --slice 0 with
     # --outputdir writes plate_1.gcode directly, which is all we need.
-    cmd = [
-        ENGINE_BIN, "--slice", "0",
+    cmd = [ENGINE_BIN, "--slice", "0"]
+    if arrange:
+        # Position (and, for multiple objects, spread) models on the plate.
+        cmd += ["--arrange", "1", "--ensure-on-bed"]
+    cmd += [
         "--load-settings", load_settings,
         "--load-filaments", ";".join(filaments),
         "--outputdir", job_dir,
@@ -367,10 +381,17 @@ async def slice_stream(request: Request) -> Response:
     async def _error_stream(message: str, code: str):
         yield _sse("error", {"message": message, "code": code, "job_id": job_id})
 
-    # 1. STL → bare 3MF (engine can't load STL).
+    # 1. STL → 3MF (engine can't load STL). Multiple models → one multi-object
+    # 3MF, arranged on the plate by the engine.
     model_3mf = os.path.join(job_dir, "model.3mf")
+    models = fields["models"] or [fields["model"]]
+    multi = len(models) > 1
+    do_arrange = multi or fields["arrange"]
     try:
-        nv, nt = stl_bytes_to_3mf(fields["model"], model_3mf)
+        if multi:
+            stls_to_multiobject_3mf(models, model_3mf)
+        else:
+            stl_bytes_to_3mf(models[0], model_3mf)
     except Exception as exc:  # noqa: BLE001
         _slice_slots.release()
         code = "ERR_MESH_TOO_LARGE" if "too large" in str(exc) else "ERR_MODEL_CONVERT"
@@ -397,7 +418,8 @@ async def slice_stream(request: Request) -> Response:
                                     "job_id": job_id})
             async for chunk in _run_slice(job_id, job_dir, model_3mf,
                                           machine, process, filaments,
-                                          fields.get("overrides")):
+                                          fields.get("overrides"),
+                                          arrange=do_arrange):
                 yield chunk
         finally:
             _slice_slots.release()

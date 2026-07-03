@@ -13,6 +13,7 @@ import ToolpathScrubber from './ToolpathScrubber.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
 import SliceHandoffCard from './SliceHandoffCard.vue'
 import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
+import ArrangePlate from './ArrangePlate.vue'
 import { previewUrl } from '@/services/slicer-api.js'
 
 export default {
@@ -29,6 +30,7 @@ export default {
 		NcPrintIcon,
 		SliceHandoffCard,
 		ErrorRecoveryCard,
+		ArrangePlate,
 	},
 	data() {
 		return {
@@ -175,6 +177,10 @@ export default {
 					<button type="button" class="nc-print-link-btn" @click="goPrepare">Prepare</button>
 					tab under <strong>Override settings</strong>.
 				</p>
+			</div>
+
+			<div class="nc-print-card nc-print-card--inset">
+				<ArrangePlate />
 			</div>
 
 			<div class="nc-print-card">

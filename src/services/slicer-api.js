@@ -64,6 +64,18 @@ export async function sliceStream({
 		signal,
 	})
 
+	return readSliceSse(response, onEvent)
+}
+
+/**
+ * Consume a slice SSE response, invoking onEvent per event, and resolve the
+ * terminal `done` payload (with a gcode-exists fallback). Shared by the single-
+ * and multi-model slice paths.
+ * @param {Response} response
+ * @param {(ev: { event: string, parsed: object|null }) => void} [onEvent]
+ * @returns {Promise<object>}
+ */
+async function readSliceSse(response, onEvent) {
 	if (!response.ok) {
 		const err = await response.json().catch(() => ({}))
 		throw new Error(err.error || err.message || response.statusText)
@@ -137,6 +149,56 @@ export async function sliceStream({
 		throw new Error(`SSE stream ended without a done event.${jobHint}${progressHint}`)
 	}
 	return donePayload
+}
+
+/**
+ * Slice multiple models on one plate, arranged by the engine. Sends a real
+ * multipart body (repeated `model` parts) so the proxy passes it through to the
+ * sidecar unchanged.
+ * @param {object} opts
+ * @param {Array<{ data: ArrayBuffer|Blob, filename?: string }>} opts.models
+ * @param {string} opts.printerId
+ * @param {string[]} [opts.filamentIds]
+ * @param {string} opts.processId
+ * @param {object} [opts.overrides]
+ * @param {boolean} [opts.arrange] default true
+ * @param {AbortSignal} [opts.signal]
+ * @param {(ev: object) => void} [opts.onEvent]
+ * @returns {Promise<object>} Final `done` payload
+ */
+export async function sliceStreamMulti({
+	models,
+	printerId,
+	filamentIds = [],
+	processId,
+	overrides = {},
+	arrange = true,
+	signal,
+	onEvent,
+}) {
+	if (!Array.isArray(models) || !models.length) {
+		throw new Error('No models supplied to arrange')
+	}
+	const form = new FormData()
+	for (let i = 0; i < models.length; i++) {
+		const m = models[i]
+		const blob = m.data instanceof Blob ? m.data : new Blob([m.data], { type: 'application/octet-stream' })
+		form.append('model', blob, m.filename || `model_${i + 1}.stl`)
+	}
+	form.append('printer_id', printerId || '')
+	form.append('process_id', processId || '')
+	form.append('filament_ids', JSON.stringify(filamentIds || []))
+	form.append('overrides', JSON.stringify(overrides || {}))
+	form.append('arrange', arrange ? '1' : '0')
+
+	const response = await fetch(`${apiBase()}/slice/stream`, {
+		method: 'POST',
+		headers: { Accept: 'text/event-stream' },
+		body: form,
+		credentials: 'same-origin',
+		signal,
+	})
+	return readSliceSse(response, onEvent)
 }
 
 /**

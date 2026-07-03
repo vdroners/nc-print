@@ -149,3 +149,57 @@ def stl_bytes_to_3mf(stl: bytes, out_path: str) -> tuple[int, int]:
         z.writestr("_rels/.rels", _RELS)
         z.writestr("3D/3dmodel.model", model)
     return len(verts), len(tris)
+
+
+def _parse_and_check(stl: bytes):
+    """Parse + weld an STL, enforcing size bounds. Returns (verts, tris)."""
+    if not _is_ascii_stl(stl) and len(stl) >= 84:
+        declared = struct.unpack_from("<I", stl, 80)[0]
+        if declared > MAX_TRIANGLES:
+            raise ValueError(
+                f"mesh too large to slice ({declared} triangles; max {MAX_TRIANGLES})")
+    verts, tris = (_parse_ascii_stl(stl) if _is_ascii_stl(stl)
+                   else _parse_binary_stl(stl))
+    if len(tris) > MAX_TRIANGLES:
+        raise ValueError(
+            f"mesh too large to slice ({len(tris)} triangles; max {MAX_TRIANGLES})")
+    verts, tris = _dedup(verts, tris)
+    if len(verts) < 4 or len(tris) < 4:
+        raise ValueError(f"mesh too small to slice ({len(verts)} verts, {len(tris)} tris)")
+    return verts, tris
+
+
+def stls_to_multiobject_3mf(stls: list[bytes], out_path: str) -> tuple[int, int]:
+    """Write a 3MF containing one <object> per input STL.
+
+    Each object is placed at the origin (identity transform); the engine's
+    `--arrange` positions them on the plate. Returns (object_count, total_tris).
+    """
+    if not stls:
+        raise ValueError("no models supplied")
+    objects_xml = []
+    build_xml = []
+    total_tris = 0
+    for i, stl in enumerate(stls, start=1):
+        verts, tris = _parse_and_check(stl)
+        total_tris += len(tris)
+        vx = "".join(f'<vertex x="{x}" y="{y}" z="{z}"/>' for x, y, z in verts)
+        tx = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in tris)
+        objects_xml.append(
+            f'<object id="{i}" type="model"><mesh>'
+            f"<vertices>{vx}</vertices><triangles>{tx}</triangles>"
+            "</mesh></object>")
+        build_xml.append(f'<item objectid="{i}" transform="1 0 0 0 1 0 0 0 1 0 0 0"/>')
+    model = (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        '<model unit="millimeter" xml:lang="en-US" '
+        'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+        f'<resources>{"".join(objects_xml)}</resources>'
+        f'<build>{"".join(build_xml)}</build>'
+        "</model>"
+    )
+    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", _CONTENT_TYPES)
+        z.writestr("_rels/.rels", _RELS)
+        z.writestr("3D/3dmodel.model", model)
+    return len(stls), total_tris
