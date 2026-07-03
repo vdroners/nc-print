@@ -162,7 +162,7 @@ class SlicerProxyController extends Controller
 			return new JSONResponse(
 				[
 					'error' => 'backend_unreachable',
-					'message' => 'Forge slicer service unreachable',
+					'message' => 'Slicing engine unreachable',
 				],
 				Http::STATUS_BAD_GATEWAY,
 			);

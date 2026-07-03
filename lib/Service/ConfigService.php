@@ -20,8 +20,14 @@ class ConfigService
 	/** WS11 G-code console: arbitrary command send. Default OFF. */
 	public const KEY_CONSOLE_ENABLED = 'console_enabled';
 
-	/** Reachable from cloud_app via host.docker.internal or bridge gateway. */
-	public const DEFAULT_SLICER_INTERNAL_URL = 'http://host.docker.internal:8766';
+	/**
+	 * Owned slicing engine sidecar (nc-print-slicer), reached by container DNS
+	 * over the shared nc-print-net network. Addressing it by container name
+	 * bypasses the host.docker.internal / :8766 rewrite hacks in
+	 * InternalUrlResolver. Operators can still point at an external
+	 * forge-slicer by setting the slicer_internal_url app value.
+	 */
+	public const DEFAULT_SLICER_INTERNAL_URL = 'http://nc-print-slicer:8080';
 	public const DEFAULT_MOONRAKER_INTERNAL_URL = 'http://10.0.0.210:7125';
 	public const DEFAULT_MOONRAKER_CAMERA_URL = 'http://10.0.0.210:8080/?action=snapshot';
 	public const DEFAULT_PRINTER_DISPLAY_NAME = 'K1 Max';

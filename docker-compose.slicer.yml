@@ -1,0 +1,49 @@
+# nc-print-slicer — owned slicing engine sidecar.
+#
+# Brought up by `make slicer-up`, which also attaches the Nextcloud container
+# (cloud_app) to `nc-print-net` so PHP can resolve `nc-print-slicer:8080`.
+#
+# The engine runs a C++ parser on user-uploaded meshes, so the container is
+# hardened: no host port published (reachable only from the internal network),
+# capabilities dropped, no privilege escalation, read-only rootfs with a tmpfs
+# scratch, and memory/pid caps.
+services:
+  nc-print-slicer:
+    build:
+      context: ./slicer
+      dockerfile: Dockerfile
+    image: nc-print-slicer:${NC_PRINT_SLICER_TAG:-latest}
+    container_name: nc-print-slicer
+    restart: unless-stopped
+    networks:
+      - nc-print-net
+    # NOTE: no `ports:` — the sidecar is internal-only. cloud_app reaches it by
+    # container DNS on nc-print-net. Expose a host port only for local debugging.
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      # Job scratch (uploads + gcode output) and the engine's writable data_dir,
+      # X11 sockets, and runtime dir. Sized generously for large slices.
+      - /tmp:size=2g
+      - /data:size=1g
+    volumes:
+      # Operator-authored / synced presets survive restarts.
+      - nc-print-slicer-user:/data/user-profiles
+    mem_limit: 4g
+    pids_limit: 512
+    healthcheck:
+      test: ["CMD", "python3", "/opt/adapter/healthcheck.py"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+networks:
+  nc-print-net:
+    name: nc-print-net
+
+volumes:
+  nc-print-slicer-user:

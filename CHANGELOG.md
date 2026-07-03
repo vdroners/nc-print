@@ -1,5 +1,71 @@
 # Changelog
 
+## [1.12.0] - 2026-07-02
+
+nc-print becomes a **self-contained slicer**. It now ships and owns its own
+slicing engine as a companion container instead of depending on the external
+forge-slicer service. This is Phase 1 of the professional-slicer roadmap
+(`docs/plans/nc-print-self-contained-slicer.md`): stand up the owned engine and
+cut the slice path over to it with zero UX change. Later phases add real 3D
+toolpath preview, supports, auto-arrange, and calibration.
+
+### Added
+
+- **`nc-print-slicer` sidecar (`slicer/`).** An Ubuntu 24.04 image that bakes the
+  3DPrintForge Slicer (OrcaSlicer fork) CLI + its `resources/` profile tree and
+  runs the engine's built-in headless REST server (`--rest-only`) behind a
+  FastAPI adapter on `:8080`. Runs headless via Xvfb + Mesa software GL (the
+  engine links GTK/webkit, not Qt). New files: `slicer/Dockerfile`,
+  `slicer/adapter/{main.py,mesh3mf.py,presets.py,entrypoint.sh,healthcheck.py,
+  smoke_test.py,test_adapter.py,requirements.txt}`, `slicer/README.md`.
+- **CLI-exec slice path.** This engine build's built-in REST `/api/slice` is
+  broken and its binary cannot load STL at all (verified — reproduces on the
+  reference forge too), so the adapter slices via the CLI: it converts the
+  uploaded STL to a bare geometry 3MF (`mesh3mf.py`, since the engine loads 3MF
+  fine), resolves a **compatible** machine/process/filament triple from the
+  on-disk preset tree and auto-repairs incompatible selections (`presets.py`),
+  execs `--slice 0 --load-settings --load-filaments --outputdir <job>` under
+  Xvfb, streams synthesized SSE progress, and serves the produced
+  `plate_1.gcode`. Profiles/health/version stay as engine pass-through.
+- **Compatibility auto-repair.** When the requested process/filament isn't
+  compatible with the chosen printer, the adapter swaps in a compatible preset
+  and reports it via an SSE `warning` progress event (avoids the engine's opaque
+  `-17` "not compatible" failure).
+- **Slice metadata.** The `done` event carries `gcode_size`, `estimated_time_s`,
+  and `filament_used_g` parsed from the gcode footer (cm³×density fallback when
+  the preset reports 0 g).
+- **`docker-compose.slicer.yml`.** Runs the sidecar on a shared `nc-print-net`
+  network, hardened: no host port published (internal-only), `cap_drop: ALL`,
+  `no-new-privileges`, read-only rootfs with tmpfs scratch, mem/pid caps, and a
+  writable volume for operator presets.
+- **Makefile targets** `slicer-fetch` (stage the git-ignored engine binary +
+  resources), `slicer-build`, `slicer-up` (also attaches `cloud_app` to
+  `nc-print-net`), `slicer-down`. `make deploy` now also ensures the sidecar is
+  running, guarded so a missing engine/compose never breaks the app deploy.
+- **Health enrichment.** The adapter's `/api/health` reports engine reachability
+  and PresetBundle counts, so "engine up but no profiles" reads as degraded.
+
+### Changed
+
+- **`ConfigService::DEFAULT_SLICER_INTERNAL_URL`** now points at the owned
+  sidecar (`http://nc-print-slicer:8080`) instead of the external
+  `host.docker.internal:8766`. Addressing it by container DNS bypasses the
+  legacy `host.docker.internal` / `:8766` URL-rewrite hacks in
+  `InternalUrlResolver`. The `slicer_internal_url` admin override is unchanged,
+  so operators can still point at an external forge-slicer for backward compat.
+- Slicer-proxy unreachable message reworded ("Slicing engine unreachable") now
+  that the engine is owned rather than an external service.
+
+### Notes
+
+- The `SlicerProxyController` contract is unchanged — the frontend slice → gcode
+  → send flow is byte-identical to v1.11.0. No frontend changes in this release.
+  Verified end-to-end: a cube STL uploaded through the adapter's
+  `/api/slice/stream` slices to 227 KB of valid G-code with live SSE progress.
+- The ~380 MB engine binary + resources are **not** committed to git; they are
+  staged at build time by `make slicer-fetch`. AGPL: engine `LICENSE.txt` is
+  baked into the image; corresponding source is offered separately.
+
 ## [1.11.0] - 2026-07-02
 
 Prepare tab grows a Creality/Orca-style tool palette: interactive 3D gizmos

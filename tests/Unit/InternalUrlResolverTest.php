@@ -28,4 +28,24 @@ class InternalUrlResolverTest extends TestCase
 		}
 		$this->assertSame($url, $resolver->resolveSlicerUrl($url));
 	}
+
+	/**
+	 * The owned sidecar default (container DNS name, port 8080) must pass
+	 * through unmodified in BOTH environments: it is not loopback, not
+	 * host.docker.internal, and not on the legacy :8766 relay port, so neither
+	 * the runningInDocker rewrite nor the :8766 LAN-rewrite branch should fire.
+	 */
+	public function testResolveSlicerUrlPassesThroughOwnedSidecarDefault(): void
+	{
+		$resolver = new InternalUrlResolver();
+		$url = 'http://nc-print-slicer:8080';
+		$this->assertSame($url, $resolver->resolveSlicerUrl($url));
+	}
+
+	public function testResolveSlicerUrlPassesThroughOwnedSidecarPath(): void
+	{
+		$resolver = new InternalUrlResolver();
+		$url = 'http://nc-print-slicer:8080/api/health';
+		$this->assertSame($url, $resolver->resolveSlicerUrl($url));
+	}
 }
