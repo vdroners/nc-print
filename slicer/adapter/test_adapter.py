@@ -147,6 +147,51 @@ def test_merge_preset_writes_copy():
         assert merge_preset(base, {}, out) == base
 
 
+_SAMPLE_GCODE = """; header
+;LAYER_CHANGE
+;Z:0.2
+;HEIGHT:0.2
+;TYPE:Outer wall
+G1 X0 Y0 Z0.2 E0
+G1 X10 Y0 E1
+G1 X10 Y10 E2
+;TYPE:Sparse infill
+G1 X5 Y5 E3
+G0 X0 Y0
+;LAYER_CHANGE
+;Z:0.4
+;HEIGHT:0.2
+;TYPE:Outer wall
+G1 X0 Y0 Z0.4 E4
+G1 X10 Y0 E5
+"""
+
+
+def test_toolpath_parser_layers_and_features():
+    import tempfile as tf
+    from gcode_toolpath import parse_toolpath
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(_SAMPLE_GCODE)
+        path = f.name
+    try:
+        tp = parse_toolpath(path)
+    finally:
+        os.unlink(path)
+    assert tp["meta"]["layer_count"] == 2, tp["meta"]
+    l0 = tp["layers"][0]
+    assert l0["z"] == 0.2
+    assert l0["height"] == 0.2
+    # outer_wall extruding segments present; a travel (G0) captured separately
+    assert "outer_wall" in l0["segments"]
+    assert "travel" in l0["segments"]
+    # positions are flat [x0,y0,z0,x1,y1,z1,...] — multiple of 6
+    ow = l0["segments"]["outer_wall"]["positions"]
+    assert len(ow) % 6 == 0 and len(ow) >= 6
+    # bbox spans the moves
+    assert tp["bbox"]["min"][2] == 0.2
+    assert tp["bbox"]["max"][2] == 0.4
+
+
 def test_mesh_too_large_rejected():
     import struct
     from mesh3mf import stl_bytes_to_3mf, MAX_TRIANGLES

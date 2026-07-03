@@ -36,6 +36,7 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
+from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf
 from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
@@ -438,6 +439,25 @@ async def job_gcode(job_id: str, request: Request) -> Response:
                 fh.seek(0)
         data = fh.read()
     return Response(data, media_type="text/plain")
+
+
+@app.get("/api/jobs/{job_id}/toolpath")
+async def job_toolpath(job_id: str) -> Response:
+    """3D toolpath geometry parsed from the job's gcode (feature-typed layers).
+
+    Parsed lazily on first request and cached on the job so repeated scrubbing
+    doesn't re-parse. Returns the contract src/services/toolpath-3d.js expects.
+    """
+    job = _JOBS.get(job_id)
+    if not job or not os.path.exists(job["gcode"]):
+        return JSONResponse({"error": "not_found", "message": "gcode not available"}, 404)
+    if "toolpath" not in job:
+        try:
+            job["toolpath"] = await asyncio.get_event_loop().run_in_executor(
+                None, parse_toolpath, job["gcode"])
+        except Exception as exc:  # noqa: BLE001
+            return JSONResponse({"error": "parse_failed", "message": str(exc)}, 500)
+    return JSONResponse(job["toolpath"])
 
 
 @app.post("/api/jobs/{job_id}/cancel")

@@ -75,6 +75,12 @@ export async function createViewport(canvas, wrap) {
 	let cutPlaneHelper = null
 	const raycaster = new THREE.Raycaster()
 
+	// 3D toolpath preview state (built from a slice job's parsed gcode).
+	let toolpathGroup = null
+	// feature key -> { line: THREE.LineSegments, layerIndex: Uint32Array (per vertex) }
+	const toolpathLines = new Map()
+	let toolpathLayerCount = 0
+
 	function ensureGizmo() {
 		if (gizmo) {
 			return gizmo
@@ -383,6 +389,15 @@ export async function createViewport(canvas, wrap) {
 				cutPlaneHelper = null
 			}
 			disposeGizmo()
+			if (toolpathGroup) {
+				for (const { line } of toolpathLines.values()) {
+					line.geometry.dispose()
+					line.material.dispose()
+				}
+				scene.remove(toolpathGroup)
+				toolpathGroup = null
+				toolpathLines.clear()
+			}
 			clearModelMesh()
 			renderer.dispose()
 		},
@@ -631,6 +646,128 @@ export async function createViewport(canvas, wrap) {
 		hideCutPlane() {
 			if (cutPlaneHelper) {
 				cutPlaneHelper.visible = false
+			}
+		},
+		/**
+		 * Render a parsed toolpath (from src/services/toolpath-3d.js). Builds one
+		 * THREE.LineSegments per feature type in the existing Z-up scene, hides the
+		 * model mesh, and frames the camera. Colours are provided by the caller.
+		 * @param {object} toolpath { layers: [{ z, features: { key: Float32Array }}], ... }
+		 * @param {Record<string, number>} colorMap feature key -> hex colour
+		 */
+		showToolpath(toolpath, colorMap = {}) {
+			this.disposeToolpath()
+			if (!toolpath?.layers?.length) {
+				return
+			}
+			// Hide the prepared mesh + gizmo while previewing toolpaths.
+			detachGizmo()
+			if (modelMesh) {
+				modelMesh.visible = false
+			}
+			toolpathLayerCount = toolpath.layers.length
+			toolpathGroup = new THREE.Group()
+
+			// Concatenate each feature's segments across all layers into one buffer,
+			// tracking the source layer index per vertex so a range slider can
+			// show/hide layers via BufferGeometry draw ranges without rebuilds.
+			const byFeature = new Map()
+			toolpath.layers.forEach((layer, li) => {
+				for (const [feat, arr] of Object.entries(layer.features || {})) {
+					if (!arr?.length) {
+						continue
+					}
+					let acc = byFeature.get(feat)
+					if (!acc) {
+						acc = { positions: [], layerOfVertex: [] }
+						byFeature.set(feat, acc)
+					}
+					for (let i = 0; i < arr.length; i++) {
+						acc.positions.push(arr[i])
+					}
+					// two vertices per segment -> 6 floats
+					const verts = arr.length / 3
+					for (let v = 0; v < verts; v++) {
+						acc.layerOfVertex.push(li)
+					}
+				}
+			})
+
+			for (const [feat, acc] of byFeature.entries()) {
+				const geom = new THREE.BufferGeometry()
+				const pos = new Float32Array(acc.positions)
+				geom.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+				const mat = new THREE.LineBasicMaterial({
+					color: colorMap[feat] ?? 0x8b949e,
+					transparent: feat === 'travel',
+					opacity: feat === 'travel' ? 0.35 : 1,
+				})
+				const line = new THREE.LineSegments(geom, mat)
+				line.visible = feat !== 'travel' // travel hidden by default
+				toolpathGroup.add(line)
+				toolpathLines.set(feat, {
+					line,
+					layerOfVertex: new Uint32Array(acc.layerOfVertex),
+				})
+			}
+			scene.add(toolpathGroup)
+
+			// Frame the camera to the toolpath bounds.
+			const box = new THREE.Box3().setFromObject(toolpathGroup)
+			if (!box.isEmpty()) {
+				const center = box.getCenter(new THREE.Vector3())
+				const size = box.getSize(new THREE.Vector3())
+				const dist = Math.max(size.x, size.y, size.z, 40) * 2.2
+				camera.position.set(center.x + dist * 0.6, center.y + dist * 0.6, center.z + dist * 0.5)
+				controls.target.copy(center)
+				camera.up.set(0, 0, 1)
+				camera.lookAt(center)
+				controls.update()
+			}
+			return { layerCount: toolpathLayerCount }
+		},
+		/**
+		 * Limit visible layers to [0, maxLayer] (inclusive) via per-feature draw
+		 * ranges. Cheap — no geometry rebuild.
+		 * @param {number} maxLayer
+		 */
+		setToolpathLayerRange(maxLayer) {
+			if (!toolpathGroup) {
+				return
+			}
+			const cap = Number.isFinite(maxLayer) ? maxLayer : toolpathLayerCount
+			for (const { line, layerOfVertex } of toolpathLines.values()) {
+				// vertices are grouped by layer in ascending order, so find the count
+				// of vertices whose layer <= cap.
+				let count = layerOfVertex.length
+				for (let i = 0; i < layerOfVertex.length; i++) {
+					if (layerOfVertex[i] > cap) {
+						count = i
+						break
+					}
+				}
+				line.geometry.setDrawRange(0, count)
+			}
+		},
+		setToolpathFeatureVisible(feature, visible) {
+			const entry = toolpathLines.get(feature)
+			if (entry) {
+				entry.line.visible = !!visible
+			}
+		},
+		disposeToolpath() {
+			if (toolpathGroup) {
+				for (const { line } of toolpathLines.values()) {
+					line.geometry.dispose()
+					line.material.dispose()
+				}
+				scene.remove(toolpathGroup)
+				toolpathGroup = null
+				toolpathLines.clear()
+				toolpathLayerCount = 0
+			}
+			if (modelMesh) {
+				modelMesh.visible = true
 			}
 		},
 		getTransform() {

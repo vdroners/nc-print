@@ -7,9 +7,11 @@ import GcodePreview from './GcodePreview.vue'
 import ProfileSummaryChip from './ProfileSummaryChip.vue'
 import SliceReviewPanel from './SliceReviewPanel.vue'
 import PreviewLightbox from './PreviewLightbox.vue'
+import Toolpath3D from './Toolpath3D.vue'
 
 const TABS = [
 	{ id: 'summary', label: 'Summary' },
+	{ id: 'preview3d', label: '3D preview' },
 	{ id: 'toolpath', label: 'Toolpath' },
 	{ id: 'gcode', label: 'G-code' },
 	{ id: 'settings', label: 'Settings' },
@@ -23,6 +25,7 @@ export default {
 		ProfileSummaryChip,
 		SliceReviewPanel,
 		PreviewLightbox,
+		Toolpath3D,
 	},
 	data() {
 		return {
@@ -104,6 +107,21 @@ export default {
 			role="tabpanel"
 			aria-labelledby="slice-result-tab-summary">
 			<SliceResultPanel :embedded="true" />
+		</div>
+
+		<div
+			v-show="activeTab === 'preview3d'"
+			id="slice-result-panel-preview3d"
+			role="tabpanel"
+			aria-labelledby="slice-result-tab-preview3d"
+			class="nc-print-slice-result-tabs__panel">
+			<Toolpath3D
+				v-if="activeTab === 'preview3d' && printStore.sliceJob.jobId"
+				:job-id="printStore.sliceJob.jobId"
+				:build-volume="printStore.buildVolume" />
+			<p v-else class="nc-print-slice-result-tabs__empty">
+				Slice a model to see the 3D toolpath.
+			</p>
 		</div>
 
 		<div

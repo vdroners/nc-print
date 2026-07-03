@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.13.0] - 2026-07-03
+
+Phase 2 of the professional-slicer roadmap: **real 3D toolpath preview**. After a
+slice you can inspect the actual printed paths in the 3D viewport — per-feature
+colours, a layer-range slider, and toggleable travel moves — instead of only a
+flat thumbnail. Closes the long-standing `/api/preview 501` gap with something
+better.
+
+### Added
+
+- **Sidecar `GET /api/jobs/{id}/toolpath`** (`slicer/adapter/gcode_toolpath.py`).
+  Parses the sliced gcode's `;LAYER_CHANGE`/`;Z:`/`;HEIGHT:`/`;TYPE:` markers
+  into feature-typed, layer-indexed 3D segment buffers (flat
+  `[x0,y0,z0,x1,y1,z1,…]` per feature per layer). Parsed server-side and cached
+  on the job, so the browser never touches multi-MB gcode. Extrusion vs. travel
+  is distinguished from the E axis; G92/M82/M83 extruder modes handled.
+- **`src/services/toolpath-3d.js`** — fetches the contract, converts each
+  feature's segments to `Float32Array`, and provides the Orca-like colour map +
+  labels + `presentFeatures()`.
+- **`viewport.js showToolpath()/setToolpathLayerRange()/
+  setToolpathFeatureVisible()/disposeToolpath()`** — renders one
+  `THREE.LineSegments` per feature type in the existing Z-up scene, hides the
+  prepared mesh while previewing, frames the camera, and drives the layer slider
+  via cheap per-feature draw ranges (no geometry rebuilds).
+- **`Toolpath3D.vue`** — self-contained preview: its own viewport, a layer
+  slider (`N / total`), and a feature legend with clickable colour chips (travel
+  off by default). Added as a **“3D preview” tab** in `SliceResultTabs.vue`,
+  mounted only when the tab is active.
+
+### Tests
+
+- Adapter: `test_toolpath_parser_layers_and_features` (layer/feature/bbox
+  parsing). Frontend: `src/__tests__/toolpath-3d.spec.js` (Float32Array
+  conversion, small-segment drop, error handling, `presentFeatures`).
+
 ## [1.12.1] - 2026-07-03
 
 Critical slice-correctness fix plus sidecar hardening.
