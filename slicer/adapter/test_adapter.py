@@ -206,6 +206,46 @@ def test_mesh_too_large_rejected():
         assert raised
 
 
+def test_mesh_analyze_watertight_cube():
+    from mesh_analyze import analyze_stl
+    rep = analyze_stl(_binary_cube())
+    assert rep["ok"] is True
+    assert rep["triangles"] == 12
+    assert rep["vertices"] == 8
+    assert rep["watertight"] is True
+    assert rep["open_edges"] == 0
+    assert rep["non_manifold_edges"] == 0
+    assert rep["bbox"]["size"] == [20.0, 20.0, 20.0]
+
+
+def test_mesh_analyze_open_mesh():
+    from mesh_analyze import analyze_stl
+    import struct
+    # Two triangles sharing one edge → the other edges are open (used once).
+    v = [(0, 0, 0), (10, 0, 0), (0, 10, 0), (10, 10, 0)]
+    faces = [(0, 1, 2), (1, 3, 2)]
+    buf = b"\0" * 80 + struct.pack("<I", len(faces))
+    for a, b, c in faces:
+        buf += struct.pack("<3f", 0, 0, 1)
+        for i in (a, b, c):
+            buf += struct.pack("<3f", *v[i])
+        buf += struct.pack("<H", 0)
+    rep = analyze_stl(buf)
+    assert rep["ok"] is True
+    assert rep["watertight"] is False
+    assert rep["open_edges"] > 0
+
+
+def test_support_type_snug_maps_to_style():
+    from overrides import split_overrides
+    proc, _, _ = split_overrides({"support_type": "snug", "enable_support": True})
+    assert proc["support_type"] == "normal(auto)"
+    assert proc["support_style"] == "snug"
+    proc2, _, _ = split_overrides({"support_type": "tree"})
+    assert proc2["support_type"] == "tree(auto)"
+    assert "support_style" not in proc2
+
+
 if __name__ == "__main__":
     import traceback
     failures = 0

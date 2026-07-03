@@ -38,6 +38,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf
+from mesh_analyze import analyze_stl
 from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
 
@@ -439,6 +440,29 @@ async def job_gcode(job_id: str, request: Request) -> Response:
                 fh.seek(0)
         data = fh.read()
     return Response(data, media_type="text/plain")
+
+
+@app.post("/api/mesh/analyze")
+async def mesh_analyze(request: Request) -> JSONResponse:
+    """Mesh health report for an uploaded STL (raw octet-stream or multipart).
+
+    Lets the UI warn about non-watertight / degenerate meshes before slicing.
+    """
+    body = await request.body()
+    if not body:
+        return JSONResponse({"error": "no_model", "message": "empty body"}, 400)
+    content_type = request.headers.get("content-type", "").lower()
+    stl = body
+    if "multipart/form-data" in content_type:
+        parsed = _parse_multipart(request.headers.get("content-type", ""), body)
+        if not parsed["model"]:
+            return JSONResponse({"error": "no_model", "message": "model part missing"}, 400)
+        stl = parsed["model"]
+    try:
+        report = await asyncio.get_event_loop().run_in_executor(None, analyze_stl, stl)
+    except Exception as exc:  # noqa: BLE001
+        return JSONResponse({"error": "analyze_failed", "message": str(exc)}, 500)
+    return JSONResponse(report)
 
 
 @app.get("/api/jobs/{job_id}/toolpath")

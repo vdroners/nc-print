@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.14.0] - 2026-07-03
+
+Phase 3: supports now work end-to-end, plus server-side mesh health.
+
+### Fixed
+
+- **Support type `snug`/`grid` were sent as invalid `support_type` values.** The
+  UI offers Normal/Tree/Snug/Grid, but in OrcaSlicer only Normal/Tree are
+  `support_type` values — Snug/Grid are `support_style`. The override mapping now
+  routes `snug`/`grid` to `support_type=normal(auto)` + the matching
+  `support_style`, so those options actually take effect instead of erroring.
+  (Supports themselves already reach the engine as of v1.12.1's override fix;
+  the existing enable/type/threshold/brim/raft/skirt UI in `ProfileQuickEdit.vue`
+  needs no change.)
+
+### Added
+
+- **Server-side mesh analysis** — new `slicer/adapter/mesh_analyze.py` +
+  `POST /api/mesh/analyze` return a mesh health report (triangles, open edges,
+  non-manifold edges, watertight, bbox, warnings) from the authoritative STL
+  parser the slicer feeds. Complements the existing browser-side check for large
+  meshes / exact-geometry confirmation. Frontend client:
+  `src/services/mesh-analyze-api.js`.
+
+### Tests
+
+- Adapter: `test_mesh_analyze_watertight_cube`, `test_mesh_analyze_open_mesh`,
+  `test_support_type_snug_maps_to_style` (12 adapter tests total).
+
 ## [1.13.0] - 2026-07-03
 
 Phase 2 of the professional-slicer roadmap: **real 3D toolpath preview**. After a

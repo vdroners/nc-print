@@ -49,12 +49,20 @@ _MAP = {
     "retraction_speed":   ("retraction_speed",          "filament", "num"),
 }
 
-# support_type from the frontend is "normal"/"tree"; map to engine enum values.
+# support_type from the frontend maps to the engine's support_type enum.
+# "snug"/"grid" are OrcaSlicer support *styles*, not types — they map to the
+# normal(auto) type plus a support_style patch applied in split_overrides.
 _SUPPORT_TYPE = {
     "normal": "normal(auto)",
     "tree": "tree(auto)",
+    "snug": "normal(auto)",
+    "grid": "normal(auto)",
     "normal(auto)": "normal(auto)",
     "tree(auto)": "tree(auto)",
+}
+_SUPPORT_STYLE = {
+    "snug": "snug",
+    "grid": "grid",
 }
 
 
@@ -97,7 +105,11 @@ def split_overrides(overrides: dict) -> tuple[dict, dict, list[str]]:
             continue
         engine_key, scope, kind = spec
         if key == "support_type":
-            val = _SUPPORT_TYPE.get(str(raw).lower())
+            low = str(raw).lower()
+            val = _SUPPORT_TYPE.get(low)
+            # snug/grid are styles on top of the normal type.
+            if low in _SUPPORT_STYLE:
+                process_patch["support_style"] = _SUPPORT_STYLE[low]
         else:
             val = _fmt(kind, raw)
         if val is None:
