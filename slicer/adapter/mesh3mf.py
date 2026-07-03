@@ -11,6 +11,7 @@ CLI `--load-settings` presets apply cleanly.
 """
 from __future__ import annotations
 
+import os
 import struct
 import zipfile
 
@@ -103,12 +104,30 @@ def _dedup(
     return out_v, out_t
 
 
+# Upper bound so a photogrammetry-scale mesh can't OOM the container (4 GB
+# mem_limit) or wedge the slice queue. ~2M triangles is well beyond any normal
+# FDM print; larger meshes should be decimated before upload.
+MAX_TRIANGLES = int(os.environ.get("MAX_MESH_TRIANGLES", "2000000"))
+
+
 def stl_bytes_to_3mf(stl: bytes, out_path: str) -> tuple[int, int]:
     """Write a bare geometry 3MF from STL bytes. Returns (vertex, triangle) count."""
+    # Cheap pre-parse triangle count from a binary STL header, so we reject a
+    # huge mesh before allocating millions of Python tuples.
+    if not _is_ascii_stl(stl) and len(stl) >= 84:
+        declared = struct.unpack_from("<I", stl, 80)[0]
+        if declared > MAX_TRIANGLES:
+            raise ValueError(
+                f"mesh too large to slice ({declared} triangles; max "
+                f"{MAX_TRIANGLES}). Decimate the model before uploading.")
     if _is_ascii_stl(stl):
         verts, tris = _parse_ascii_stl(stl)
     else:
         verts, tris = _parse_binary_stl(stl)
+    if len(tris) > MAX_TRIANGLES:
+        raise ValueError(
+            f"mesh too large to slice ({len(tris)} triangles; max "
+            f"{MAX_TRIANGLES}). Decimate the model before uploading.")
     verts, tris = _dedup(verts, tris)
     if len(verts) < 4 or len(tris) < 4:
         raise ValueError(f"mesh too small to slice ({len(verts)} verts, {len(tris)} tris)")

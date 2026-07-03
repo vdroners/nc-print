@@ -7,3 +7,6 @@
 # Owned slicer engine binary + resources — staged by `make slicer-fetch`,
 # kept out of git (~380 MB; AGPL source is offered separately).
 /slicer/3dprintforge-slicer/
+# Python bytecode from adapter compile-checks / tests.
+__pycache__/
+*.pyc

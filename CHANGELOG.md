@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.12.1] - 2026-07-03
+
+Critical slice-correctness fix plus sidecar hardening.
+
+### Fixed
+
+- **Slice overrides were silently ignored.** The adapter parsed the UI's
+  `overrides` field (layer height, infill, perimeters, temps, supports…) but
+  never passed it to the engine, so every slice used the raw profile defaults —
+  changing any setting in the UI had no effect on the output. The adapter now
+  applies overrides by merging them into copies of the process/filament presets
+  (the OrcaSlicer CLI has no per-key override flags). New `slicer/adapter/
+  overrides.py` maps the frontend's generic keys to the engine's preset keys
+  (e.g. `infill_density` → `sparse_infill_density`, `perimeters` → `wall_loops`,
+  `bed_temperature` → `hot_plate_temp`) and splits them into process-scoped vs
+  filament-scoped merges. Verified end-to-end: sending
+  `{layer_height:0.28, infill_density:0.42, nozzle_temperature:215, perimeters:4}`
+  produces gcode whose config footer reports exactly those values. A `settings`
+  SSE progress event now reports what was applied (and lists any ignored keys).
+
+### Added (hardening)
+
+- **Concurrency guard.** At most `MAX_CONCURRENT_SLICES` (default 2) engine
+  processes run at once; excess slice requests fail fast with 503 instead of
+  piling up and exhausting CPU/RAM.
+- **Job garbage collection.** A background loop evicts completed jobs and their
+  `/tmp/slice/<id>` dirs after `JOB_MAX_AGE_S` (default 1 h) and sweeps orphaned
+  dirs from failed slices, so the tmpfs and the in-memory job map stay bounded.
+- **Mesh size limit.** Uploads over `MAX_MESH_TRIANGLES` (default 2 M) are
+  rejected up front (`ERR_MESH_TOO_LARGE`) — checked cheaply from the binary-STL
+  header before allocating — so a photogrammetry-scale mesh can't OOM the
+  container.
+- **Health `jobs` section** reports active/cached/max-concurrent slice counts.
+- Adapter unit tests expanded to 8 (override mapping/scoping, percent forms,
+  preset merge, mesh-size guard).
+
 ## [1.12.0] - 2026-07-02
 
 nc-print becomes a **self-contained slicer**. It now ships and owns its own

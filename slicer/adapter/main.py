@@ -27,6 +27,7 @@ import json
 import os
 import shutil
 import subprocess
+import time
 import uuid
 from email.parser import BytesParser
 from email.policy import HTTP
@@ -36,16 +37,25 @@ from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from mesh3mf import stl_bytes_to_3mf
+from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
 
 ENGINE_BASE = os.environ.get("ENGINE_BASE", "http://127.0.0.1:8765").rstrip("/")
 ENGINE_BIN = os.environ.get("ORCA_BIN", "/opt/orca/3dprintforge-slicer")
 JOB_ROOT = os.environ.get("SLICE_JOB_ROOT", "/tmp/slice")
 SLICE_TIMEOUT_S = int(os.environ.get("SLICE_TIMEOUT_S", "600"))
+# Hardening knobs.
+MAX_CONCURRENT_SLICES = int(os.environ.get("MAX_CONCURRENT_SLICES", "2"))
+JOB_MAX_AGE_S = int(os.environ.get("JOB_MAX_AGE_S", "3600"))
+GC_INTERVAL_S = int(os.environ.get("GC_INTERVAL_S", "300"))
 
 _QUICK_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=30.0, pool=5.0)
 
 app = FastAPI(title="nc-print-slicer", version="2")
+
+# Bound the number of engine processes running at once so a burst of uploads
+# can't exhaust CPU/RAM. Excess requests fail fast with 503 rather than piling up.
+_slice_slots = asyncio.Semaphore(MAX_CONCURRENT_SLICES)
 
 _HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
@@ -55,7 +65,7 @@ _HOP_BY_HOP = {
 # Preset index is built once at startup (the on-disk tree is immutable per image
 # except for the mounted user volume, which is small).
 _INDEX: PresetIndex | None = None
-# job_id -> {gcode: path, meta: {...}}
+# job_id -> {gcode: path, meta: {...}, created: monotonic_seconds}
 _JOBS: dict[str, dict] = {}
 
 
@@ -70,10 +80,40 @@ def _clean_headers(raw) -> dict[str, str]:
     return {k: v for k, v in raw.items() if k.lower() not in _HOP_BY_HOP}
 
 
+async def _gc_loop() -> None:
+    """Periodically evict completed jobs older than JOB_MAX_AGE_S.
+
+    Without this, _JOBS grows unbounded and /tmp/slice/<job> dirs accumulate
+    (each slice is hundreds of KB of gcode + presets) until the tmpfs fills.
+    """
+    while True:
+        await asyncio.sleep(GC_INTERVAL_S)
+        now = time.monotonic()
+        for job_id, meta in list(_JOBS.items()):
+            if now - meta.get("created", now) > JOB_MAX_AGE_S:
+                _JOBS.pop(job_id, None)
+                shutil.rmtree(os.path.join(JOB_ROOT, job_id), ignore_errors=True)
+        # Also sweep orphaned dirs (e.g. failed slices never recorded in _JOBS).
+        wall = time.time()
+        try:
+            for name in os.listdir(JOB_ROOT):
+                d = os.path.join(JOB_ROOT, name)
+                if name in _JOBS or not os.path.isdir(d):
+                    continue
+                try:
+                    if wall - os.path.getmtime(d) > JOB_MAX_AGE_S:
+                        shutil.rmtree(d, ignore_errors=True)
+                except OSError:
+                    pass
+        except OSError:
+            pass
+
+
 @app.on_event("startup")
 async def _startup() -> None:
     os.makedirs(JOB_ROOT, exist_ok=True)
     _index()  # warm the preset index
+    asyncio.create_task(_gc_loop())
 
 
 @app.get("/api/health")
@@ -113,6 +153,10 @@ async def health() -> JSONResponse:
             "engine": {"reachable": engine_ok, "version": engine_version},
             "bundle": bundle,
             "presets_on_disk": disk,
+            "jobs": {"active": MAX_CONCURRENT_SLICES - _slice_slots._value
+                     if hasattr(_slice_slots, "_value") else None,
+                     "cached": len(_JOBS),
+                     "max_concurrent": MAX_CONCURRENT_SLICES},
         },
         status_code=200 if ok else 503,
     )
@@ -158,8 +202,20 @@ def _sse(event: str, data: dict) -> bytes:
 
 
 async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
-                     machine: str, process: str, filaments: list[str]):
+                     machine: str, process: str, filaments: list[str],
+                     overrides: dict | None = None):
     """Async generator yielding SSE bytes while the CLI slices."""
+    # Apply the UI's slice overrides by merging them into process/filament
+    # preset copies (the CLI has no per-key override flags). Without this, every
+    # slice would silently use the raw profile defaults.
+    applied: list[str] = []
+    if overrides:
+        process, filaments, applied = apply_overrides(
+            overrides, process, filaments, job_dir)
+    for line in applied:
+        yield _sse("progress", {"stage": "settings", "pct": 35,
+                                "message": line, "job_id": job_id})
+
     load_settings = f"{machine};{process}"
     # NOTE: no --export-3mf. Adding it makes the CLI attempt a
     # boost::filesystem::create_directories that fails ("Invalid argument") and
@@ -202,7 +258,7 @@ async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
 
     if gcode and os.path.exists(gcode) and os.path.getsize(gcode) > 0:
         meta = _read_gcode_meta(gcode)
-        _JOBS[job_id] = {"gcode": gcode, "meta": meta}
+        _JOBS[job_id] = {"gcode": gcode, "meta": meta, "created": time.monotonic()}
         yield _sse("done", {
             "ok": True,
             "job_id": job_id,
@@ -289,6 +345,17 @@ async def slice_stream(request: Request) -> Response:
     if not fields["model"]:
         return JSONResponse({"error": "no_model", "message": "model part missing"}, 400)
 
+    # Concurrency guard: acquire a slice slot without waiting. If none is free,
+    # fail fast with 503 rather than letting engine processes pile up and
+    # exhaust CPU/RAM. The slot is released in _full_stream's finally.
+    try:
+        await asyncio.wait_for(_slice_slots.acquire(), timeout=0.01)
+    except asyncio.TimeoutError:
+        return JSONResponse(
+            {"error": "too_many_jobs",
+             "message": f"slicer busy (max {MAX_CONCURRENT_SLICES} concurrent). Retry shortly."},
+            503)
+
     job_id = uuid.uuid4().hex[:16]
     job_dir = os.path.join(JOB_ROOT, job_id)
     os.makedirs(job_dir, exist_ok=True)
@@ -303,8 +370,10 @@ async def slice_stream(request: Request) -> Response:
     try:
         nv, nt = stl_bytes_to_3mf(fields["model"], model_3mf)
     except Exception as exc:  # noqa: BLE001
+        _slice_slots.release()
+        code = "ERR_MESH_TOO_LARGE" if "too large" in str(exc) else "ERR_MODEL_CONVERT"
         return StreamingResponse(_error_stream(f"model conversion failed: {exc}",
-                                 "ERR_MODEL_CONVERT"), media_type="text/event-stream")
+                                 code), media_type="text/event-stream")
 
     # 2. Resolve a compatible preset triple.
     try:
@@ -312,19 +381,24 @@ async def slice_stream(request: Request) -> Response:
             _index(), fields["printer_id"], fields["process_id"],
             fields["filament_ids"])
     except ValueError as exc:
+        _slice_slots.release()
         return StreamingResponse(_error_stream(str(exc), "ERR_PRESET_RESOLVE"),
                                  media_type="text/event-stream")
 
     async def _full_stream():
-        yield _sse("progress", {"stage": "preparing", "pct": 10, "job_id": job_id})
-        for w in warnings:
-            yield _sse("progress", {"stage": "warning", "pct": 12,
-                                    "message": w, "job_id": job_id})
-        yield _sse("progress", {"stage": "loading_model", "pct": 25,
-                                "job_id": job_id})
-        async for chunk in _run_slice(job_id, job_dir, model_3mf,
-                                      machine, process, filaments):
-            yield chunk
+        try:
+            yield _sse("progress", {"stage": "preparing", "pct": 10, "job_id": job_id})
+            for w in warnings:
+                yield _sse("progress", {"stage": "warning", "pct": 12,
+                                        "message": w, "job_id": job_id})
+            yield _sse("progress", {"stage": "loading_model", "pct": 25,
+                                    "job_id": job_id})
+            async for chunk in _run_slice(job_id, job_dir, model_3mf,
+                                          machine, process, filaments,
+                                          fields.get("overrides")):
+                yield chunk
+        finally:
+            _slice_slots.release()
 
     return StreamingResponse(
         _full_stream(),

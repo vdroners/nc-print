@@ -95,6 +95,72 @@ def test_duration_parser():
     assert _parse_duration("no numbers") is None
 
 
+def test_override_mapping_scopes_and_keys():
+    from overrides import split_overrides
+    proc, fil, unknown = split_overrides({
+        "layer_height": 0.3,
+        "infill_density": 0.55,       # 0-1 -> "55%"
+        "perimeters": 3,
+        "nozzle_temperature": 215,    # filament-scoped
+        "bed_temperature": 60,        # filament-scoped, remapped key
+        "enable_support": True,
+        "support_type": "tree",
+        "bogus_key": 1,
+    })
+    # process-scoped, mapped to engine keys
+    assert proc["layer_height"] == "0.3"
+    assert proc["sparse_infill_density"] == "55%"
+    assert proc["wall_loops"] == "3"
+    assert proc["enable_support"] == "1"
+    assert proc["support_type"] == "tree(auto)"
+    # filament-scoped
+    assert fil["nozzle_temperature"] == "215"
+    assert fil["hot_plate_temp"] == "60"
+    # unknown keys reported, not silently applied
+    assert "bogus_key" in unknown
+
+
+def test_override_percent_forms():
+    from overrides import split_overrides
+    # already-percent value (55) and fractional (0.55) both -> "55%"
+    p1, _, _ = split_overrides({"infill_density": 55})
+    p2, _, _ = split_overrides({"infill_density": 0.55})
+    assert p1["sparse_infill_density"] == "55%"
+    assert p2["sparse_infill_density"] == "55%"
+
+
+def test_merge_preset_writes_copy():
+    import json
+    from overrides import merge_preset
+    with tempfile.TemporaryDirectory() as d:
+        base = os.path.join(d, "base.json")
+        json.dump({"type": "process", "name": "Base", "inherits": "parent",
+                   "layer_height": "0.24"}, open(base, "w"))
+        out = os.path.join(d, "merged.json")
+        result = merge_preset(base, {"layer_height": "0.3"}, out)
+        assert result == out
+        merged = json.load(open(out))
+        assert merged["layer_height"] == "0.3"       # overwritten
+        assert merged["name"] == "Base"              # preserved
+        assert merged["inherits"] == "parent"        # preserved
+        # empty patch returns the base path unchanged
+        assert merge_preset(base, {}, out) == base
+
+
+def test_mesh_too_large_rejected():
+    import struct
+    from mesh3mf import stl_bytes_to_3mf, MAX_TRIANGLES
+    # Binary STL header claiming more than the cap → rejected on the cheap path.
+    fake = b"\0" * 80 + struct.pack("<I", MAX_TRIANGLES + 1)
+    with tempfile.TemporaryDirectory() as d:
+        raised = False
+        try:
+            stl_bytes_to_3mf(fake, os.path.join(d, "m.3mf"))
+        except ValueError as e:
+            raised = "too large" in str(e)
+        assert raised
+
+
 if __name__ == "__main__":
     import traceback
     failures = 0

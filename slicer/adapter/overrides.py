@@ -1,0 +1,155 @@
+"""Apply per-job slice overrides by merging them into preset copies.
+
+The frontend (src/services/slicer-utils.js buildSliceOverrides) sends a generic
+`overrides` JSON — e.g. {"layer_height":0.3,"infill_density":0.55,
+"nozzle_temperature":215,"enable_support":true}. The OrcaSlicer-fork CLI has NO
+per-key override flags; it only loads preset JSON files via --load-settings /
+--load-filaments. So to make overrides take effect we:
+
+  1. Map the frontend keys to the engine's preset keys (which differ, e.g.
+     infill_density -> sparse_infill_density, perimeters -> wall_loops).
+  2. Split them by scope: process-scoped keys merge into a copy of the base
+     PROCESS preset; filament-scoped keys (temps, fan, retraction) merge into a
+     copy of the base FILAMENT preset.
+  3. Write the merged copies and load them in place of the base presets. Values
+     are written as strings, matching the on-disk preset format.
+
+Verified: a merged process copy with layer_height="0.3" / sparse_infill_density=
+"55%" produces gcode whose config footer reports exactly those values.
+"""
+from __future__ import annotations
+
+import json
+import os
+
+# Frontend override key -> (engine preset key, scope, kind)
+#   scope "process"  -> merged into the process preset
+#   scope "filament" -> merged into the filament preset(s)
+#   kind: "num" (numeric passthrough), "pct" (0-1 or 0-100 -> "NN%"),
+#         "bool" ("1"/"0"), "str" (verbatim), "temp" (int string)
+_MAP = {
+    # ── process-scoped ──
+    "layer_height":       ("layer_height",             "process", "num"),
+    "line_width":         ("line_width",               "process", "num"),
+    "perimeters":         ("wall_loops",               "process", "num"),
+    "infill_density":     ("sparse_infill_density",     "process", "pct"),
+    "print_speed":        ("outer_wall_speed",          "process", "num"),
+    "first_layer_speed":  ("initial_layer_speed",       "process", "num"),
+    "enable_support":     ("enable_support",            "process", "bool"),
+    "support_type":       ("support_type",              "process", "str"),
+    "support_threshold":  ("support_threshold_angle",   "process", "num"),
+    "brim_width":         ("brim_width",                "process", "num"),
+    "raft_layers":        ("raft_layers",               "process", "num"),
+    "skirt_loops":        ("skirt_loops",               "process", "num"),
+    # ── filament-scoped ──
+    "nozzle_temperature": ("nozzle_temperature",        "filament", "temp"),
+    "bed_temperature":    ("hot_plate_temp",            "filament", "temp"),
+    "fan_speed":          ("fan_max_speed",             "filament", "num"),
+    "retraction_length":  ("retraction_length",         "filament", "num"),
+    "retraction_speed":   ("retraction_speed",          "filament", "num"),
+}
+
+# support_type from the frontend is "normal"/"tree"; map to engine enum values.
+_SUPPORT_TYPE = {
+    "normal": "normal(auto)",
+    "tree": "tree(auto)",
+    "normal(auto)": "normal(auto)",
+    "tree(auto)": "tree(auto)",
+}
+
+
+def _fmt(kind: str, value) -> str | None:
+    """Render an override value in the string form the preset JSON expects."""
+    if value is None or value == "":
+        return None
+    try:
+        if kind == "num":
+            n = float(value)
+            return str(int(n)) if n == int(n) else str(n)
+        if kind == "temp":
+            return str(int(round(float(value))))
+        if kind == "pct":
+            n = float(value)
+            pct = n * 100 if n <= 1 else n
+            return f"{int(round(pct))}%"
+        if kind == "bool":
+            truthy = value in (True, 1, "1", "true", "True")
+            return "1" if truthy else "0"
+        if kind == "str":
+            return str(value)
+    except (TypeError, ValueError):
+        return None
+    return None
+
+
+def split_overrides(overrides: dict) -> tuple[dict, dict, list[str]]:
+    """Return (process_patch, filament_patch, unknown_keys).
+
+    Each patch maps engine preset key -> string value, ready to merge.
+    """
+    process_patch: dict[str, str] = {}
+    filament_patch: dict[str, str] = {}
+    unknown: list[str] = []
+    for key, raw in (overrides or {}).items():
+        spec = _MAP.get(key)
+        if not spec:
+            unknown.append(key)
+            continue
+        engine_key, scope, kind = spec
+        if key == "support_type":
+            val = _SUPPORT_TYPE.get(str(raw).lower())
+        else:
+            val = _fmt(kind, raw)
+        if val is None:
+            continue
+        (process_patch if scope == "process" else filament_patch)[engine_key] = val
+    return process_patch, filament_patch, unknown
+
+
+def merge_preset(base_path: str, patch: dict, out_path: str) -> str:
+    """Write a copy of the base preset JSON with `patch` keys overwritten.
+
+    Keeps type/name/inherits/from so the engine still resolves the preset, then
+    overwrites the override keys. Returns out_path (or base_path if patch empty).
+    """
+    if not patch:
+        return base_path
+    with open(base_path, encoding="utf-8") as fh:
+        data = json.load(fh)
+    data.update(patch)
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump(data, fh)
+    return out_path
+
+
+def apply_overrides(
+    overrides: dict,
+    process_path: str,
+    filament_paths: list[str],
+    job_dir: str,
+) -> tuple[str, list[str], list[str]]:
+    """Merge overrides into process/filament preset copies in job_dir.
+
+    Returns (process_path, filament_paths, applied_summary). Paths point at the
+    merged copies when overrides applied, else the originals.
+    """
+    process_patch, filament_patch, unknown = split_overrides(overrides)
+    summary: list[str] = []
+
+    if process_patch:
+        process_path = merge_preset(
+            process_path, process_patch, os.path.join(job_dir, "process_override.json"))
+        summary.append("process: " + ", ".join(f"{k}={v}" for k, v in process_patch.items()))
+
+    if filament_patch:
+        merged = []
+        for i, fp in enumerate(filament_paths):
+            merged.append(merge_preset(
+                fp, filament_patch, os.path.join(job_dir, f"filament_override_{i}.json")))
+        filament_paths = merged
+        summary.append("filament: " + ", ".join(f"{k}={v}" for k, v in filament_patch.items()))
+
+    if unknown:
+        summary.append("ignored unknown: " + ", ".join(unknown))
+
+    return process_path, filament_paths, summary
