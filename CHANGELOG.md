@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.24.0] - 2026-07-04
+
+**Automatic printer discovery in the app + recently-used printers.** The
+target-printer picker can now scan the LAN for Moonraker printers and floats the
+printers you actually use to the top.
+
+### Added
+
+- **In-app discovery**: new group-gated `POST /api/printers/discover`
+  (`PrinterDiscoveryController`) runs the same Moonraker `/server/info` /24 sweep
+  as the admin page, but is available to any allowed user. The candidate-building
+  + probe logic was extracted into a shared `PrinterDiscoveryService`
+  (`AdminController` now delegates to it; `buildDiscoveryCandidates` kept as a
+  thin back-compat wrapper).
+- **Recently-used printers**: the store tracks a per-browser MRU
+  (`nc_print_recent_printers_v1`, cap 5, most-recent-first, deduped), recorded on
+  every printer switch (`recordPrinterUsage`, wired into `onPrinterTargetChange`).
+- **Grouped picker**: `MultiPrinterPicker` now shows **Recent** / **Configured** /
+  **Found on network** (`printerPickerGroups` getter), a "Scan for printers"
+  button (`discoverPrinters` action), and a one-click **Use** for found printers
+  (`addDiscoveredPrinter` — session-only; saving permanently stays an admin
+  action, with a hint pointing there). Found printers are deduped against
+  configured ones by Moonraker URL.
+- New `src/services/printers-api.js` (`discoverPrinters`).
+
+### Tests
+
+- PHP: new `PrinterDiscoveryServiceTest` (6) — explicit hosts win; /24 sweep from
+  configured IP; explicit subnet prefix; non-IP host → .local fallbacks only;
+  candidate cap; empty-hosts probe returns empty. (52 → 58 phpunit.)
+- Frontend: new `printers.spec` (9) — discover api payloads; recent MRU
+  (order/dedupe/cap/persist); `printerPickerGroups` split + dedupe; discover
+  action populate/error; `addDiscoveredPrinter` add+select+drop+recent.
+  (196 → 205 vitest.)
+
 ## [1.23.0] - 2026-07-03
 
 **Smart ETA** — learns each printer's slicer-vs-actual time delta and shows a

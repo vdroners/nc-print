@@ -17,6 +17,7 @@ import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
+import { discoverPrinters as discoverPrintersApi } from '@/services/printers-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
@@ -30,8 +31,10 @@ export { TABS }
 const PREFS_KEY = 'nc_print_prefs_v1'
 const JOB_HISTORY_KEY = 'nc_print_job_history_v1'
 const RECENT_MODELS_KEY = 'nc_print_recent_models_v1'
+const RECENT_PRINTERS_KEY = 'nc_print_recent_printers_v1'
 const JOB_HISTORY_MAX = 20
 const RECENT_MODELS_MAX = 5
+const RECENT_PRINTERS_MAX = 5
 const PRESETS_KEY = 'nc_print_presets_v1'
 const NOTIF_PROMPT_KEY = 'nc_print_notif_prompted_v1'
 
@@ -86,6 +89,23 @@ function loadRecentModels() {
 function persistRecentModels(rows) {
 	try {
 		localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(rows.slice(0, RECENT_MODELS_MAX)))
+	} catch {
+		// private browsing
+	}
+}
+
+function loadRecentPrinters() {
+	try {
+		const rows = JSON.parse(localStorage.getItem(RECENT_PRINTERS_KEY) || '[]')
+		return Array.isArray(rows) ? rows : []
+	} catch {
+		return []
+	}
+}
+
+function persistRecentPrinters(rows) {
+	try {
+		localStorage.setItem(RECENT_PRINTERS_KEY, JSON.stringify(rows.slice(0, RECENT_PRINTERS_MAX)))
 	} catch {
 		// private browsing
 	}
@@ -221,6 +241,14 @@ export const usePrintStore = defineStore('print', {
 			processId: '',
 		},
 		selectedPrinterId: '',
+		// Recently-used target printers (MRU, most-recent-first). Each:
+		// { id, name, at }. Persisted per-browser like recentModels.
+		recentPrinters: loadRecentPrinters(),
+		// Printers found by the on-demand LAN scan (session-only, not saved to
+		// admin config). Each: the discover() row + a derived id/name/default.
+		discoveredPrinters: [],
+		discovering: false,
+		discoverError: '',
 		savedPresets: {},
 		overrides: {
 			layerHeight: '',
@@ -650,6 +678,37 @@ export const usePrintStore = defineStore('print', {
 		activeTargetPrinter(state) {
 			const id = state.selectedPrinterId || state.configuredPrinters.find(p => p.default)?.id || state.configuredPrinters[0]?.id
 			return state.configuredPrinters.find(p => String(p.id) === String(id)) || state.configuredPrinters[0] || null
+		},
+		/**
+		 * Printer-picker groups: Recent (MRU, resolved against configured), then
+		 * the remaining Configured printers, then Found-on-network candidates
+		 * (deduped against configured/recent). Feeds MultiPrinterPicker's
+		 * optgroups so the printers you use float to the top.
+		 */
+		printerPickerGroups(state) {
+			const configured = this.configuredPrinters
+			const byId = new Map(configured.map(p => [String(p.id), p]))
+			// Recent: only those still present in the configured set, in MRU order.
+			const recent = []
+			const recentIds = new Set()
+			for (const r of state.recentPrinters) {
+				const p = byId.get(String(r.id))
+				if (p && !recentIds.has(String(p.id))) {
+					recent.push(p)
+					recentIds.add(String(p.id))
+				}
+			}
+			// Configured minus the ones already shown under Recent.
+			const rest = configured.filter(p => !recentIds.has(String(p.id)))
+			// Discovered: drop anything whose URL/host already matches a
+			// configured printer (avoid offering to "add" what you already have).
+			const knownUrls = new Set(
+				configured.map(p => String(p.moonraker_url || '').toLowerCase()).filter(Boolean),
+			)
+			const discovered = state.discoveredPrinters.filter(
+				d => !knownUrls.has(String(d.moonraker_url || '').toLowerCase()),
+			)
+			return { recent, configured: rest, discovered }
 		},
 		extruderCount(state) {
 			return parseExtruderCount(state.profiles, state.selection.printerId)
@@ -1132,8 +1191,97 @@ export const usePrintStore = defineStore('print', {
 
 		onPrinterTargetChange() {
 			savePrefs({ selectedPrinterId: this.selectedPrinterId })
+			this.recordPrinterUsage(this.selectedPrinterId)
 			this.stopPrinterPolling()
 			this.startPrinterPolling()
+		},
+
+		/**
+		 * Record a target-printer selection into the recently-used MRU (most
+		 * recent first, deduped, capped). Persisted per-browser.
+		 * @param {string} id
+		 */
+		recordPrinterUsage(id) {
+			if (!id) {
+				return
+			}
+			const printer = findById(this.configuredPrinters, id)
+			const name = printer?.name || String(id)
+			const at = Date.now()
+			const next = [{ id: String(id), name, at }]
+			for (const r of this.recentPrinters) {
+				if (String(r.id) !== String(id) && next.length < RECENT_PRINTERS_MAX) {
+					next.push(r)
+				}
+			}
+			this.recentPrinters = next
+			persistRecentPrinters(next)
+		},
+
+		/**
+		 * On-demand LAN scan for Moonraker printers. Populates
+		 * discoveredPrinters (session-only). Best-effort with a visible error.
+		 * @param {object} [opts] { hosts, subnet }
+		 */
+		async discoverPrinters(opts = {}) {
+			this.discovering = true
+			this.discoverError = ''
+			try {
+				const found = await discoverPrintersApi(opts)
+				// Derive a stable id + display name for the picker.
+				this.discoveredPrinters = found.map((f) => ({
+					...f,
+					id: 'found:' + (f.host || f.moonraker_url),
+					name: f.hostname || f.host || f.moonraker_url,
+				}))
+				return this.discoveredPrinters
+			} catch (e) {
+				this.discoverError = e?.response?.data?.message || e?.message || 'Scan failed'
+				return []
+			} finally {
+				this.discovering = false
+			}
+		},
+
+		/**
+		 * Add a discovered printer to the in-session configured list and select
+		 * it. This does NOT persist to admin config (that stays an admin action)
+		 * — it makes the printer usable now and remembers it via recent. Returns
+		 * the added printer's id.
+		 * @param {object} found a discoveredPrinters entry
+		 */
+		addDiscoveredPrinter(found) {
+			if (!found?.moonraker_url) {
+				return null
+			}
+			const id = found.id || ('found:' + found.host)
+			const printer = {
+				id,
+				name: found.name || found.hostname || found.host,
+				moonraker_url: found.moonraker_url,
+				camera_url: '',
+				default: false,
+				_discovered: true,
+			}
+			// Merge into config.multi_printers (in-memory) so configuredPrinters
+			// picks it up, unless an entry with the same URL already exists.
+			const rows = Array.isArray(this.config?.multi_printers)
+				? [...this.config.multi_printers]
+				: [...this.configuredPrinters]
+			const url = String(found.moonraker_url).toLowerCase()
+			const existing = rows.find(p => String(p.moonraker_url || '').toLowerCase() === url)
+			const targetId = existing ? existing.id : id
+			if (!existing) {
+				rows.push(printer)
+				this.config = { ...(this.config || {}), multi_printers: rows }
+			}
+			// Remove from the discovered list now that it's configured.
+			this.discoveredPrinters = this.discoveredPrinters.filter(
+				d => String(d.moonraker_url || '').toLowerCase() !== url,
+			)
+			this.selectedPrinterId = targetId
+			this.onPrinterTargetChange()
+			return targetId
 		},
 
 		saveOverridePreset(name) {

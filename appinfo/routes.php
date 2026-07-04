@@ -25,6 +25,8 @@ return [
 		['name' => 'printer#consoleCommand', 'url' => '/api/printer/console', 'verb' => 'POST'],
 		['name' => 'printer#upload', 'url' => '/api/printer/upload', 'verb' => 'POST'],
 
+		['name' => 'printer_discovery#discover', 'url' => '/api/printers/discover', 'verb' => 'POST'],
+
 		['name' => 'eta#predict', 'url' => '/api/eta/predict', 'verb' => 'POST'],
 		['name' => 'eta#record', 'url' => '/api/eta/record', 'verb' => 'POST'],
 		['name' => 'eta#stats', 'url' => '/api/eta/stats', 'verb' => 'GET'],
