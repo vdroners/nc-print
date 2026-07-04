@@ -30,6 +30,7 @@ import PowerDevicePanel from './PowerDevicePanel.vue'
 import WebcamListPanel from './WebcamListPanel.vue'
 import SensorPanel from './SensorPanel.vue'
 import UpdateStatusBanner from './UpdateStatusBanner.vue'
+import UpdateControlPanel from './UpdateControlPanel.vue'
 import AnnouncementsBanner from './AnnouncementsBanner.vue'
 
 export default {
@@ -57,6 +58,7 @@ export default {
 		WebcamListPanel,
 		SensorPanel,
 		UpdateStatusBanner,
+		UpdateControlPanel,
 		AnnouncementsBanner,
 	},
 	mixins: [useCameraFrame('streamUrl')],
@@ -317,6 +319,7 @@ export default {
 		<MultiPrinterPicker />
 
 		<UpdateStatusBanner />
+		<UpdateControlPanel />
 		<AnnouncementsBanner />
 
 		<div v-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">

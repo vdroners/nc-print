@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.30.0] - 2026-07-04
+
+**Update-trigger** — the update banner is now actionable for admins: trigger a
+Moonraker `update_manager` update (Klipper / Moonraker / client / system / all)
+from the app. Because it restarts printer services it is heavily guarded.
+
+### Added
+
+- New `UpdateController` + `POST /api/update/trigger` (`{target}`). Guards:
+  **admin-only** (via new `AccessService::isAdmin()`, beyond normal group
+  access), **idle-only** (queries `print_stats`; refuses while printing or if
+  state can't be confirmed — fail closed), **fixed target allowlist**
+  (klipper/moonraker/client/system/full), and it POSTs only to
+  `machine/update/<target>` — never a generic passthrough (the Moonraker proxy
+  stays read-only).
+- **UI**: `UpdateControlPanel` (admin-only render; hidden for non-admins and when
+  no update is available) with per-component "Update" buttons + "Update all",
+  each behind an explicit confirm and disabled while printing. `moonraker-api`
+  `triggerUpdate(target)`.
+
+### Tests
+
+- PHP (+5 → 75): `UpdateControllerTest` — admin guard, idle guard (fail-closed +
+  busy states + 409), exact target allowlist + bad-target 400, only-posts-to
+  machine/update, and the generic proxy never opened an update write.
+- Frontend (+1): `triggerUpdate` posts the target to the guarded route.
+
 ## [1.29.0] - 2026-07-04
 
 **Prime / wipe tower** for multi-material prints — the purge tower that catches

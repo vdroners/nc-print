@@ -178,6 +178,20 @@ export async function filamentExtrude(distanceMm, printerId) {
 	return gcodeAction({ action: 'filament_extrude', distance: distanceMm }, printerId)
 }
 
+/**
+ * Trigger a Moonraker update_manager update. Admin-only + idle-only + confirmed
+ * server-side; this restarts printer services. target ∈
+ * klipper|moonraker|client|system|full.
+ * @param {string} target
+ * @param {string} [printerId]
+ */
+export async function triggerUpdate(target, printerId) {
+	const url = generateUrl('/apps/nc_print/api/update/trigger')
+	const params = printerId ? { printer_id: printerId } : {}
+	const { data } = await axios.post(url, { target }, { params })
+	return data
+}
+
 export async function setHeaterTemp(heater, target, printerId) {
 	return gcodeAction({ action: 'set_heater_temp', heater, target }, printerId)
 }

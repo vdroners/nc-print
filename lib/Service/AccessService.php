@@ -53,6 +53,17 @@ class AccessService
 		return false;
 	}
 
+	/**
+	 * True if the current (or given) user is a Nextcloud admin. Used to gate
+	 * disruptive operations (e.g. triggering a Moonraker service update) beyond
+	 * the normal group-based app access.
+	 */
+	public function isAdmin(?IUser $user = null): bool
+	{
+		$user ??= $this->getUser();
+		return $user !== null && $this->groupManager->isAdmin($user->getUID());
+	}
+
 	/** @return array{error: string, message: string} */
 	public function forbiddenJsonPayload(): array
 	{

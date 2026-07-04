@@ -10,7 +10,7 @@ vi.mock('@nextcloud/axios', () => ({
 
 global.window = global.window || {}
 
-import { filamentExtrude, moonrakerGet, moonrakerProxyPost } from '@/services/moonraker-api.js'
+import { filamentExtrude, moonrakerGet, moonrakerProxyPost, triggerUpdate } from '@/services/moonraker-api.js'
 import axios from '@nextcloud/axios'
 
 describe('moonraker-api additions (v1.27.0)', () => {
@@ -52,5 +52,15 @@ describe('moonraker-api additions (v1.27.0)', () => {
 		axios.get.mockResolvedValueOnce({ data: { result: { webcams: [{ name: 'chamber' }] } } })
 		const res = await moonrakerGet('server/webcams/list', {}, 'k1')
 		expect(res.result.webcams[0].name).toBe('chamber')
+	})
+
+	it('triggerUpdate posts the target to the guarded update route', async () => {
+		axios.post.mockResolvedValueOnce({ data: { ok: true, target: 'moonraker' } })
+		await triggerUpdate('moonraker', 'k1')
+		expect(axios.post).toHaveBeenCalledWith(
+			'https://cloud.example/apps/nc_print/api/update/trigger',
+			{ target: 'moonraker' },
+			{ params: { printer_id: 'k1' } },
+		)
 	})
 })

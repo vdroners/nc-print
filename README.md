@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.29.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.30.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -81,7 +81,9 @@ external slicer service** and no NC-GCS dependency.
   switch/motion sensor state, shown when such sensors exist
 - **Cameras** — lists the printer's configured webcams when more than one exists
 - **Update & announcement banners** — a firmware/component update-available
-  notice (status only) and Moonraker service announcements
+  notice and Moonraker service announcements; **admins** can trigger an update
+  (Klipper/Moonraker/client/system/all) from the app — heavily guarded
+  (admin-only, refused while printing, explicit confirm, restarts services)
 - Moonraker history/statistics with embedded thumbnails, timelapse playback
 - Read-only G-code console log with an optional admin-gated command input
 
