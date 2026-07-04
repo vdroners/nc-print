@@ -73,4 +73,29 @@ class PrinterControllerClampingTest extends TestCase
 		$this->assertSame('G28 Z', $this->invoke('buildGcodeScriptForAction', 'home_z', []));
 		$this->assertSame('M84', $this->invoke('buildGcodeScriptForAction', 'disable_steppers', []));
 	}
+
+	/**
+	 * Non-numeric / overflow temperatures cast to dangerous values and clamp to
+	 * a real setpoint: "abc" → 0.0 (S0, unintended shutdown), "1e999" → INF →
+	 * clamps to the MAX (S300, unintended full heat). setTemperature must reject
+	 * non-numeric input up front with is_numeric — this documents why.
+	 */
+	public function testNonNumericTemperatureClampsToDangerousSetpoint(): void
+	{
+		// (float)'abc' = 0.0 → would send M104 S0 (heater off)
+		$this->assertSame(0.0, $this->invoke('clampNozzleTemp', (float) 'abc'));
+		// (float)'1e999' = INF → clamps to the max, i.e. full nozzle heat
+		$this->assertSame(300.0, $this->invoke('clampNozzleTemp', (float) '1e999'));
+	}
+
+	public function testSetTemperatureRejectsNonNumeric(): void
+	{
+		$src = (string) file_get_contents(__DIR__ . '/../../lib/Controller/PrinterController.php');
+		// setTemperature guards nozzle/bed with is_numeric before casting.
+		$this->assertMatchesRegularExpression(
+			'/is_numeric\(\$params\[.nozzle.\]\).*is_numeric\(\$params\[.bed.\]\)/s',
+			$src,
+			'setTemperature must reject non-numeric nozzle/bed values',
+		);
+	}
 }

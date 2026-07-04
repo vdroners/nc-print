@@ -354,14 +354,14 @@ _BREAKDOWN_GCODE = """; filament_diameter = 1.75
 ;Z:0.2
 ;TYPE:Outer wall
 G1 X0 Y0 E0
-G1 X10 Y0 E1
+G1 X10 Y0 E200
 ;TYPE:Support
-G1 X0 Y5 E1.5
-G1 X10 Y5 E2.0
+G1 X0 Y5 E250
+G1 X10 Y5 E300
 ;LAYER_CHANGE
 ;Z:0.4
 ;TYPE:Inner wall
-G1 X0 Y0 E3
+G1 X0 Y0 E500
 """
 
 

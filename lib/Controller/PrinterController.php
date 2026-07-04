@@ -147,8 +147,16 @@ class PrinterController extends Controller
 
 		$params = $this->mergedParams();
 		$printerId = $this->printerIdFromParams($params);
+		// Require numeric values — a non-numeric would cast to 0.0/NaN and
+		// silently send M104 S0 (unintended heater shutdown), so reject it.
 		$hasNozzle = array_key_exists('nozzle', $params) && $params['nozzle'] !== '' && $params['nozzle'] !== null;
 		$hasBed = array_key_exists('bed', $params) && $params['bed'] !== '' && $params['bed'] !== null;
+		if (($hasNozzle && !is_numeric($params['nozzle'])) || ($hasBed && !is_numeric($params['bed']))) {
+			return new JSONResponse(
+				['error' => 'invalid_target', 'message' => 'Temperature values must be numeric'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
 		if (!$hasNozzle && !$hasBed) {
 			return new JSONResponse(
 				['error' => 'missing_target', 'message' => 'At least one of nozzle or bed temperature is required'],

@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.18.1] - 2026-07-03
+
+Printer-safety and telemetry-robustness fixes from a targeted audit of the
+Moonraker control path and WebSocket lifecycle.
+
+### Fixed
+
+- **Non-numeric temperature could command the wrong setpoint (safety).**
+  `setTemperature` checked only that nozzle/bed weren't empty, then cast to
+  float. A non-numeric value cast to `0.0` (→ `M104 S0`, unintended heater
+  shutdown) and, worse, an overflow like `1e999` cast to `INF` which clamps to
+  the **maximum** (→ `M104 S300`, unintended full nozzle heat). It now rejects
+  non-numeric nozzle/bed values with a 400 before any G-code is built, matching
+  the `is_numeric` validation the other tuning actions already use.
+  (`lib/Controller/PrinterController.php`)
+- **Print monitor showed stale live data after a WebSocket drop.** On `onclose`
+  the client scheduled a reconnect but emitted no state, so during the reconnect
+  window the UI kept showing the last-known temps/progress as if still
+  connected. It now emits a `reconnecting` (offline) state on drop — normalized
+  the same way as the HTTP-poll failure path. (`src/services/moonraker-ws.js`)
+
+### Tests
+
+- Added: temperature clamp danger cases (`abc`→0, `1e999`→max) and a guard-
+  presence assertion for `setTemperature` (34 phpunit). Vitest 176 unchanged.
+
+### Audit notes (verified safe, no change)
+
+- Moonraker write path is otherwise sound: motion-while-printing guard covers all
+  motion actions, temperature/speed/flow/fan/babystep/jog bounds are safe, the
+  console command + exclude-object inputs are charset/length guarded, there is no
+  raw `printer/gcode/script` passthrough, and multi-printer routing threads
+  `printer_id` correctly (URLs come from admin config, never user input).
+- Telemetry teardown is clean: every timer / listener / RAF / WebSocket has a
+  matching clear in a teardown path; reconnect fetches a fresh ws-ticket; the
+  HTTP-poll failure path already clears stale telemetry.
+
 ## [1.18.0] - 2026-07-03
 
 Two pro-slicer features: model-vs-support material breakdown, and

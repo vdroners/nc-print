@@ -242,6 +242,15 @@ export class MoonrakerWsClient {
 					this._ws = null
 					this._usingWs = false
 					if (!this._stopped) {
+						// Surface the drop so the UI stops showing stale live data
+						// as if still connected during the reconnect window. The
+						// store's mapPrinterState normalizes this to offline with
+						// cleared telemetry — same as the HTTP-poll failure path.
+						this.onState({
+							connected: false,
+							state: 'reconnecting',
+							lastError: 'Reconnecting to printer…',
+						})
 						this._reconnectTimer = setTimeout(() => {
 							void this.start({ printer: this._printer, printerId: this._printerId })
 						}, WS_RECONNECT_MS)
