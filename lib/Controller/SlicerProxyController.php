@@ -217,7 +217,7 @@ class SlicerProxyController extends Controller
 		'api/slice',        // covers api/slice and api/slice/stream
 		'api/jobs/',
 		'api/mesh/',
-		'api/calibration',  // covers list + calibration/{id}/slice
+		'api/calibration',  // covers list + calibration/{id}/slice + calibration/generate
 	];
 
 	private function isAllowedSlicerPath(string $upstreamPath): bool

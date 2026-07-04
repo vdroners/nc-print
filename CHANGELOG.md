@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.20.0] - 2026-07-03
+
+Calibration **generator suite** — seven procedural tuning prints that emit
+G-code directly (no slice engine), ported from the 3dprintforge calibration
+generators. Complements the existing 3MF-slice calibration path.
+
+### Added
+
+- **Procedural calibration generators** (sidecar `calibration_gcode.py`): temp
+  tower, retraction tower, flow test, pressure-advance tower, pressure-advance
+  pattern, first-layer test, and single-line (max-flow) test. Each returns
+  `{name, description, gcode, expected_minutes, filament_g, type}` with a
+  `; CALIBRATION:<type>` header and `CALIBRATION_END` marker. Output is
+  deterministic (no wall-clock timestamp) for reproducible G-code.
+- **Adapter endpoints**: `GET /api/calibration/list` now also returns a
+  `generators` array (kind `gcode` catalog with per-type params); new
+  `POST /api/calibration/generate` (`{type, params}`) writes the generated
+  G-code to a job dir and returns the job id, downloadable via the existing
+  `GET /api/jobs/{id}/gcode`. No engine exec.
+- **UI**: `CalibrationPanel` gains a "Generator prints" section — a card grid of
+  the seven generators with per-generator param forms and a **Generate G-code**
+  button. The result flows into the standard slice-result path, so
+  Save-to-Files and Send-to-printer work as with a sliced job.
+
+### Tests
+
+- Adapter: all seven generators emit non-empty G-code with the calibration
+  header/end markers and sane `filament_g`; temp-tower steps ascend to the
+  requested end temperature; param validation (low ≥ high) and unknown-type both
+  raise. (+3 adapter tests → 31.)
+- Frontend: new `calibration-api.spec` covers `fetchCalibrations`,
+  `fetchGenerators` (incl. missing-key tolerance), and `generateCalibration`
+  posting `{type, params}`.
+
 ## [1.19.1] - 2026-07-03
 
 Test-coverage backfill for high-risk untested paths, plus docs housekeeping. No

@@ -20,6 +20,27 @@ export async function fetchCalibrations() {
 }
 
 /**
+ * Procedural G-code calibration generators (retract/flow/PA/first-layer/etc.).
+ * @returns {Promise<Array<{ id: string, name: string, kind: string, help?: string, params?: object }>>}
+ */
+export async function fetchGenerators() {
+	const { data } = await axios.get(`${apiBase()}/calibration/list`)
+	return data.generators || []
+}
+
+/**
+ * Generate a calibration print's G-code directly (no slice engine).
+ * @param {object} opts
+ * @param {string} opts.type generator id
+ * @param {object} [opts.params]
+ * @returns {Promise<object>} { job_id, name, description, type, expected_minutes, filament_g, gcode_size }
+ */
+export async function generateCalibration({ type, params = {} }) {
+	const { data } = await axios.post(`${apiBase()}/calibration/generate`, { type, params })
+	return data
+}
+
+/**
  * Slice a calibration model. Streams SSE; resolves the `done` payload.
  * @param {object} opts
  * @param {string} opts.calibId

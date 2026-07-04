@@ -48,19 +48,61 @@
 
 		<p v-if="error" class="calib__error">{{ error }}</p>
 		<p v-if="doneMsg" class="calib__done">{{ doneMsg }}</p>
+
+		<template v-if="generators.length">
+			<h3 class="calib__title calib__title--sub">Generator prints</h3>
+			<p class="calib__hint">
+				Procedural tuning G-code (no slicer needed): retraction, flow,
+				pressure advance, first layer, max-flow speed.
+			</p>
+			<div class="calib__grid">
+				<button
+					v-for="g in generators"
+					:key="g.id"
+					type="button"
+					class="calib__card"
+					:class="{ 'calib__card--active': genSelected === g.id }"
+					@click="selectGenerator(g.id)">
+					<span class="calib__name">{{ g.name }}</span>
+					<span class="calib__kind">gcode</span>
+					<span class="calib__help">{{ g.help }}</span>
+				</button>
+			</div>
+
+			<div v-if="genSelectedObj" class="calib__params">
+				<label v-for="(val, key) in genParams" :key="key" class="calib__param">
+					{{ key }}
+					<input v-if="typeof val === 'number'" v-model.number="genParams[key]" type="number" step="any">
+					<input v-else v-model="genParams[key]" type="text">
+				</label>
+			</div>
+
+			<div class="calib__actions">
+				<button
+					type="button"
+					class="calib__btn calib__btn--primary"
+					:disabled="genBusy || !genSelected"
+					@click="generate">
+					{{ genBusy ? 'Generating…' : 'Generate G-code' }}
+				</button>
+			</div>
+			<p v-if="genError" class="calib__error">{{ genError }}</p>
+			<p v-if="genDoneMsg" class="calib__done">{{ genDoneMsg }}</p>
+		</template>
 	</div>
 </template>
 
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
-import { fetchCalibrations, sliceCalibration } from '@/services/calibration-api.js'
+import { fetchCalibrations, fetchGenerators, sliceCalibration, generateCalibration } from '@/services/calibration-api.js'
 
 export default {
 	name: 'CalibrationPanel',
 	data() {
 		return {
 			calibrations: [],
+			generators: [],
 			selected: '',
 			params: { temp_start: 220, temp_end: 190, step: 5 },
 			busy: false,
@@ -68,12 +110,21 @@ export default {
 			error: '',
 			loadError: '',
 			doneMsg: '',
+			// Generator (gcode) state
+			genSelected: '',
+			genParams: {},
+			genBusy: false,
+			genError: '',
+			genDoneMsg: '',
 		}
 	},
 	computed: {
 		...mapStores(usePrintStore),
 		selectedObj() {
 			return this.calibrations.find((c) => c.id === this.selected) || null
+		},
+		genSelectedObj() {
+			return this.generators.find((g) => g.id === this.genSelected) || null
 		},
 		printerReady() {
 			return !!this.printStore.selection?.printerId
@@ -82,11 +133,38 @@ export default {
 	async mounted() {
 		try {
 			this.calibrations = await fetchCalibrations()
+			this.generators = await fetchGenerators()
 		} catch (e) {
 			this.loadError = e?.message || 'Could not load calibration catalog'
 		}
 	},
 	methods: {
+		selectGenerator(id) {
+			this.genSelected = id
+			const g = this.generators.find((x) => x.id === id)
+			// Clone the default params so the form is editable per selection.
+			this.genParams = { ...(g?.params || {}) }
+			this.genError = ''
+			this.genDoneMsg = ''
+		},
+		async generate() {
+			if (!this.genSelected) {
+				return
+			}
+			this.genBusy = true
+			this.genError = ''
+			this.genDoneMsg = ''
+			try {
+				const done = await generateCalibration({ type: this.genSelected, params: this.genParams })
+				await this.printStore.applyArrangedSliceResult?.(done)
+				this.genDoneMsg = `${done.name} generated — open Slice results to save or send.`
+				this.$emit('sliced', done)
+			} catch (e) {
+				this.genError = e?.response?.data?.message || e?.message || 'Generation failed'
+			} finally {
+				this.genBusy = false
+			}
+		},
 		async slice() {
 			if (!this.selected || !this.printerReady) {
 				return
@@ -125,6 +203,7 @@ export default {
 <style scoped lang="scss">
 .calib { display: flex; flex-direction: column; gap: 8px; }
 .calib__title { margin: 0; font-size: 0.95rem; }
+.calib__title--sub { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--color-border, #30363d); }
 .calib__hint { margin: 0; font-size: 0.8rem; color: var(--color-text-maxcontrast, #8b949e); }
 .calib__grid {
 	display: grid;

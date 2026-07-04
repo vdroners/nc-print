@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.19.1** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.20.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -28,8 +28,10 @@ external slicer service** and no NC-GCS dependency.
 - **3D toolpath preview** — inspect the printed paths after slicing with
   per-feature colours, a layer slider, and toggleable travel moves
 - **Multi-object plates** — add several models and auto-arrange them on one plate
-- **Calibration suite** — one-click flow-rate models and a parametric
-  temperature tower
+- **Calibration suite** — one-click flow-rate models, a parametric temperature
+  tower, plus seven procedural **generator prints** (temp/retract/flow/
+  pressure-advance towers, a PA pattern, first-layer patch, and single-line
+  max-flow test) that emit tuning G-code directly with no slice needed
 - **Pause / filament change at height** — insert M600 (filament change) or M601
   (pause) at chosen Z heights, for multi-colour prints, embedding hardware, or
   inspection

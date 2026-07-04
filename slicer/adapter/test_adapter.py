@@ -520,6 +520,50 @@ def test_resolve_triple_supplies_filament_when_none_given():
     assert any("no usable filament" in w for w in warn)
 
 
+def test_calibration_generators_all_emit_valid_gcode():
+    from calibration_gcode import list_gcode_calibrations, generate
+    ids = [c["id"] for c in list_gcode_calibrations()]
+    assert set(ids) == {
+        "temp-tower", "retract-tower", "flow-test", "pressure-advance",
+        "pressure-advance-pattern", "first-layer", "single-line",
+    }
+    for cid in ids:
+        r = generate(cid)
+        assert r["gcode"], f"{cid} produced no gcode"
+        assert f"; CALIBRATION:{r['type']}" in r["gcode"], f"{cid} missing header"
+        assert "CALIBRATION_END" in r["gcode"], f"{cid} missing end marker"
+        assert isinstance(r["filament_g"], (int, float))
+        assert r["expected_minutes"] >= 1
+
+
+def test_temp_tower_steps_are_monotonic():
+    from calibration_gcode import generate
+    import re
+    r = generate("temp-tower", {"hotendStart": 200, "hotendEnd": 230, "blocks": 4})
+    # Block M104 commands after the prelude preheat should ascend to hotendEnd.
+    temps = [int(m) for m in re.findall(r"M104 S(\d+)", r["gcode"])]
+    assert temps[-1] == 0 or 230 in temps  # POSTLUDE sets M104 S0; blocks hit 230
+    block_temps = [t for t in temps if t > 0]
+    assert block_temps == sorted(block_temps)
+    assert 230 in block_temps
+
+
+def test_calibration_generate_validates():
+    from calibration_gcode import generate
+    raised = False
+    try:
+        generate("temp-tower", {"hotendStart": 250, "hotendEnd": 200})  # low >= high
+    except ValueError:
+        raised = True
+    assert raised
+    raised2 = False
+    try:
+        generate("no-such-type")
+    except ValueError:
+        raised2 = True
+    assert raised2
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t

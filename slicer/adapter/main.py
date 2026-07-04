@@ -42,6 +42,8 @@ from calibration import (
     list_calibrations,
     shipped_model_path,
 )
+from calibration_gcode import generate as calib_generate
+from calibration_gcode import list_gcode_calibrations
 from gcode_postprocess import inject_pauses
 from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
@@ -554,8 +556,56 @@ async def job_gcode(job_id: str, request: Request) -> Response:
 
 @app.get("/api/calibration/list")
 async def calibration_list() -> JSONResponse:
-    """Catalog of available calibration prints (shipped models + parametric)."""
-    return JSONResponse({"calibrations": list_calibrations()})
+    """Catalog of calibration prints: engine-sliced (shipped models + temp tower)
+    plus the procedural G-code generators (retract/flow/PA/first-layer/etc.)."""
+    return JSONResponse({
+        "calibrations": list_calibrations(),
+        "generators": list_gcode_calibrations(),
+    })
+
+
+@app.post("/api/calibration/generate")
+async def calibration_generate(request: Request) -> JSONResponse:
+    """Generate a calibration print's G-code directly (no slice engine).
+
+    Body: {type, params}. Writes the gcode to a job dir and returns metadata +
+    the job_id so the frontend downloads it via GET /api/jobs/{id}/gcode and can
+    Save-to-Files / Send-to-printer through the usual flow.
+    """
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    ctype = str(payload.get("type", ""))
+    params = payload.get("params") or {}
+    if not isinstance(params, dict):
+        params = {}
+    try:
+        result = calib_generate(ctype, params)
+    except ValueError as exc:
+        return JSONResponse({"error": "bad_calibration", "message": str(exc)}, 400)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[calibration generate {ctype}] failed: {exc}", flush=True)
+        return JSONResponse({"error": "generate_failed",
+                             "message": "Could not generate calibration"}, 500)
+
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOB_ROOT, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    gcode_path = os.path.join(job_dir, "plate_1.gcode")
+    with open(gcode_path, "w", encoding="ascii", errors="ignore") as fh:
+        fh.write(result["gcode"])
+    _JOBS[job_id] = {"gcode": gcode_path, "meta": {}, "created": time.monotonic()}
+    return JSONResponse({
+        "ok": True,
+        "job_id": job_id,
+        "name": result["name"],
+        "description": result["description"],
+        "type": result["type"],
+        "expected_minutes": result.get("expected_minutes"),
+        "filament_g": result.get("filament_g"),
+        "gcode_size": os.path.getsize(gcode_path),
+    })
 
 
 @app.post("/api/calibration/{calib_id}/slice")
