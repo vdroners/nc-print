@@ -108,6 +108,17 @@ export function buildSliceOverrides(form = {}) {
 		overrides.support_type = String(form.supportType)
 	}
 
+	// Surface-quality / detail overrides (process-scoped in the engine).
+	bool('adaptive_layer_height', form.adaptiveLayerHeight)
+	const str = (key, val) => {
+		if (val !== '' && val != null) {
+			overrides[key] = String(val)
+		}
+	}
+	str('ironing_type', form.ironingType)
+	str('fuzzy_skin', form.fuzzySkin)
+	str('seam_position', form.seamPosition)
+
 	return overrides
 }
 
@@ -176,6 +187,10 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'brimWidth', label: 'Brim width (mm)' },
 	{ key: 'raftLayers', label: 'Raft layers' },
 	{ key: 'skirtLoops', label: 'Skirt loops' },
+	{ key: 'adaptiveLayerHeight', label: 'Adaptive layers', format: v => (v ? 'On' : 'Off') },
+	{ key: 'ironingType', label: 'Ironing' },
+	{ key: 'fuzzySkin', label: 'Fuzzy skin' },
+	{ key: 'seamPosition', label: 'Seam position' },
 ]
 
 /**

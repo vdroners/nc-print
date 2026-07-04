@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.19.0] - 2026-07-03
+
+Surface-quality slice overrides.
+
+### Added
+
+- **Ironing, fuzzy skin, seam position, and adaptive layer height** — a new
+  "Surface quality" section in the quick-edit override panel. All four are real
+  engine process keys (verified in the shipped OrcaSlicer-fork presets), applied
+  through the existing override plumbing (`buildSliceOverrides` →
+  `SlicerProxyController`/multipart → sidecar `overrides.py` merges them into a
+  copy of the process preset). Ironing (off/top/topmost/all-solid), fuzzy skin
+  (off/outer/all walls), seam (aligned/nearest/back/random), adaptive layers
+  (on/off). Empty selections fall through to the profile default.
+
+### Tests
+
+- Frontend: `buildSliceOverrides` maps the four keys and omits empty ones.
+  Adapter: `split_overrides` routes them to process scope with correct values
+  (178 vitest, 24 adapter, 34 phpunit).
+
 ## [1.18.1] - 2026-07-03
 
 Printer-safety and telemetry-robustness fixes from a targeted audit of the

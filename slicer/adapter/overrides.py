@@ -41,6 +41,11 @@ _MAP = {
     "brim_width":         ("brim_width",                "process", "num"),
     "raft_layers":        ("raft_layers",               "process", "num"),
     "skirt_loops":        ("skirt_loops",               "process", "num"),
+    # ── surface quality / detail (process-scoped) ──
+    "adaptive_layer_height": ("adaptive_layer_height",  "process", "bool"),
+    "ironing_type":       ("ironing_type",              "process", "str"),
+    "fuzzy_skin":         ("fuzzy_skin",                "process", "str"),
+    "seam_position":      ("seam_position",             "process", "str"),
     # ── filament-scoped ──
     "nozzle_temperature": ("nozzle_temperature",        "filament", "temp"),
     "bed_temperature":    ("hot_plate_temp",            "filament", "temp"),

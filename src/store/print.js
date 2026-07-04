@@ -234,6 +234,10 @@ export const usePrintStore = defineStore('print', {
 			brimWidth: '',
 			raftLayers: '',
 			skirtLoops: '',
+			adaptiveLayerHeight: false,
+			ironingType: '',
+			fuzzySkin: '',
+			seamPosition: '',
 		},
 		overridesCollapsed: true,
 		// Pause / filament-change points injected into gcode at a Z height.

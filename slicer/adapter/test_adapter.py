@@ -120,6 +120,22 @@ def test_override_mapping_scopes_and_keys():
     assert "bogus_key" in unknown
 
 
+def test_override_surface_quality_keys():
+    from overrides import split_overrides
+    proc, fil, unknown = split_overrides({
+        "adaptive_layer_height": True,
+        "ironing_type": "top",
+        "fuzzy_skin": "external",
+        "seam_position": "aligned",
+    })
+    assert proc["adaptive_layer_height"] == "1"
+    assert proc["ironing_type"] == "top"
+    assert proc["fuzzy_skin"] == "external"
+    assert proc["seam_position"] == "aligned"
+    assert fil == {}
+    assert unknown == []
+
+
 def test_override_percent_forms():
     from overrides import split_overrides
     # already-percent value (55) and fractional (0.55) both -> "55%"

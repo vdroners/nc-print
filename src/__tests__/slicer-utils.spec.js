@@ -41,6 +41,26 @@ describe('slicer-utils', () => {
 		expect(o.skirt_loops).toBe(1)
 	})
 
+	it('buildSliceOverrides maps surface-quality fields', () => {
+		const o = buildSliceOverrides({
+			adaptiveLayerHeight: true,
+			ironingType: 'top',
+			fuzzySkin: 'external',
+			seamPosition: 'aligned',
+		})
+		expect(o.adaptive_layer_height).toBe(true)
+		expect(o.ironing_type).toBe('top')
+		expect(o.fuzzy_skin).toBe('external')
+		expect(o.seam_position).toBe('aligned')
+	})
+
+	it('buildSliceOverrides omits empty surface-quality fields', () => {
+		const o = buildSliceOverrides({ ironingType: '', fuzzySkin: '', seamPosition: '' })
+		expect('ironing_type' in o).toBe(false)
+		expect('fuzzy_skin' in o).toBe(false)
+		expect('seam_position' in o).toBe(false)
+	})
+
 	it('mergeProfileSettings merges settings_json', () => {
 		const merged = mergeProfileSettings(
 			{

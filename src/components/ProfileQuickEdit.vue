@@ -10,6 +10,29 @@ const SUPPORT_TYPES = [
 	{ value: 'grid', label: 'Grid' },
 ]
 
+const IRONING_TYPES = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'no ironing', label: 'Off' },
+	{ value: 'top', label: 'Top surfaces' },
+	{ value: 'topmost', label: 'Topmost only' },
+	{ value: 'solid', label: 'All solid' },
+]
+
+const FUZZY_SKIN = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'none', label: 'Off' },
+	{ value: 'external', label: 'Outer walls' },
+	{ value: 'all', label: 'All walls' },
+]
+
+const SEAM_POSITIONS = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'aligned', label: 'Aligned' },
+	{ value: 'nearest', label: 'Nearest' },
+	{ value: 'back', label: 'Back' },
+	{ value: 'random', label: 'Random' },
+]
+
 export default {
 	name: 'ProfileQuickEdit',
 	emits: ['change'],
@@ -17,6 +40,15 @@ export default {
 		...mapStores(usePrintStore),
 		supportTypes() {
 			return SUPPORT_TYPES
+		},
+		ironingTypes() {
+			return IRONING_TYPES
+		},
+		fuzzySkinOptions() {
+			return FUZZY_SKIN
+		},
+		seamPositions() {
+			return SEAM_POSITIONS
 		},
 	},
 	methods: {
@@ -76,6 +108,34 @@ export default {
 			<div class="nc-print-field">
 				<label>Skirt loops</label>
 				<input v-model="printStore.overrides.skirtLoops" type="number" step="1" min="0" @change="emitChange">
+			</div>
+		</div>
+
+		<h3 class="nc-print-quick-edit__title">Surface quality</h3>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label for="nc-print-ironing-type">Ironing</label>
+				<select id="nc-print-ironing-type" v-model="printStore.overrides.ironingType" @change="emitChange">
+					<option v-for="opt in ironingTypes" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-fuzzy-skin">Fuzzy skin</label>
+				<select id="nc-print-fuzzy-skin" v-model="printStore.overrides.fuzzySkin" @change="emitChange">
+					<option v-for="opt in fuzzySkinOptions" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-seam-position">Seam position</label>
+				<select id="nc-print-seam-position" v-model="printStore.overrides.seamPosition" @change="emitChange">
+					<option v-for="opt in seamPositions" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field nc-print-field--checkbox">
+				<label>
+					<input v-model="printStore.overrides.adaptiveLayerHeight" type="checkbox" @change="emitChange">
+					Adaptive layer height
+				</label>
 			</div>
 		</div>
 	</div>
