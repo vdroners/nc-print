@@ -160,6 +160,28 @@ per-triangle 3MF attributes the engine reads (`paint_supports`, `paint_seam`).
   which is a documented, simpler 3MF mechanism, and note the downgrade. Decide
   during implementation from the round-trip test.
 
+## Resolution (2026-07): Phase 4 painting DEFERRED
+
+Phases 0–3 shipped (v1.28.0–v1.31.0). **Phase 4 (painting) was deferred** after
+empirical testing showed neither mechanism affects this engine build's slice
+output through the CLI 3MF path:
+- `support_enforcer` PART (subtype in model_settings.config) with global supports
+  OFF → **0** `;TYPE:Support` toolpath markers on an overhang model (reference:
+  per-object `enable_support=1` → 67; OFF → 0). Not honored.
+- per-triangle `paint_supports` attrs: the engine binary is stripped, so the
+  exact encoding this build reads couldn't be confirmed; not implemented blind.
+
+Shipping a paint brush (or enforcer/blocker boxes) that doesn't change the slice
+would be a no-op, so it was not shipped. To revisit: produce a GUI-painted 3MF
+from the desktop OrcaSlicer-fork and round-trip it to learn the exact
+`paint_supports` triangle-attribute encoding, or move to a newer engine build.
+The proven-good discriminator is the `;TYPE:Support` marker count (NOT the word
+"support", which is dominated by config-echo noise). See memory
+[[nc-print-engine-3mf-capabilities]].
+
+Note: per-object `enable_support` (whole-object) DOES work (Phase 3), so
+supports can be forced/blocked per *object* today — just not per painted region.
+
 ## Out of scope
 LED/neopixel control, curated macro runner (still deferred), variable-layer-height
 painting, negative/modifier volumes beyond support enforcers/blockers, wipe-tower
