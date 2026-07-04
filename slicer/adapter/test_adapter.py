@@ -677,6 +677,25 @@ def test_overrides_new_quality_keys_map_to_engine_keys():
     assert unknown == []
 
 
+def test_overrides_wipe_prime_tower_keys():
+    from overrides import split_overrides
+    process, filament, unknown = split_overrides({
+        "enable_prime_tower": True,
+        "prime_tower_width": 60,
+        "prime_tower_brim_width": 3,
+        "prime_volume": 45,
+        "wipe_tower_rotation": 90,
+        "wipe_tower_extra_spacing": 150,  # percentage -> "150%"
+    })
+    assert process["enable_prime_tower"] == "1"
+    assert process["prime_tower_width"] == "60"
+    assert process["prime_tower_brim_width"] == "3"
+    assert process["prime_volume"] == "45"
+    assert process["wipe_tower_rotation_angle"] == "90"
+    assert process["wipe_tower_extra_spacing"] == "150%"
+    assert filament == {} and unknown == []
+
+
 def test_overrides_omit_empty_new_keys():
     from overrides import split_overrides
     process, _f, _u = split_overrides({

@@ -131,6 +131,15 @@ export function buildSliceOverrides(form = {}) {
 	num('support_interface_layers', form.supportInterfaceLayers)
 	num('support_interface_spacing', form.supportInterfaceSpacing)
 
+	// Wipe / prime tower (multi-material purge). enable is a bool; the rest are
+	// numeric; extra-spacing is a percentage handled server-side as "NN%".
+	bool('enable_prime_tower', form.enablePrimeTower)
+	num('prime_tower_width', form.primeTowerWidth)
+	num('prime_tower_brim_width', form.primeTowerBrimWidth)
+	num('prime_volume', form.primeVolume)
+	num('wipe_tower_rotation', form.wipeTowerRotation)
+	num('wipe_tower_extra_spacing', form.wipeTowerExtraSpacing)
+
 	return overrides
 }
 
@@ -212,6 +221,12 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'supportTopGap', label: 'Support top gap (mm)' },
 	{ key: 'supportInterfaceLayers', label: 'Support interface layers' },
 	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)' },
+	{ key: 'enablePrimeTower', label: 'Prime tower', format: v => (v ? 'On' : 'Off') },
+	{ key: 'primeTowerWidth', label: 'Prime tower width (mm)' },
+	{ key: 'primeTowerBrimWidth', label: 'Prime tower brim (mm)' },
+	{ key: 'primeVolume', label: 'Prime volume (mm³)' },
+	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)' },
+	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)' },
 ]
 
 /**

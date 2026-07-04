@@ -59,6 +59,13 @@ _MAP = {
     "support_interface_spacing": ("support_interface_spacing", "process", "num"),
     # ── first layer (process-scoped) ──
     "first_layer_height": ("initial_layer_print_height", "process", "num"),
+    # ── wipe / prime tower (process-scoped; multi-material purge) ──
+    "enable_prime_tower":     ("enable_prime_tower",       "process", "bool"),
+    "prime_tower_width":      ("prime_tower_width",        "process", "num"),
+    "prime_tower_brim_width": ("prime_tower_brim_width",   "process", "num"),
+    "prime_volume":           ("prime_volume",             "process", "num"),
+    "wipe_tower_rotation":    ("wipe_tower_rotation_angle", "process", "num"),
+    "wipe_tower_extra_spacing": ("wipe_tower_extra_spacing", "process", "pct"),
     # ── filament-scoped ──
     "nozzle_temperature": ("nozzle_temperature",        "filament", "temp"),
     "bed_temperature":    ("hot_plate_temp",            "filament", "temp"),

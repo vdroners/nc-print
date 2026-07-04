@@ -285,6 +285,12 @@ export const usePrintStore = defineStore('print', {
 			supportTopGap: '',
 			supportInterfaceLayers: '',
 			supportInterfaceSpacing: '',
+			enablePrimeTower: false,
+			primeTowerWidth: '',
+			primeTowerBrimWidth: '',
+			primeVolume: '',
+			wipeTowerRotation: '',
+			wipeTowerExtraSpacing: '',
 		},
 		overridesCollapsed: true,
 		// Pause / filament-change points injected into gcode at a Z height.

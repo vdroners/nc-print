@@ -79,6 +79,10 @@ export default {
 		surfacePatterns() {
 			return SURFACE_PATTERNS
 		},
+		// A prime/wipe tower only makes sense for a multi-material plate.
+		isMultiMaterial() {
+			return (this.printStore.selection.filamentIds || []).length > 1
+		},
 	},
 	methods: {
 		emitChange() {
@@ -217,6 +221,42 @@ export default {
 				<input v-model="printStore.overrides.solidInfillSpeed" type="number" step="1" min="0" @change="emitChange">
 			</div>
 		</div>
+
+		<template v-if="isMultiMaterial">
+			<h3 class="nc-print-quick-edit__title">Prime / wipe tower</h3>
+			<p class="nc-print-quick-edit__hint">
+				Purge tower for multi-material prints — the tower catches the
+				filament wasted at each colour change.
+			</p>
+			<div class="nc-print-overrides-grid">
+				<div class="nc-print-field nc-print-field--checkbox">
+					<label>
+						<input v-model="printStore.overrides.enablePrimeTower" type="checkbox" @change="emitChange">
+						Enable prime tower
+					</label>
+				</div>
+				<div class="nc-print-field">
+					<label>Tower width (mm)</label>
+					<input v-model="printStore.overrides.primeTowerWidth" type="number" step="1" min="0" @change="emitChange">
+				</div>
+				<div class="nc-print-field">
+					<label>Tower brim (mm)</label>
+					<input v-model="printStore.overrides.primeTowerBrimWidth" type="number" step="0.5" min="0" @change="emitChange">
+				</div>
+				<div class="nc-print-field">
+					<label>Prime volume (mm³)</label>
+					<input v-model="printStore.overrides.primeVolume" type="number" step="1" min="0" @change="emitChange">
+				</div>
+				<div class="nc-print-field">
+					<label>Rotation (°)</label>
+					<input v-model="printStore.overrides.wipeTowerRotation" type="number" step="1" @change="emitChange">
+				</div>
+				<div class="nc-print-field">
+					<label>Extra spacing (%)</label>
+					<input v-model="printStore.overrides.wipeTowerExtraSpacing" type="number" step="10" min="100" max="300" @change="emitChange">
+				</div>
+			</div>
+		</template>
 	</div>
 </template>
 
@@ -229,6 +269,12 @@ export default {
 
 .nc-print-quick-edit__title:first-child {
 	margin-top: var(--nc-gcs-space-sm);
+}
+
+.nc-print-quick-edit__hint {
+	font-size: 0.78rem;
+	color: var(--color-text-maxcontrast, #8b949e);
+	margin: 0 0 var(--nc-gcs-space-sm);
 }
 
 .nc-print-overrides-grid {

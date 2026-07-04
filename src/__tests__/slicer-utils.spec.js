@@ -77,6 +77,29 @@ describe('slicer-utils', () => {
 		expect(o.first_layer_height).toBe(0.25)
 	})
 
+	it('buildSliceOverrides maps wipe/prime tower fields', () => {
+		const o = buildSliceOverrides({
+			enablePrimeTower: true,
+			primeTowerWidth: '60',
+			primeTowerBrimWidth: '3',
+			primeVolume: '45',
+			wipeTowerRotation: '90',
+			wipeTowerExtraSpacing: '150',
+		})
+		expect(o.enable_prime_tower).toBe(true)
+		expect(o.prime_tower_width).toBe(60)
+		expect(o.prime_tower_brim_width).toBe(3)
+		expect(o.prime_volume).toBe(45)
+		expect(o.wipe_tower_rotation).toBe(90)
+		expect(o.wipe_tower_extra_spacing).toBe(150)
+	})
+
+	it('buildSliceOverrides omits the prime tower when disabled/empty', () => {
+		const o = buildSliceOverrides({ enablePrimeTower: false, primeTowerWidth: '' })
+		expect(o.enable_prime_tower).toBe(false) // bool always emitted when set
+		expect('prime_tower_width' in o).toBe(false)
+	})
+
 	it('buildSliceOverrides omits empty pattern/speed fields', () => {
 		const o = buildSliceOverrides({ infillPattern: '', infillSpeed: '', firstLayerHeight: '' })
 		expect('infill_pattern' in o).toBe(false)

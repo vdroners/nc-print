@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.29.0] - 2026-07-04
+
+**Prime / wipe tower** for multi-material prints — the purge tower that catches
+filament wasted at each colour change. Engine keys already existed; this wires
+them through as overrides with a UI shown only for multi-material plates.
+
+### Added
+
+- New process overrides (`overrides.py` `_MAP` + store + `buildSliceOverrides` +
+  `OVERRIDE_FIELD_DEFS`): `enable_prime_tower`, `prime_tower_width`,
+  `prime_tower_brim_width`, `prime_volume`, `wipe_tower_rotation`
+  (→ wipe_tower_rotation_angle), `wipe_tower_extra_spacing` (percentage).
+- **UI**: a "Prime / wipe tower" group in `ProfileQuickEdit`, shown only when
+  more than one filament is selected (a tower is meaningless single-material).
+
+### Tests
+
+- Adapter (+1 → 42): tower keys map to the engine keys with correct
+  bool/num/pct formatting.
+- Frontend (+2 → 223): `buildSliceOverrides` maps the tower fields and omits the
+  empty ones.
+
 ## [1.28.0] - 2026-07-04
 
 Developer-workflow hardening — removes the friction/footguns that kept requiring
