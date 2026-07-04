@@ -236,6 +236,9 @@ export const usePrintStore = defineStore('print', {
 			skirtLoops: '',
 		},
 		overridesCollapsed: true,
+		// Pause / filament-change points injected into gcode at a Z height.
+		// Each: { height: number, type: 'filament_change'|'pause' }
+		pauses: [],
 		sliceJob: {
 			status: 'idle',
 			stage: '',
@@ -1371,6 +1374,7 @@ export const usePrintStore = defineStore('print', {
 					filamentIds,
 					processId: this.selection.processId,
 					overrides,
+					pauses: this.pauses,
 					signal,
 					onEvent: ({ event, parsed }) => {
 						if (event === 'progress' && parsed) {
@@ -1706,6 +1710,25 @@ export const usePrintStore = defineStore('print', {
 
 		persistOverrides() {
 			this._persistOverrides()
+		},
+
+		// ── Pause / filament-change at height ──────────────────────────
+		addPause({ height, type = 'filament_change' } = {}) {
+			const h = Number(height)
+			if (!Number.isFinite(h) || h <= 0) {
+				return false
+			}
+			this.pauses = [...this.pauses, { height: h, type }]
+				.sort((a, b) => a.height - b.height)
+			return true
+		},
+		removePause(index) {
+			if (index >= 0 && index < this.pauses.length) {
+				this.pauses = this.pauses.filter((_, i) => i !== index)
+			}
+		},
+		clearPauses() {
+			this.pauses = []
 		},
 	},
 })

@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.18.0] - 2026-07-03
+
+Two pro-slicer features: model-vs-support material breakdown, and
+pause / filament-change at a Z height.
+
+### Added
+
+- **Model vs support filament + cost breakdown.** The engine's gcode footer only
+  reports total filament (often 0 g when the preset has no density), so the
+  slice-result panel's model/support/cost rows never populated. New sidecar
+  `gcode_stats.py` computes per-feature filament (integrating E-delta ×
+  filament cross-section, classifying `;TYPE:Support*` moves) and a support-time
+  share; the slice `done` payload now carries `model_filament_g`,
+  `support_filament_g`, and `support_time_s`. Density/diameter are read from the
+  gcode footer with a PLA-density fallback so grams/cost are non-zero even for
+  density-less presets. The existing SliceResultPanel UI + `estimateFilamentCost`
+  now light up with no frontend change.
+- **Pause / filament-change at height.** New **PausePlanner** panel (Slice tab)
+  lets you add pause (M601) or filament-change (M600) points at chosen Z heights
+  — for multi-colour prints, embedding hardware, or inspection. New sidecar
+  `gcode_postprocess.py` injects the command at the start of the first layer
+  whose `;Z:` ≥ the target height (safe command allowlist: M600/M601/M0/M25).
+  Plumbed through: store `pauses` state + add/remove/clear actions →
+  `sliceStream` query param → `SlicerProxyController`/`MultipartBuilder` multipart
+  `pauses` field → adapter post-process. The `done` payload reports
+  `pauses_applied`.
+
+### Tests
+
+- Adapter: model/support breakdown split, pause injection placement + unsafe-
+  command rejection (22 adapter tests). Frontend: pause store actions (add sorts
+  by height / rejects invalid, remove, clear) — 176 vitest. 32 phpunit.
+
 ## [1.17.1] - 2026-07-03
 
 Audit fixes: correctness bugs, a cancel/resource-leak DoS vector, and sidecar

@@ -42,6 +42,8 @@ from calibration import (
     list_calibrations,
     shipped_model_path,
 )
+from gcode_postprocess import inject_pauses
+from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf, stls_to_multiobject_3mf
 from mesh_analyze import analyze_stl
@@ -194,7 +196,7 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
     msg = BytesParser(policy=HTTP).parsebytes(hdr + body)
     fields: dict = {"model": None, "models": [], "arrange": False,
                     "printer_id": "", "process_id": "",
-                    "filament_ids": [], "overrides": {}}
+                    "filament_ids": [], "overrides": {}, "pauses": []}
     for part in msg.iter_parts():
         cd = part.get("Content-Disposition", "")
         name = None
@@ -227,6 +229,12 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
                 fields["overrides"] = json.loads(payload.decode() or "{}")
             except Exception:  # noqa: BLE001
                 fields["overrides"] = {}
+        elif name == "pauses":
+            try:
+                v = json.loads(payload.decode() or "[]")
+                fields["pauses"] = v if isinstance(v, list) else []
+            except Exception:  # noqa: BLE001
+                fields["pauses"] = []
         else:
             fields[name] = payload.decode(errors="replace").strip()
     return fields
@@ -238,7 +246,8 @@ def _sse(event: str, data: dict) -> bytes:
 
 async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
                      machine: str, process: str, filaments: list[str],
-                     overrides: dict | None = None, arrange: bool = False):
+                     overrides: dict | None = None, arrange: bool = False,
+                     pauses: list | None = None):
     """Async generator yielding SSE bytes while the CLI slices."""
     # Apply the UI's slice overrides by merging them into process/filament
     # preset copies (the CLI has no per-key override flags). Without this, every
@@ -311,14 +320,33 @@ async def _run_slice(job_id: str, job_dir: str, model_3mf: str,
         gcode = os.path.join(job_dir, cand[0]) if cand else ""
 
     if gcode and os.path.exists(gcode) and os.path.getsize(gcode) > 0:
+        # Post-process: inject pause / filament-change commands at requested
+        # heights (the engine has no preset key for this).
+        pauses_applied = 0
+        if pauses:
+            try:
+                pauses_applied = inject_pauses(gcode, pauses)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[slice {job_id}] pause injection failed: {exc}", flush=True)
         meta = _read_gcode_meta(gcode)
+        # Per-feature filament (model vs support) + support-time share, which the
+        # gcode footer doesn't provide — feeds the app's cost/material breakdown.
+        breakdown = compute_breakdown(gcode)
+        est_s = meta.get("estimated_time_s")
+        support_time_s = None
+        if breakdown.get("support_time_frac") and est_s:
+            support_time_s = int(round(est_s * breakdown["support_time_frac"]))
         _JOBS[job_id] = {"gcode": gcode, "meta": meta, "created": time.monotonic()}
         yield _sse("done", {
             "ok": True,
             "job_id": job_id,
             "gcode_size": os.path.getsize(gcode),
-            "estimated_time_s": meta.get("estimated_time_s"),
+            "estimated_time_s": est_s,
             "filament_used_g": meta.get("filament_used_g"),
+            "model_filament_g": breakdown.get("model_filament_g"),
+            "support_filament_g": breakdown.get("support_filament_g"),
+            "support_time_s": support_time_s,
+            "pauses_applied": pauses_applied,
         })
         return
 
@@ -478,7 +506,8 @@ async def slice_stream(request: Request) -> Response:
             async for chunk in _run_slice(job_id, job_dir, model_3mf,
                                           machine, process, filaments,
                                           fields.get("overrides"),
-                                          arrange=do_arrange):
+                                          arrange=do_arrange,
+                                          pauses=fields.get("pauses")):
                 yield chunk
         finally:
             _slice_slots.release()

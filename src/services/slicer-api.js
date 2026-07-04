@@ -35,6 +35,7 @@ export async function sliceStream({
 	filamentIds = [],
 	processId,
 	overrides = {},
+	pauses = [],
 	signal,
 	onEvent,
 }) {
@@ -47,6 +48,9 @@ export async function sliceStream({
 	}
 	if (Object.keys(overrides).length) {
 		params.set('overrides', JSON.stringify(overrides))
+	}
+	if (Array.isArray(pauses) && pauses.length) {
+		params.set('pauses', JSON.stringify(pauses))
 	}
 
 	const body = model instanceof Blob ? await model.arrayBuffer() : model

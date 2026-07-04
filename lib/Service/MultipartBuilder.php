@@ -21,6 +21,7 @@ final class MultipartBuilder
 		array $filamentIds,
 		string $processId,
 		?array $overrides = null,
+		?array $pauses = null,
 	): array {
 		$boundary = self::generateBoundary();
 		$safeName = self::sanitizeFilename($filename);
@@ -32,6 +33,9 @@ final class MultipartBuilder
 		];
 		if ($overrides !== null && $overrides !== []) {
 			$parts[] = self::fieldPart($boundary, 'overrides', json_encode($overrides, JSON_THROW_ON_ERROR));
+		}
+		if ($pauses !== null && $pauses !== []) {
+			$parts[] = self::fieldPart($boundary, 'pauses', json_encode(array_values($pauses), JSON_THROW_ON_ERROR));
 		}
 		$body = implode('', $parts) . '--' . $boundary . "--\r\n";
 

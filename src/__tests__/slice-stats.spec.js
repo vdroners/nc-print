@@ -67,3 +67,31 @@ describe('lastCompletedSliceStats getter', () => {
 		expect(stats.supportFilamentG).toBeNull()
 	})
 })
+
+describe('pause-at-height actions', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('adds pauses sorted by height and rejects invalid input', () => {
+		const store = usePrintStore()
+		expect(store.pauses).toEqual([])
+		expect(store.addPause({ height: 10, type: 'pause' })).toBe(true)
+		expect(store.addPause({ height: 5, type: 'filament_change' })).toBe(true)
+		expect(store.addPause({ height: 0 })).toBe(false)
+		expect(store.addPause({ height: 'x' })).toBe(false)
+		expect(store.pauses.map(p => p.height)).toEqual([5, 10]) // sorted
+		expect(store.pauses[0].type).toBe('filament_change')
+	})
+
+	it('removes and clears pauses', () => {
+		const store = usePrintStore()
+		store.addPause({ height: 3 })
+		store.addPause({ height: 6 })
+		store.removePause(0)
+		expect(store.pauses.map(p => p.height)).toEqual([6])
+		store.clearPauses()
+		expect(store.pauses).toEqual([])
+	})
+})

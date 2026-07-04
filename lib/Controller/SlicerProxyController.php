@@ -395,6 +395,13 @@ class SlicerProxyController extends Controller
 				$overrides = $decoded;
 			}
 		}
+		$pauses = null;
+		if (!empty($params['pauses'])) {
+			$decoded = json_decode((string) $params['pauses'], true);
+			if (is_array($decoded)) {
+				$pauses = $decoded;
+			}
+		}
 
 		return MultipartBuilder::buildSliceMultipart(
 			$modelBody,
@@ -403,6 +410,7 @@ class SlicerProxyController extends Controller
 			$filamentIds,
 			$processId,
 			$overrides,
+			$pauses,
 		);
 	}
 

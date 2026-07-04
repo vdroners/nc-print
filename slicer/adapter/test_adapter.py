@@ -348,6 +348,80 @@ def test_calib_id_validation_regex():
     assert bad2 is None
 
 
+_BREAKDOWN_GCODE = """; filament_diameter = 1.75
+; filament_density = 1.24
+;LAYER_CHANGE
+;Z:0.2
+;TYPE:Outer wall
+G1 X0 Y0 E0
+G1 X10 Y0 E1
+;TYPE:Support
+G1 X0 Y5 E1.5
+G1 X10 Y5 E2.0
+;LAYER_CHANGE
+;Z:0.4
+;TYPE:Inner wall
+G1 X0 Y0 E3
+"""
+
+
+def test_breakdown_splits_model_vs_support():
+    import tempfile as tf
+    from gcode_stats import compute_breakdown
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(_BREAKDOWN_GCODE)
+        path = f.name
+    try:
+        b = compute_breakdown(path)
+    finally:
+        os.unlink(path)
+    # model extrusion (1 + 1 = 2mm) vs support (0.5 + 0.5 = 1mm) → support < model
+    assert b["model_filament_g"] > 0
+    assert b["support_filament_g"] > 0
+    assert b["support_filament_g"] < b["model_filament_g"]
+    assert abs(b["total_filament_g"] - (b["model_filament_g"] + b["support_filament_g"])) < 0.01
+    assert 0 < b["support_time_frac"] < 1
+
+
+def test_pause_injection_places_commands_at_heights():
+    import tempfile as tf
+    from gcode_postprocess import inject_pauses
+    gcode = "\n".join([
+        ";LAYER_CHANGE", ";Z:0.2", "G1 X0 Y0 E1",
+        ";LAYER_CHANGE", ";Z:5.0", "G1 X1 Y1 E2",
+        ";LAYER_CHANGE", ";Z:10.0", "G1 X2 Y2 E3",
+    ])
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(gcode)
+        path = f.name
+    try:
+        n = inject_pauses(path, [{"height": 5.0, "type": "filament_change"},
+                                 {"height": 9.0, "type": "pause"}])
+        out = open(path).read()
+    finally:
+        os.unlink(path)
+    assert n == 2
+    assert "M600" in out and "M601" in out
+    # M600 must appear before its ;Z:5.0 layer
+    assert out.index("M600") < out.index(";Z:5.0")
+    # M601 (height 9) lands at the first layer >= 9, i.e. ;Z:10.0
+    assert out.index("M601") < out.index(";Z:10.0")
+
+
+def test_pause_injection_rejects_unsafe_command():
+    import tempfile as tf
+    from gcode_postprocess import inject_pauses
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(";LAYER_CHANGE\n;Z:5.0\nG1 X0 Y0 E1\n")
+        path = f.name
+    try:
+        # arbitrary command not in the safe set is dropped
+        n = inject_pauses(path, [{"height": 5.0, "command": "M104 S500"}])
+    finally:
+        os.unlink(path)
+    assert n == 0
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t
