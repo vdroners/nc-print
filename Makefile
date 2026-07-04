@@ -19,11 +19,38 @@ ENGINE_DEST := $(ROOT)slicer/3dprintforge-slicer
 DATADIR_SEED_SRC ?= $(HOME)/.config/3DPrintForgeSlicer
 DATADIR_SEED_DEST := $(ENGINE_DEST)/datadir-seed
 
-.PHONY: build test deploy gate-preflight phpunit run-phpunit \
+.PHONY: build test deploy gate-preflight phpunit run-phpunit ship \
+	bump-patch bump-minor \
 	slicer-fetch slicer-build slicer-up slicer-down slicer-test
 
 build:
 	cd "$(ROOT)" && npm run build
+
+# Version bump: edits info.xml, package.json, package-lock.json (both fields),
+# the README badge, and inserts a dated CHANGELOG stub. DATE defaults to today
+# but can be pinned (DATE=2026-07-05) for reproducibility.
+DATE ?= $(shell date +%F)
+bump-patch:
+	@$(MAKE) --no-print-directory _bump PART=patch
+bump-minor:
+	@$(MAKE) --no-print-directory _bump PART=minor
+
+_bump:
+	@cur=$$(grep -oE '<version>[0-9]+\.[0-9]+\.[0-9]+</version>' "$(ROOT)appinfo/info.xml" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+'); \
+	test -n "$$cur" || (echo "could not read current version from info.xml" && exit 1); \
+	maj=$$(echo $$cur | cut -d. -f1); min=$$(echo $$cur | cut -d. -f2); pat=$$(echo $$cur | cut -d. -f3); \
+	if [ "$(PART)" = "minor" ]; then min=$$((min+1)); pat=0; else pat=$$((pat+1)); fi; \
+	next="$$maj.$$min.$$pat"; \
+	sed -i "s#<version>$$cur</version>#<version>$$next</version>#" "$(ROOT)appinfo/info.xml"; \
+	sed -i "s#\"version\": \"$$cur\"#\"version\": \"$$next\"#" "$(ROOT)package.json"; \
+	sed -i "0,/\"version\": \"$$cur\"/s##\"version\": \"$$next\"#" "$(ROOT)package-lock.json"; \
+	sed -i "0,/\"version\": \"$$cur\"/s##\"version\": \"$$next\"#" "$(ROOT)package-lock.json"; \
+	sed -i "s#\*\*Version $$cur\*\*#**Version $$next**#" "$(ROOT)README.md"; \
+	if ! grep -q "^## \[$$next\]" "$(ROOT)CHANGELOG.md"; then \
+		awk -v v="$$next" -v d="$(DATE)" 'BEGIN{done=0} /^## \[/ && !done {print "## [" v "] - " d "\n"; done=1} {print}' \
+			"$(ROOT)CHANGELOG.md" > "$(ROOT)CHANGELOG.md.tmp" && mv "$(ROOT)CHANGELOG.md.tmp" "$(ROOT)CHANGELOG.md"; \
+	fi; \
+	echo "Bumped $$cur -> $$next (CHANGELOG dated $(DATE)); fill in the CHANGELOG stub."
 
 test: phpunit slicer-test
 	cd "$(ROOT)" && npm run test
@@ -99,13 +126,30 @@ deploy: build
 	docker exec $(CONTAINER) mkdir -p $(REMOTE)
 	for dir in appinfo css img js lib templates tools; do \
 		if [ -d "$(ROOT)$$dir" ]; then \
+			docker exec $(CONTAINER) rm -rf $(REMOTE)/$$dir; \
 			docker cp "$(ROOT)$$dir/." $(CONTAINER):$(REMOTE)/$$dir/; \
 		fi; \
 	done
+	@# Ownership: docker cp lands as root; the app must be www-data readable.
+	@docker exec $(CONTAINER) chown -R www-data:www-data $(REMOTE) 2>/dev/null || true
 	@if [ -f "$(ROOT)composer.json" ]; then docker cp "$(ROOT)composer.json" $(CONTAINER):$(REMOTE)/; fi
 	docker exec -u www-data $(CONTAINER) php /var/www/html/occ app:enable $(APP_ID) || true
 	docker exec -u www-data $(CONTAINER) php /var/www/html/occ upgrade
+	@# Flush PHP opcache so newly added routes/classes are seen without a manual
+	@# restart. opcache_reset only clears the CLI worker; when a route/class was
+	@# ADDED (not just edited), pass RESTART=1 to bounce php-fpm workers too.
+	@docker exec -u www-data $(CONTAINER) php -r 'function_exists("opcache_reset") && @opcache_reset();' 2>/dev/null || true
+	@if [ "$(RESTART)" = "1" ]; then \
+		echo "RESTART=1 -> restarting $(CONTAINER) to flush php-fpm opcache"; \
+		docker restart $(CONTAINER) >/dev/null && sleep 8; \
+	fi
 	@echo "Deployed $(APP_ID) to $(CONTAINER):$(REMOTE)"
+
+# One-shot ship: build the frontend, (re)build+up the sidecar, deploy into the
+# container (stale-clean + opcache flush), then run the full gate. Pass RESTART=1
+# to bounce php-fpm when a route/class was added this change.
+ship: build slicer-up deploy gate-preflight
+	@echo "ship complete: build + slicer-up + deploy + gate-preflight all green"
 
 gate-preflight:
 	bash "$(ROOT)tools/print-preflight.sh"

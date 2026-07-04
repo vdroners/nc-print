@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.28.0] - 2026-07-04
+
+Developer-workflow hardening — removes the friction/footguns that kept requiring
+manual intervention (stale deployed files, opcache-stale routes, hand-edited
+version bumps across five files). No runtime app behaviour change.
+
+### Changed / Added
+
+- **Makefile**: `make bump-patch` / `make bump-minor` edit all version files
+  (info.xml, package.json, package-lock ×2, README badge) and insert a dated
+  CHANGELOG stub in one step. New `make ship` = build + slicer-up + deploy +
+  gate-preflight.
+- **`make deploy`** now removes the target subdirs in the container before
+  copying (so files deleted from source no longer linger — we shipped a stale
+  controller once), `chown`s to www-data, and flushes the CLI opcache; pass
+  `RESTART=1` to bounce php-fpm when a route/class was added (fixes the
+  stale-routes 404 that previously needed a manual `docker restart`).
+- **Gate**: new G46–G50 assert the routes/allowlist added since G45 are present
+  in the DEPLOYED files (discovery/capabilities, eta, print-transition, monitor
+  read prefixes, guarded filament_extrude) — which also catches the
+  opcache-stale-routes class of bug.
+- **vitest**: defaults every spec to the `happy-dom` environment (was a
+  hand-maintained per-file glob list that silently ran forgotten specs under
+  node); node-only specs opt out with a `@vitest-environment node` docblock.
+- **CLAUDE.md**: added a project workflow doc (bump/build/ship/verify/commit
+  rules, the opcache-RESTART caveat, and the "test the engine binary, not preset
+  grep" note).
+
 ## [1.27.0] - 2026-07-04
 
 Prepare/Slice **quality controls** and Monitor-tab **expansion** — a review of

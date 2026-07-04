@@ -494,4 +494,40 @@ gate('G45', $g45, $g45
 	: sprintf('reads=%d noraw=%d guard=%d off=%d',
 		$g45Reads ? 1 : 0, $g45NoRawGcode ? 1 : 0, $g45ConsoleGuard ? 1 : 0, $g45ConsoleDefaultOff ? 1 : 0));
 
+// ── G46–G50: routes/allowlist added since G45 are actually registered in the
+// DEPLOYED files. We assert wiring against the deployed routes.php / controller
+// sources rather than HTTP (CLI requests are unauthenticated → misleading), and
+// this specifically catches the "opcache served a stale routes.php" class of bug
+// because the check reads the file the container is actually running.
+
+// G46 — discovery + capabilities routes registered.
+$g46 = gate_routes_contain($routesRaw, "'printer_discovery#discover'")
+	&& gate_routes_contain($routesRaw, "'printer#capabilities'");
+gate('G46', $g46, $g46 ? 'discovery + capabilities routes registered' : 'missing discovery/capabilities route');
+
+// G47 — smart-ETA routes registered.
+$g47 = gate_routes_contain($routesRaw, "'eta#predict'")
+	&& gate_routes_contain($routesRaw, "'eta#record'")
+	&& gate_routes_contain($routesRaw, "'eta#stats'");
+gate('G47', $g47, $g47 ? 'eta routes registered' : 'missing eta route(s)');
+
+// G48 — print-transition (notifications/activity bridge) route registered.
+$g48 = gate_routes_contain($routesRaw, "'print_event#notifyTransition'");
+gate('G48', $g48, $g48 ? 'print-transition route registered' : 'missing print-transition route');
+
+// G49 — monitor read prefixes on the Moonraker allowlist (v1.27.0 expansion).
+$g49 = $proxySrc !== ''
+	&& str_contains($proxySrc, "'server/webcams'")
+	&& str_contains($proxySrc, "'machine/update/status'")
+	&& str_contains($proxySrc, "'server/announcements/'");
+gate('G49', $g49, $g49 ? 'monitor read prefixes allowlisted' : 'missing monitor read prefix');
+
+// G50 — guarded filament_extrude action is allowlisted AND idle-only.
+$printerSrcPath = dirname(__DIR__) . '/lib/Controller/PrinterController.php';
+$printerSrc = is_readable($printerSrcPath) ? (string) file_get_contents($printerSrcPath) : '';
+$g50 = $printerSrc !== ''
+	&& preg_match('/ALLOWED_GCODE_ACTIONS[\s\S]*?filament_extrude/', $printerSrc) === 1
+	&& preg_match('/IDLE_ONLY_ACTIONS[\s\S]*?filament_extrude/', $printerSrc) === 1;
+gate('G50', $g50, $g50 ? 'filament_extrude guarded + idle-only' : 'filament_extrude missing/not idle-gated');
+
 exit($fail === 0 ? 0 : 1);

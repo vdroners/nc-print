@@ -1,3 +1,8 @@
+/**
+ * @vitest-environment node
+ * Reads css/style.scss off disk via import.meta.url — needs the node env
+ * (happy-dom resolves import.meta.url to an http URL, breaking fileURLToPath).
+ */
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
