@@ -178,6 +178,9 @@ class ApiController extends Controller
 			'timelapse' => $has('timelapse'),
 			'spoolman' => $has('spoolman'),
 			'power' => $has('power'),
+			'webcam' => $has('webcam') || $has('webcam_manager'),
+			'update_manager' => $has('update_manager'),
+			'announcements' => $has('announcements') || $has('announcement_manager'),
 		];
 	}
 }

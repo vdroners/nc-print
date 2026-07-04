@@ -651,6 +651,71 @@ def test_basic_color_name_nearest_match():
     assert basic_color_name("") is None
 
 
+def test_overrides_new_quality_keys_map_to_engine_keys():
+    from overrides import split_overrides
+    process, filament, unknown = split_overrides({
+        "infill_pattern": "gyroid",
+        "top_surface_pattern": "monotonic",
+        "bottom_surface_pattern": "concentric",
+        "infill_speed": 120,
+        "solid_infill_speed": 90,
+        "support_top_gap": 0.2,
+        "support_interface_layers": 2,
+        "support_interface_spacing": 0.2,
+        "first_layer_height": 0.25,
+    })
+    assert process["sparse_infill_pattern"] == "gyroid"
+    assert process["top_surface_pattern"] == "monotonic"
+    assert process["bottom_surface_pattern"] == "concentric"
+    assert process["sparse_infill_speed"] == "120"
+    assert process["internal_solid_infill_speed"] == "90"
+    assert process["support_top_z_distance"] == "0.2"
+    assert process["support_interface_top_layers"] == "2"
+    assert process["support_interface_spacing"] == "0.2"
+    assert process["initial_layer_print_height"] == "0.25"
+    assert filament == {}
+    assert unknown == []
+
+
+def test_overrides_omit_empty_new_keys():
+    from overrides import split_overrides
+    process, _f, _u = split_overrides({
+        "infill_pattern": "",
+        "infill_speed": None,
+        "layer_height": 0.2,
+    })
+    # Empty/None new keys are dropped; only the real value survives.
+    assert "sparse_infill_pattern" not in process
+    assert "sparse_infill_speed" not in process
+    assert process["layer_height"] == "0.2"
+
+
+def test_breakdown_separates_adhesion_bucket():
+    import tempfile as tf
+    from gcode_stats import compute_breakdown
+    # Use large E deltas so every bucket rounds to a non-zero gram figure.
+    gcode = (
+        "M83\n"
+        ";TYPE:Skirt\nG1 X0 Y0 E200\n"
+        ";TYPE:Brim\nG1 X1 Y0 E200\n"
+        ";TYPE:Outer wall\nG1 X2 Y0 E500\n"
+        ";TYPE:Support\nG1 X3 Y0 E300\n"
+        "; filament_diameter = 1.75\n; filament_density = 1.24\n"
+    )
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(gcode)
+        path = f.name
+    try:
+        b = compute_breakdown(path)
+    finally:
+        os.unlink(path)
+    assert b["model_filament_g"] > 0
+    assert b["support_filament_g"] > 0
+    assert b["adhesion_filament_g"] > 0  # skirt + brim bucketed here
+    total = b["model_filament_g"] + b["support_filament_g"] + b["adhesion_filament_g"]
+    assert abs(b["total_filament_g"] - total) < 0.01
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t

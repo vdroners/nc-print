@@ -16,9 +16,16 @@ import re
 
 _MOVE_RE = re.compile(r"([XYZEF])(-?\d*\.?\d+(?:[eE][+-]?\d+)?)")
 # Feature labels the engine emits for support (kept lowercase for matching).
+# Raft is bed adhesion, but historically bucketed with support here; keep it in
+# support so support_filament_g stays comparable, and track brim/skirt as a
+# separate "adhesion" bucket.
 _SUPPORT_TYPES = {
     "support", "support interface", "support material",
     "support material interface", "raft", "raft interface",
+}
+# Bed-adhesion features (not part of the model or its supports).
+_ADHESION_TYPES = {
+    "brim", "skirt", "skirt/brim",
 }
 _DEFAULT_DIAMETER_MM = 1.75
 # Fallback density (g/cm3) when the preset reports 0 — matches _read_gcode_meta.
@@ -67,9 +74,10 @@ def compute_breakdown(path: str) -> dict:
 
     e = 0.0
     absolute_e = True
-    is_support = False
+    bucket = "model"      # "model" | "support" | "adhesion"
     model_mm = 0.0        # extruded filament length on model features
     support_mm = 0.0      # extruded filament length on support features
+    adhesion_mm = 0.0     # extruded filament on brim/skirt
     # Time share: count moves (with feedrate integration would be heavier); a
     # move-count ratio is a reasonable proxy for support-time fraction.
     model_moves = 0
@@ -85,7 +93,13 @@ def compute_breakdown(path: str) -> dict:
                 if c == ";":
                     low = line.lower()
                     if low.startswith(";type:"):
-                        is_support = low[6:].strip() in _SUPPORT_TYPES
+                        feat = low[6:].strip()
+                        if feat in _SUPPORT_TYPES:
+                            bucket = "support"
+                        elif feat in _ADHESION_TYPES:
+                            bucket = "adhesion"
+                        else:
+                            bucket = "model"
                     continue
                 head = line[:3].upper()
                 if head[:2] in ("G0", "G1"):
@@ -101,9 +115,11 @@ def compute_breakdown(path: str) -> dict:
                     if has_e:
                         delta = (ne - e) if absolute_e else ne
                         if delta > 0:  # extrusion, not retraction
-                            if is_support:
+                            if bucket == "support":
                                 support_mm += delta
                                 support_moves += 1
+                            elif bucket == "adhesion":
+                                adhesion_mm += delta
                             else:
                                 model_mm += delta
                                 model_moves += 1
@@ -128,11 +144,13 @@ def compute_breakdown(path: str) -> dict:
 
     model_g = round(to_grams(model_mm), 2)
     support_g = round(to_grams(support_mm), 2)
+    adhesion_g = round(to_grams(adhesion_mm), 2)
     total_moves = model_moves + support_moves
     out = {
         "model_filament_g": model_g,
         "support_filament_g": support_g,
-        "total_filament_g": round(model_g + support_g, 2),
+        "adhesion_filament_g": adhesion_g,
+        "total_filament_g": round(model_g + support_g + adhesion_g, 2),
     }
     if total_moves > 0 and support_moves > 0:
         out["support_time_frac"] = round(support_moves / total_moves, 4)

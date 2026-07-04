@@ -6,6 +6,7 @@ import {
 	filamentLoad,
 	filamentUnload,
 	filamentPurge,
+	filamentExtrude,
 } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import NcPrintIcon from './NcPrintIcon.vue'
@@ -122,6 +123,17 @@ export default {
 		fmtCost(cost) {
 			return cost != null ? cost.toFixed(2) : null
 		},
+		async move(distanceMm) {
+			this.busy = true
+			try {
+				await filamentExtrude(distanceMm, this.printerId)
+				toastSuccess(distanceMm > 0 ? `Extruded ${distanceMm} mm` : `Retracted ${Math.abs(distanceMm)} mm`)
+			} catch (e) {
+				toastError('Filament move failed', e)
+			} finally {
+				this.busy = false
+			}
+		},
 	},
 }
 </script>
@@ -169,6 +181,17 @@ export default {
 			<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="run('load')">Load</button>
 			<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="run('unload')">Unload</button>
 			<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="run('purge')">Purge</button>
+		</div>
+
+		<div class="nc-print-filament__jog">
+			<p class="nc-print-section-label">Extrude / retract (mm, idle only)</p>
+			<div class="nc-print-actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="move(-10)">− 10</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="move(-1)">− 1</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="move(0.1)">+ 0.1</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="move(1)">+ 1</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="busy || !idle" @click="move(10)">+ 10</button>
+			</div>
 		</div>
 	</div>
 </template>

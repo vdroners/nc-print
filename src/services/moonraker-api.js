@@ -169,6 +169,15 @@ export async function filamentPurge(printerId) {
 	return gcodeAction({ action: 'filament_purge' }, printerId)
 }
 
+/**
+ * Manually extrude (+) or retract (-) filament. Distance clamped server-side to
+ * ±50 mm; idle-only. Klipper refuses below min_extrude_temp.
+ * @param {number} distanceMm positive = extrude, negative = retract
+ */
+export async function filamentExtrude(distanceMm, printerId) {
+	return gcodeAction({ action: 'filament_extrude', distance: distanceMm }, printerId)
+}
+
 export async function setHeaterTemp(heater, target, printerId) {
 	return gcodeAction({ action: 'set_heater_temp', heater, target }, printerId)
 }

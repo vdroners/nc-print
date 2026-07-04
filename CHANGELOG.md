@@ -1,5 +1,62 @@
 # Changelog
 
+## [1.27.0] - 2026-07-04
+
+Prepare/Slice **quality controls** and Monitor-tab **expansion** — a review of
+all three tabs against pro slicers (OrcaSlicer/Prusa/Bambu) and Mainsail/Fluidd.
+All new slice keys were verified present in the shipped engine presets; all new
+Moonraker endpoints verified against the live printer.
+
+### Added — Slice / Prepare
+
+- **Infill & surface patterns**: `infill_pattern` (→ sparse_infill_pattern:
+  grid/gyroid/honeycomb/cubic/…), `top_surface_pattern`,
+  `bottom_surface_pattern`.
+- **Per-feature speeds**: `infill_speed` (→ sparse_infill_speed) and
+  `solid_infill_speed` (→ internal_solid_infill_speed).
+- **Support interface tuning**: `support_top_gap` (→ support_top_z_distance),
+  `support_interface_layers` (→ support_interface_top_layers),
+  `support_interface_spacing`; plus a `first_layer_height`
+  (→ initial_layer_print_height) override.
+  All wired through `overrides.py` `_MAP` + the store + `buildSliceOverrides` +
+  new fields in `ProfileQuickEdit` (Infill & surface patterns / Per-feature
+  speeds groups + support-interface + first-layer inputs).
+- **Per-feature weight/cost breakdown** on the slice result: `gcode_stats.py`
+  now buckets brim/skirt as `adhesion_filament_g` (separate from support), and
+  `SliceResultPanel` shows model / support / brim-skirt grams (with per-row cost
+  when a filament price is set).
+
+### Added — Monitor
+
+- **Power devices** (`PowerDevicePanel`): list + on/off toggle via the
+  already-allowlisted `machine/device_power/`; feature-gated on `power`; blocked
+  while printing.
+- **Cameras** (`WebcamListPanel`): lists Moonraker webcams (allowlisted
+  `server/webcams`); shown when >1 exists. Live view still uses the
+  admin-configured camera proxy (no user-supplied stream URL, by design).
+- **Manual extrude/retract**: new guarded `filament_extrude` action
+  (`PrinterController`, idle-only, `M83`/`G1 E±mm`/`M82`, distance clamped ±50 mm,
+  feed 60–600 mm/min) + ±0.1/1/10 mm buttons in `FilamentPanel`.
+- **Sensor readouts** (`SensorPanel`): extra temperature sensors + filament
+  switch/motion state from `printer.objects` (already allowlisted); auto-hides
+  when none exist.
+- **Update & announcement banners** (`UpdateStatusBanner` /
+  `AnnouncementsBanner`): update-available status (allowlisted
+  `machine/update/status`, status only — no trigger) and Moonraker service
+  announcements (`server/announcements/`); feature-gated on `update_manager` /
+  `announcements`.
+
+### Tests
+
+- Adapter (+3 → 41): new override keys map to engine keys; empty new keys
+  omitted; gcode breakdown separates the adhesion bucket.
+- PHP (+5 → 70): `filament_extrude` script build + distance/feed clamp + bad
+  input + idle-only gating; monitor read prefixes on the allowlist; monitor
+  feature-detection present.
+- Frontend (+6 → 221): `buildSliceOverrides` maps/omits the new pattern/speed/
+  support/first-layer keys; new `moonraker-api.spec` (filamentExtrude,
+  power/webcam proxy calls).
+
 ## [1.26.0] - 2026-07-04
 
 **Native Nextcloud integration.** Print lifecycle now shows up where Nextcloud

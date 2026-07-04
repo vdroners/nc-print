@@ -98,4 +98,47 @@ class PrinterControllerClampingTest extends TestCase
 			'setTemperature must reject non-numeric nozzle/bed values',
 		);
 	}
+
+	public function testBuildFilamentExtrudeScript(): void
+	{
+		// Extrude: relative move, default (max) feed, wrapped M83/M82.
+		$this->assertSame(
+			"M83\nG1 E5.000 F600\nM82",
+			$this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => 5]),
+		);
+		// Retract: negative distance.
+		$this->assertSame(
+			"M83\nG1 E-1.000 F600\nM82",
+			$this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => -1]),
+		);
+	}
+
+	public function testFilamentExtrudeClampsDistanceAndFeed(): void
+	{
+		// |distance| clamps to 50 mm; feed clamps to the 60..600 mm/min band.
+		$this->assertSame(
+			"M83\nG1 E50.000 F600\nM82",
+			$this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => 999]),
+		);
+		$this->assertSame(
+			"M83\nG1 E-50.000 F60\nM82",
+			$this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => -999, 'feed' => 1]),
+		);
+	}
+
+	public function testFilamentExtrudeRejectsBadInput(): void
+	{
+		// Non-numeric or ~zero distance → no script.
+		$this->assertNull($this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => 'abc']));
+		$this->assertNull($this->invoke('buildGcodeScriptForAction', 'filament_extrude', ['distance' => 0]));
+		$this->assertNull($this->invoke('buildGcodeScriptForAction', 'filament_extrude', []));
+	}
+
+	public function testFilamentExtrudeIsIdleOnly(): void
+	{
+		$src = (string) file_get_contents(__DIR__ . '/../../lib/Controller/PrinterController.php');
+		// filament_extrude must be in both the allowlist and the idle-only set.
+		$this->assertMatchesRegularExpression('/ALLOWED_GCODE_ACTIONS.*filament_extrude/s', $src);
+		$this->assertMatchesRegularExpression('/IDLE_ONLY_ACTIONS.*filament_extrude/s', $src);
+	}
 }

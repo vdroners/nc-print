@@ -26,6 +26,11 @@ import BedMeshPanel from './BedMeshPanel.vue'
 import QueuePanel from './QueuePanel.vue'
 import FilamentPanel from './FilamentPanel.vue'
 import TimelapsePanel from './TimelapsePanel.vue'
+import PowerDevicePanel from './PowerDevicePanel.vue'
+import WebcamListPanel from './WebcamListPanel.vue'
+import SensorPanel from './SensorPanel.vue'
+import UpdateStatusBanner from './UpdateStatusBanner.vue'
+import AnnouncementsBanner from './AnnouncementsBanner.vue'
 
 export default {
 	name: 'PrintTab',
@@ -48,6 +53,11 @@ export default {
 		QueuePanel,
 		FilamentPanel,
 		TimelapsePanel,
+		PowerDevicePanel,
+		WebcamListPanel,
+		SensorPanel,
+		UpdateStatusBanner,
+		AnnouncementsBanner,
 	},
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
@@ -306,6 +316,9 @@ export default {
 	<WorkspaceRail class="nc-print-print-tab">
 		<MultiPrinterPicker />
 
+		<UpdateStatusBanner />
+		<AnnouncementsBanner />
+
 		<div v-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
 			<h2 class="nc-print-banner__title">
 				<span class="nc-print-card__title-row">
@@ -451,9 +464,15 @@ export default {
 
 		<FilamentPanel />
 
+		<SensorPanel />
+
 		<TimelapsePanel />
 
 		<QueuePanel />
+
+		<div v-if="printStore.hasFeature('power')" class="nc-print-card"><PowerDevicePanel /></div>
+
+		<div v-if="printStore.hasFeature('webcam')" class="nc-print-card"><WebcamListPanel /></div>
 
 		<GcodeConsole v-if="printStore.consoleEnabled" />
 

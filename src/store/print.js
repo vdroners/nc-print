@@ -276,6 +276,15 @@ export const usePrintStore = defineStore('print', {
 			ironingType: '',
 			fuzzySkin: '',
 			seamPosition: '',
+			firstLayerHeight: '',
+			infillPattern: '',
+			topSurfacePattern: '',
+			bottomSurfacePattern: '',
+			infillSpeed: '',
+			solidInfillSpeed: '',
+			supportTopGap: '',
+			supportInterfaceLayers: '',
+			supportInterfaceSpacing: '',
 		},
 		overridesCollapsed: true,
 		// Pause / filament-change points injected into gcode at a Z height.
@@ -1652,6 +1661,7 @@ export const usePrintStore = defineStore('print', {
 				this.sliceJob.materialStats = {
 					modelFilamentG: s.model_filament_g ?? s.modelFilamentG ?? null,
 					supportFilamentG: s.support_filament_g ?? s.supportFilamentG ?? null,
+					adhesionFilamentG: s.adhesion_filament_g ?? s.adhesionFilamentG ?? null,
 					supportFilamentUsedG: s.support_filament_used_g ?? null,
 					supportTimeS: s.support_time_s ?? s.supportTimeS ?? null,
 				}
@@ -1660,6 +1670,7 @@ export const usePrintStore = defineStore('print', {
 			this.sliceJob.materialStats = {
 				modelFilamentG: done.model_filament_g ?? null,
 				supportFilamentG: done.support_filament_g ?? null,
+				adhesionFilamentG: done.adhesion_filament_g ?? null,
 				supportFilamentUsedG: done.support_filament_used_g ?? null,
 				supportTimeS: done.support_time_s ?? null,
 			}

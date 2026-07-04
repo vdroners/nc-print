@@ -119,6 +119,18 @@ export function buildSliceOverrides(form = {}) {
 	str('fuzzy_skin', form.fuzzySkin)
 	str('seam_position', form.seamPosition)
 
+	// Infill / surface patterns + per-feature speeds + support interface tuning
+	// + first-layer height (all process-scoped engine keys).
+	num('first_layer_height', form.firstLayerHeight)
+	str('infill_pattern', form.infillPattern)
+	str('top_surface_pattern', form.topSurfacePattern)
+	str('bottom_surface_pattern', form.bottomSurfacePattern)
+	num('infill_speed', form.infillSpeed)
+	num('solid_infill_speed', form.solidInfillSpeed)
+	num('support_top_gap', form.supportTopGap)
+	num('support_interface_layers', form.supportInterfaceLayers)
+	num('support_interface_spacing', form.supportInterfaceSpacing)
+
 	return overrides
 }
 
@@ -191,6 +203,15 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'ironingType', label: 'Ironing' },
 	{ key: 'fuzzySkin', label: 'Fuzzy skin' },
 	{ key: 'seamPosition', label: 'Seam position' },
+	{ key: 'firstLayerHeight', label: 'First layer height (mm)' },
+	{ key: 'infillPattern', label: 'Infill pattern' },
+	{ key: 'topSurfacePattern', label: 'Top surface pattern' },
+	{ key: 'bottomSurfacePattern', label: 'Bottom surface pattern' },
+	{ key: 'infillSpeed', label: 'Infill speed (mm/s)' },
+	{ key: 'solidInfillSpeed', label: 'Solid infill speed (mm/s)' },
+	{ key: 'supportTopGap', label: 'Support top gap (mm)' },
+	{ key: 'supportInterfaceLayers', label: 'Support interface layers' },
+	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)' },
 ]
 
 /**

@@ -37,6 +37,10 @@ class MoonrakerProxyController extends Controller
 		'server/timelapse', // WS16 timelapse (settings)
 		'machine/device_power/', // WS10/WS14 optional power/fan/LED
 		'server/spoolman/', // WS14 filament (Spoolman)
+		'server/webcams', // multi-webcam list/picker
+		'machine/update/status', // update_manager status (read-only)
+		'machine/update_manager/status', // update_manager status (alt path)
+		'server/announcements/', // Moonraker service announcements
 	];
 
 	private const CONNECT_TIMEOUT_SECONDS = 5;

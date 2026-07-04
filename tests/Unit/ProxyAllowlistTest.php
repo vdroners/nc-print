@@ -87,8 +87,24 @@ class ProxyAllowlistTest extends TestCase
 			"'server/timelapse'",
 			"'machine/device_power/'",
 			"'server/spoolman/'",
+			// v1.27.0 monitor expansion (read-only).
+			"'server/webcams'",
+			"'machine/update/status'",
+			"'server/announcements/'",
 		] as $needle) {
 			$this->assertStringContainsString($needle, $src, "Missing allowlist prefix: $needle");
+		}
+	}
+
+	/**
+	 * v1.27.0: the monitor-expansion components are feature-detected so their
+	 * panels can hide when the plugin is absent.
+	 */
+	public function testMonitorFeatureDetection(): void
+	{
+		$src = (string) file_get_contents(__DIR__ . '/../../lib/Controller/ApiController.php');
+		foreach (["'webcam'", "'update_manager'", "'announcements'"] as $needle) {
+			$this->assertStringContainsString($needle, $src, "Missing feature detection: $needle");
 		}
 	}
 

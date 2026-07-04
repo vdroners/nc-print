@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.26.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.27.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -51,6 +51,13 @@ external slicer service** and no NC-GCS dependency.
   "use these temps" action seeds the slice overrides
 - **Surface-quality overrides** — ironing, fuzzy skin, seam position, and
   adaptive layer height, applied on top of the process profile
+- **Infill & surface patterns** — pick the infill pattern (gyroid, honeycomb,
+  cubic, concentric, …) and the top/bottom solid-surface pattern
+- **Per-feature speeds** — separate infill and solid-infill speed overrides
+- **Support interface tuning** — top gap, interface layers and spacing for
+  supports that peel off cleanly; plus a first-layer-height override
+- **Per-feature weight/cost breakdown** — model vs support vs brim/skirt grams
+  (and cost when a filament price is set) on the slice result
 - Save G-code beside the model in Nextcloud Files
 
 **Print monitor (Moonraker)**
@@ -64,7 +71,15 @@ external slicer service** and no NC-GCS dependency.
 - Live telemetry with camera, multi-series temperature graph + PID tuning
 - Bed-mesh heatmap + calibrate (idle-only), print/job queue, mid-print
   exclude-object
-- Filament management (Spoolman + runout sensors, load/unload/purge)
+- Filament management (Spoolman + runout sensors, load/unload/purge, plus
+  manual extrude/retract in ±0.1/1/10 mm steps, idle-only)
+- **Power devices** — turn a Moonraker-managed smart plug / PSU relay on/off
+  (blocked while printing); shown when the `[power]` component is present
+- **Sensor readouts** — chamber/other temperature sensors and filament
+  switch/motion sensor state, shown when such sensors exist
+- **Cameras** — lists the printer's configured webcams when more than one exists
+- **Update & announcement banners** — a firmware/component update-available
+  notice (status only) and Moonraker service announcements
 - Moonraker history/statistics with embedded thumbnails, timelapse playback
 - Read-only G-code console log with an optional admin-gated command input
 

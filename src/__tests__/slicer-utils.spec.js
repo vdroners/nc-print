@@ -54,6 +54,36 @@ describe('slicer-utils', () => {
 		expect(o.seam_position).toBe('aligned')
 	})
 
+	it('buildSliceOverrides maps patterns, per-feature speeds, support interface + first-layer', () => {
+		const o = buildSliceOverrides({
+			infillPattern: 'gyroid',
+			topSurfacePattern: 'monotonic',
+			bottomSurfacePattern: 'concentric',
+			infillSpeed: '120',
+			solidInfillSpeed: '90',
+			supportTopGap: '0.2',
+			supportInterfaceLayers: '2',
+			supportInterfaceSpacing: '0.2',
+			firstLayerHeight: '0.25',
+		})
+		expect(o.infill_pattern).toBe('gyroid')
+		expect(o.top_surface_pattern).toBe('monotonic')
+		expect(o.bottom_surface_pattern).toBe('concentric')
+		expect(o.infill_speed).toBe(120)
+		expect(o.solid_infill_speed).toBe(90)
+		expect(o.support_top_gap).toBe(0.2)
+		expect(o.support_interface_layers).toBe(2)
+		expect(o.support_interface_spacing).toBe(0.2)
+		expect(o.first_layer_height).toBe(0.25)
+	})
+
+	it('buildSliceOverrides omits empty pattern/speed fields', () => {
+		const o = buildSliceOverrides({ infillPattern: '', infillSpeed: '', firstLayerHeight: '' })
+		expect('infill_pattern' in o).toBe(false)
+		expect('infill_speed' in o).toBe(false)
+		expect('first_layer_height' in o).toBe(false)
+	})
+
 	it('buildSliceOverrides omits empty surface-quality fields', () => {
 		const o = buildSliceOverrides({ ironingType: '', fuzzySkin: '', seamPosition: '' })
 		expect('ironing_type' in o).toBe(false)

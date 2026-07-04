@@ -33,6 +33,29 @@ const SEAM_POSITIONS = [
 	{ value: 'random', label: 'Random' },
 ]
 
+// Infill patterns exposed by the OrcaSlicer-fork engine (sparse_infill_pattern).
+const INFILL_PATTERNS = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'grid', label: 'Grid' },
+	{ value: 'gyroid', label: 'Gyroid' },
+	{ value: 'honeycomb', label: 'Honeycomb' },
+	{ value: 'cubic', label: 'Cubic' },
+	{ value: 'adaptivecubic', label: 'Adaptive cubic' },
+	{ value: 'triangles', label: 'Triangles' },
+	{ value: 'rectilinear', label: 'Rectilinear' },
+	{ value: 'concentric', label: 'Concentric' },
+	{ value: 'line', label: 'Line' },
+]
+
+// Top/bottom solid-surface patterns (top_surface_pattern / bottom_surface_pattern).
+const SURFACE_PATTERNS = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'monotonic', label: 'Monotonic' },
+	{ value: 'monotonicline', label: 'Monotonic line' },
+	{ value: 'concentric', label: 'Concentric' },
+	{ value: 'rectilinear', label: 'Rectilinear' },
+]
+
 export default {
 	name: 'ProfileQuickEdit',
 	emits: ['change'],
@@ -49,6 +72,12 @@ export default {
 		},
 		seamPositions() {
 			return SEAM_POSITIONS
+		},
+		infillPatterns() {
+			return INFILL_PATTERNS
+		},
+		surfacePatterns() {
+			return SURFACE_PATTERNS
 		},
 	},
 	methods: {
@@ -109,6 +138,18 @@ export default {
 				<label>Skirt loops</label>
 				<input v-model="printStore.overrides.skirtLoops" type="number" step="1" min="0" @change="emitChange">
 			</div>
+			<div class="nc-print-field">
+				<label>Support top gap (mm)</label>
+				<input v-model="printStore.overrides.supportTopGap" type="number" step="0.05" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Support interface layers</label>
+				<input v-model="printStore.overrides.supportInterfaceLayers" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Interface spacing (mm)</label>
+				<input v-model="printStore.overrides.supportInterfaceSpacing" type="number" step="0.05" min="0" @change="emitChange">
+			</div>
 		</div>
 
 		<h3 class="nc-print-quick-edit__title">Surface quality</h3>
@@ -136,6 +177,44 @@ export default {
 					<input v-model="printStore.overrides.adaptiveLayerHeight" type="checkbox" @change="emitChange">
 					Adaptive layer height
 				</label>
+			</div>
+			<div class="nc-print-field">
+				<label>First layer height (mm)</label>
+				<input v-model="printStore.overrides.firstLayerHeight" type="number" step="0.02" min="0" @change="emitChange">
+			</div>
+		</div>
+
+		<h3 class="nc-print-quick-edit__title">Infill &amp; surface patterns</h3>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label for="nc-print-infill-pattern">Infill pattern</label>
+				<select id="nc-print-infill-pattern" v-model="printStore.overrides.infillPattern" @change="emitChange">
+					<option v-for="opt in infillPatterns" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-top-pattern">Top surface</label>
+				<select id="nc-print-top-pattern" v-model="printStore.overrides.topSurfacePattern" @change="emitChange">
+					<option v-for="opt in surfacePatterns" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-bottom-pattern">Bottom surface</label>
+				<select id="nc-print-bottom-pattern" v-model="printStore.overrides.bottomSurfacePattern" @change="emitChange">
+					<option v-for="opt in surfacePatterns" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+		</div>
+
+		<h3 class="nc-print-quick-edit__title">Per-feature speeds</h3>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label>Infill speed (mm/s)</label>
+				<input v-model="printStore.overrides.infillSpeed" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Solid infill speed (mm/s)</label>
+				<input v-model="printStore.overrides.solidInfillSpeed" type="number" step="1" min="0" @change="emitChange">
 			</div>
 		</div>
 	</div>

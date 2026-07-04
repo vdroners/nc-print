@@ -106,6 +106,34 @@ export default {
 			}
 			return `$${this.filamentCostEstimate.toFixed(2)}`
 		},
+		/**
+		 * Per-feature weight (and cost when a price is set) breakdown for the
+		 * result summary: model / support / adhesion. Only categories with a
+		 * positive gram figure are shown.
+		 */
+		featureBreakdown() {
+			const s = this.materialStats
+			const price = this.filamentPricePerKg
+			const rows = [
+				{ key: 'model', label: 'Model', g: s.modelFilamentG },
+				{ key: 'support', label: 'Support', g: s.supportFilamentG ?? s.supportFilamentUsedG },
+				{ key: 'adhesion', label: 'Brim / skirt', g: s.adhesionFilamentG },
+			]
+			return rows
+				.filter(r => r.g != null && Number(r.g) > 0)
+				.map(r => {
+					const grams = Number(r.g)
+					const cost = estimateFilamentCost(grams, price)
+					return {
+						...r,
+						grams,
+						costLabel: cost != null ? `$${cost.toFixed(2)}` : null,
+					}
+				})
+		},
+		hasFeatureBreakdown() {
+			return this.featureBreakdown.length > 1
+		},
 	},
 	methods: {
 		formatPrintTime,
@@ -160,7 +188,20 @@ export default {
 					<dd>{{ row.grams.toFixed(2) }} g</dd>
 				</div>
 			</template>
-			<template v-if="hasMaterialStats">
+			<template v-if="hasFeatureBreakdown">
+				<div
+					v-for="row in featureBreakdown"
+					:key="'feat-' + row.key"
+					class="nc-print-slice-result__feat-row">
+					<dt>{{ row.label }} filament</dt>
+					<dd>{{ row.grams.toFixed(2) }} g<span v-if="row.costLabel" class="nc-print-slice-result__feat-cost"> · {{ row.costLabel }}</span></dd>
+				</div>
+				<div v-if="materialStats.supportTimeS != null">
+					<dt>Support time</dt>
+					<dd>{{ formatPrintTime(materialStats.supportTimeS) }}</dd>
+				</div>
+			</template>
+			<template v-else-if="hasMaterialStats">
 				<div v-if="materialStats.modelFilamentG != null">
 					<dt>Model filament</dt>
 					<dd>{{ Number(materialStats.modelFilamentG).toFixed(2) }} g</dd>
@@ -252,6 +293,10 @@ export default {
 
 .nc-print-slice-result--embedded .nc-print-slice-result__list {
 	margin: 0;
+}
+
+.nc-print-slice-result__feat-cost {
+	color: var(--nc-gcs-text-muted, #8b949e);
 }
 
 .nc-print-slice-result__eta-tag {

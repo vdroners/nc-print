@@ -50,8 +50,13 @@ class PrinterController extends Controller
 		'filament_load',
 		'filament_unload',
 		'filament_purge',
+		'filament_extrude',
 		'pid_calibrate',
 	];
+
+	private const EXTRUDE_MM_MAX = 50.0;
+	private const EXTRUDE_FEED_MM_MIN = 60;   // mm/min (1 mm/s)
+	private const EXTRUDE_FEED_MM_MAX = 600;  // mm/min (10 mm/s)
 
 	/** @var list<string> */
 	private const ALLOWED_GCODE_ACTIONS = [
@@ -70,6 +75,7 @@ class PrinterController extends Controller
 		'filament_load',
 		'filament_unload',
 		'filament_purge',
+		'filament_extrude',
 		'set_heater_temp',
 		'pid_calibrate',
 	];
@@ -658,6 +664,8 @@ class PrinterController extends Controller
 				return 'UNLOAD_FILAMENT';
 			case 'filament_purge':
 				return 'PURGE_FILAMENT';
+			case 'filament_extrude':
+				return $this->buildFilamentExtrudeScript($params);
 			case 'set_heater_temp':
 				return $this->buildSetHeaterTempScript($params);
 			case 'exclude_object':
@@ -681,6 +689,32 @@ class PrinterController extends Controller
 			default:
 				return null;
 		}
+	}
+
+	/**
+	 * Manual filament extrude/retract: a relative E move, clamped in distance
+	 * (|mm| ≤ EXTRUDE_MM_MAX) and feedrate. Klipper refuses to extrude below
+	 * min_extrude_temp, so a cold move safely no-ops on the firmware side. A
+	 * negative distance retracts. Idle-only (guarded by IDLE_ONLY_ACTIONS).
+	 * @param array<string, mixed> $params
+	 */
+	private function buildFilamentExtrudeScript(array $params): ?string
+	{
+		if (!isset($params['distance']) || !is_numeric($params['distance'])) {
+			return null;
+		}
+		$mm = (float) $params['distance'];
+		$mm = max(-self::EXTRUDE_MM_MAX, min(self::EXTRUDE_MM_MAX, $mm));
+		if (abs($mm) < 0.0001) {
+			return null;
+		}
+		$feed = self::EXTRUDE_FEED_MM_MAX;
+		if (isset($params['feed']) && is_numeric($params['feed'])) {
+			$feed = (int) max(self::EXTRUDE_FEED_MM_MIN, min(self::EXTRUDE_FEED_MM_MAX, (float) $params['feed']));
+		}
+		// M83 = relative extruder; restore absolute afterwards so we don't leave
+		// the extruder in relative mode for the next operation.
+		return sprintf("M83\nG1 E%.3f F%d\nM82", $mm, $feed);
 	}
 
 	/**

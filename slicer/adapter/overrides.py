@@ -46,6 +46,19 @@ _MAP = {
     "ironing_type":       ("ironing_type",              "process", "str"),
     "fuzzy_skin":         ("fuzzy_skin",                "process", "str"),
     "seam_position":      ("seam_position",             "process", "str"),
+    # ── infill / surface patterns (process-scoped) ──
+    "infill_pattern":     ("sparse_infill_pattern",     "process", "str"),
+    "top_surface_pattern": ("top_surface_pattern",      "process", "str"),
+    "bottom_surface_pattern": ("bottom_surface_pattern", "process", "str"),
+    # ── per-feature speeds (process-scoped) ──
+    "infill_speed":       ("sparse_infill_speed",       "process", "num"),
+    "solid_infill_speed": ("internal_solid_infill_speed", "process", "num"),
+    # ── support interface tuning (process-scoped) ──
+    "support_top_gap":    ("support_top_z_distance",    "process", "num"),
+    "support_interface_layers": ("support_interface_top_layers", "process", "num"),
+    "support_interface_spacing": ("support_interface_spacing", "process", "num"),
+    # ── first layer (process-scoped) ──
+    "first_layer_height": ("initial_layer_print_height", "process", "num"),
     # ── filament-scoped ──
     "nozzle_temperature": ("nozzle_temperature",        "filament", "temp"),
     "bed_temperature":    ("hot_plate_temp",            "filament", "temp"),
