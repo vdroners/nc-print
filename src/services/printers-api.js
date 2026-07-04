@@ -10,6 +10,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 
 const apiBase = () => generateUrl('/apps/nc_print/api/printers')
+const printerApiBase = () => generateUrl('/apps/nc_print/api/printer')
 
 /**
  * Discover Moonraker printers on the LAN.
@@ -28,4 +29,18 @@ export async function discoverPrinters(opts = {}) {
 	}
 	const { data } = await axios.post(`${apiBase()}/discover`, body)
 	return data.printers || []
+}
+
+/**
+ * Detect a printer's real capabilities live from Moonraker/Klipper (build
+ * volume, extruder count, model/OS). Returns the capabilities object or null.
+ * @param {string} [printerId]
+ * @returns {Promise<object|null>}
+ */
+export async function fetchCapabilities(printerId = '') {
+	const url = printerId
+		? `${printerApiBase()}/capabilities?printer_id=${encodeURIComponent(printerId)}`
+		: `${printerApiBase()}/capabilities`
+	const { data } = await axios.get(url)
+	return data.capabilities || null
 }

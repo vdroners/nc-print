@@ -15,11 +15,18 @@ export default {
 		hasDiscovered() {
 			return this.groups.discovered.length > 0
 		},
+		capabilityLabel() {
+			return this.printStore.activePrinterCapabilityLabel
+		},
 		// Show the control if there's a real choice OR discovery is worth
 		// offering (so a single-printer setup can still scan for more).
 		show() {
 			return this.hasConfigured || this.hasDiscovered || true
 		},
+	},
+	mounted() {
+		// Populate the capability chip for whatever printer is already selected.
+		void this.printStore.fetchPrinterCapabilities(this.printStore.selectedPrinterId)
 	},
 	methods: {
 		onChange() {
@@ -63,6 +70,10 @@ export default {
 				</option>
 			</optgroup>
 		</select>
+
+		<p v-if="capabilityLabel" class="nc-print-multi-printer__caps">
+			{{ capabilityLabel }}
+		</p>
 
 		<p v-if="printStore.discoverError" class="nc-print-multi-printer__error">
 			{{ printStore.discoverError }}
@@ -117,6 +128,11 @@ export default {
 .nc-print-multi-printer__scan:disabled {
 	opacity: 0.6;
 	cursor: default;
+}
+.nc-print-multi-printer__caps {
+	margin: 4px 0 0;
+	font-size: 0.74rem;
+	color: var(--color-text-maxcontrast, #8b949e);
 }
 .nc-print-multi-printer__error {
 	margin: 4px 0 0;

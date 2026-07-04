@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.25.0] - 2026-07-04
+
+**Live printer capability detection.** Selecting a printer now queries
+Klipper/Moonraker for its real hardware profile so the picker can show it at a
+glance (and future features can adapt to it).
+
+### Added
+
+- **Capability endpoint**: `GET /api/printer/capabilities?printer_id=`
+  (group-gated) queries Moonraker `printer.objects` (toolhead + configfile) and
+  `machine.system_info` and normalizes them into
+  `{build_volume{x,y,z}, extruders, has_enclosure?, model?, os?}`. Build volume
+  comes from `toolhead.axis_maximum − axis_minimum`; extruder count from the
+  `extruder`/`extruderN` config sections; enclosure from a chamber sensor;
+  model/OS from `system_info`. Read-only via the existing guarded Moonraker
+  helper (new GET variant for the GET-only `machine/system_info`). The
+  normalizer (`PrinterController::normalizeCapabilities`) is pure + unit-tested.
+- **UI**: `MultiPrinterPicker` shows a capability chip for the active printer
+  (e.g. "308×308×315 · 1 extruder · enclosed"); the store caches capabilities
+  per printer id (`fetchPrinterCapabilities`, `activePrinterCapabilityLabel`) and
+  fetches on selection/mount. Failures cache null to avoid re-query storms.
+- `printers-api.js`: `fetchCapabilities(printerId)`.
+
+### Tests
+
+- PHP: new `PrinterCapabilitiesTest` (5) — build volume from axis span (real K1
+  numbers), extruder count from config sections, enclosure heuristic, model/OS
+  from system_info, empty-input handling. (58 → 63 phpunit.)
+- Frontend: `printers.spec` grows — `fetchCapabilities` get/null; store cache
+  (no re-fetch, null-on-failure) and label formatting. (205 → 211 vitest.)
+
 ## [1.24.0] - 2026-07-04
 
 **Automatic printer discovery in the app + recently-used printers.** The

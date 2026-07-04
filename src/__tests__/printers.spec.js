@@ -6,7 +6,7 @@ vi.mock('@nextcloud/router', () => ({
 }))
 
 vi.mock('@nextcloud/axios', () => ({
-	default: { post: vi.fn() },
+	default: { post: vi.fn(), get: vi.fn() },
 }))
 
 // print store service mocks (mirror print-monitor.spec.js)
@@ -30,7 +30,7 @@ vi.mock('@/services/mesh-convert.js', async (importOriginal) => {
 	return { ...actual, convert3mfToStlBuffer: vi.fn(), list3mfBuildItems: vi.fn(async () => []) }
 })
 
-import { discoverPrinters } from '@/services/printers-api.js'
+import { discoverPrinters, fetchCapabilities } from '@/services/printers-api.js'
 import axios from '@nextcloud/axios'
 import { usePrintStore } from '@/store/print.js'
 
@@ -49,6 +49,20 @@ describe('printers-api', () => {
 			'https://cloud.example/apps/nc_print/api/printers/discover',
 			{ hosts: '10.0.0.9', subnet: '10.0.0.' },
 		)
+	})
+
+	it('fetchCapabilities gets and returns the capabilities object', async () => {
+		axios.get.mockResolvedValueOnce({ data: { ok: true, capabilities: { extruders: 1 } } })
+		const caps = await fetchCapabilities('k1')
+		expect(caps).toEqual({ extruders: 1 })
+		expect(axios.get).toHaveBeenCalledWith(
+			'https://cloud.example/apps/nc_print/api/printer/capabilities?printer_id=k1',
+		)
+	})
+
+	it('fetchCapabilities returns null when none reported', async () => {
+		axios.get.mockResolvedValueOnce({ data: { ok: false, capabilities: null } })
+		expect(await fetchCapabilities('k1')).toBeNull()
 	})
 })
 
@@ -151,5 +165,48 @@ describe('print store discovery actions', () => {
 		expect(store.discoveredPrinters).toHaveLength(0)
 		// Selecting it also recorded usage.
 		expect(store.recentPrinters[0].id).toBe('found:10.0.0.9')
+	})
+})
+
+describe('print store printer capabilities', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('fetchPrinterCapabilities caches by id and does not re-fetch', async () => {
+		const store = usePrintStore()
+		axios.get.mockResolvedValueOnce({ data: { ok: true, capabilities: { build_volume: { x: 300, y: 300, z: 250 }, extruders: 1 } } })
+		const caps = await store.fetchPrinterCapabilities('k1')
+		expect(caps.extruders).toBe(1)
+		expect(store.printerCapabilities.k1.build_volume.x).toBe(300)
+		// Second call is served from cache (no new axios.get).
+		axios.get.mockClear()
+		await store.fetchPrinterCapabilities('k1')
+		expect(axios.get).not.toHaveBeenCalled()
+	})
+
+	it('fetchPrinterCapabilities caches null on failure (no repeat storm)', async () => {
+		const store = usePrintStore()
+		axios.get.mockRejectedValueOnce(new Error('unreachable'))
+		const caps = await store.fetchPrinterCapabilities('k1')
+		expect(caps).toBeNull()
+		expect(store.printerCapabilities).toHaveProperty('k1', null)
+	})
+
+	it('activePrinterCapabilityLabel formats build volume + extruders + enclosure', async () => {
+		const store = usePrintStore()
+		store.config = { multi_printers: [{ id: 'k1', name: 'K1', default: true }] }
+		store.selectedPrinterId = 'k1'
+		axios.get.mockResolvedValueOnce({ data: { capabilities: { build_volume: { x: 309, y: 308, z: 315 }, extruders: 2, has_enclosure: true } } })
+		await store.fetchPrinterCapabilities('k1')
+		expect(store.activePrinterCapabilityLabel).toBe('309×308×315 · 2 extruders · enclosed')
+	})
+
+	it('activePrinterCapabilityLabel is empty when unknown', () => {
+		const store = usePrintStore()
+		store.config = { multi_printers: [{ id: 'k1', name: 'K1', default: true }] }
+		store.selectedPrinterId = 'k1'
+		expect(store.activePrinterCapabilityLabel).toBe('')
 	})
 })

@@ -16,6 +16,7 @@ return [
 		['name' => 'admin#discoverPrinters', 'url' => '/api/admin/discover-printers', 'verb' => 'POST'],
 
 		['name' => 'printer#state', 'url' => '/api/printer/state', 'verb' => 'GET'],
+		['name' => 'printer#capabilities', 'url' => '/api/printer/capabilities', 'verb' => 'GET'],
 		['name' => 'printer#pause', 'url' => '/api/printer/pause', 'verb' => 'POST'],
 		['name' => 'printer#resume', 'url' => '/api/printer/resume', 'verb' => 'POST'],
 		['name' => 'printer#cancel', 'url' => '/api/printer/cancel', 'verb' => 'POST'],

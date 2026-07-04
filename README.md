@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.24.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.25.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -58,6 +58,9 @@ external slicer service** and no NC-GCS dependency.
   target-printer picker finds Moonraker printers on the LAN; the picker groups
   them as **Recent** (the printers you actually use, floated to the top),
   **Configured**, and **Found on network** (one-click add for the session)
+- **Live capability detection** — selecting a printer queries Klipper/Moonraker
+  for its real build volume, extruder count, model and OS, shown as a chip
+  (e.g. "308×308×315 · 1 extruder")
 - Live telemetry with camera, multi-series temperature graph + PID tuning
 - Bed-mesh heatmap + calibrate (idle-only), print/job queue, mid-print
   exclude-object

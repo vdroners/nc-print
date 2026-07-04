@@ -17,7 +17,7 @@ import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
-import { discoverPrinters as discoverPrintersApi } from '@/services/printers-api.js'
+import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi } from '@/services/printers-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
@@ -249,6 +249,9 @@ export const usePrintStore = defineStore('print', {
 		discoveredPrinters: [],
 		discovering: false,
 		discoverError: '',
+		// Live-detected capabilities per printer id (build volume, extruders,
+		// model/OS), cached for the session. { [id]: {..} | null (=fetched, none) }
+		printerCapabilities: {},
 		savedPresets: {},
 		overrides: {
 			layerHeight: '',
@@ -709,6 +712,35 @@ export const usePrintStore = defineStore('print', {
 				d => !knownUrls.has(String(d.moonraker_url || '').toLowerCase()),
 			)
 			return { recent, configured: rest, discovered }
+		},
+		/** Live-detected capabilities for the active target printer (or null). */
+		activePrinterCapabilities(state) {
+			const id = this.activeTargetPrinter?.id
+			return id != null ? (state.printerCapabilities[String(id)] ?? null) : null
+		},
+		/**
+		 * Compact human label for the active printer's capabilities, e.g.
+		 * "308×308×315 · 1 extruder · enclosed". Empty string when unknown.
+		 */
+		activePrinterCapabilityLabel() {
+			const c = this.activePrinterCapabilities
+			if (!c) {
+				return ''
+			}
+			const parts = []
+			if (c.build_volume) {
+				parts.push(`${c.build_volume.x}×${c.build_volume.y}×${c.build_volume.z}`)
+			}
+			if (c.extruders > 0) {
+				parts.push(`${c.extruders} extruder${c.extruders > 1 ? 's' : ''}`)
+			}
+			if (c.has_enclosure) {
+				parts.push('enclosed')
+			}
+			if (c.model) {
+				parts.push(c.model)
+			}
+			return parts.join(' · ')
 		},
 		extruderCount(state) {
 			return parseExtruderCount(state.profiles, state.selection.printerId)
@@ -1194,6 +1226,33 @@ export const usePrintStore = defineStore('print', {
 			this.recordPrinterUsage(this.selectedPrinterId)
 			this.stopPrinterPolling()
 			this.startPrinterPolling()
+			void this.fetchPrinterCapabilities(this.selectedPrinterId)
+		},
+
+		/**
+		 * Live-detect the given printer's capabilities from Moonraker and cache
+		 * them for the session. Best-effort; a failed/unreachable probe caches
+		 * null so we don't keep re-querying every selection. Re-fetch with
+		 * force=true.
+		 * @param {string} id
+		 * @param {boolean} [force]
+		 */
+		async fetchPrinterCapabilities(id, force = false) {
+			const key = String(id || this.activeTargetPrinter?.id || '')
+			if (!key) {
+				return null
+			}
+			if (!force && Object.prototype.hasOwnProperty.call(this.printerCapabilities, key)) {
+				return this.printerCapabilities[key]
+			}
+			try {
+				const caps = await fetchCapabilitiesApi(key)
+				this.printerCapabilities = { ...this.printerCapabilities, [key]: caps }
+				return caps
+			} catch (e) {
+				this.printerCapabilities = { ...this.printerCapabilities, [key]: null }
+				return null
+			}
 		},
 
 		/**

@@ -116,6 +116,117 @@ class PrinterController extends Controller
 		return new JSONResponse($this->normalizeState($status));
 	}
 
+	/**
+	 * Detect a printer's real capabilities live from Moonraker/Klipper:
+	 * build volume (toolhead.axis_maximum), extruder count, and machine model /
+	 * firmware (machine.system_info). Read-only. Used to auto-populate the picker
+	 * capability chips when a printer is selected/added.
+	 */
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
+	public function capabilities(): JSONResponse
+	{
+		if (!$this->access->canUseApp()) {
+			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
+		}
+		if (!$this->config->isMoonrakerEnabled()) {
+			return new JSONResponse(['ok' => false, 'capabilities' => null,
+				'message' => 'Moonraker integration disabled']);
+		}
+		$printerId = $this->request->getParam('printer_id');
+
+		// toolhead gives axis_maximum (build volume) + extruder count hints;
+		// gcode_move / configfile are queried where present.
+		$objectsPayload = json_encode([
+			'objects' => ['toolhead' => null, 'configfile' => null],
+		], JSON_THROW_ON_ERROR);
+		$objects = $this->moonrakerPost('printer/objects/query', $objectsPayload, 'application/json', $printerId);
+		$status = $objects['status'] ?? $objects['result']['status'] ?? [];
+
+		// machine/system_info is GET-only in Moonraker (POST -> 405).
+		$sys = $this->moonrakerGet('machine/system_info', $printerId);
+		$systemInfo = $sys['system_info'] ?? $sys['result']['system_info'] ?? [];
+
+		$caps = self::normalizeCapabilities($status, $systemInfo);
+		if ($caps === null) {
+			return new JSONResponse(['ok' => false, 'capabilities' => null,
+				'message' => 'Printer unreachable or reported no capabilities']);
+		}
+		return new JSONResponse(['ok' => true, 'capabilities' => $caps]);
+	}
+
+	/**
+	 * Pure capability normalizer (unit-tested). Maps a Moonraker
+	 * printer.objects `status` + machine.system_info block into a compact,
+	 * UI-friendly shape. Missing fields are tolerated (returned null).
+	 *
+	 * @param array<string, mixed> $status
+	 * @param array<string, mixed> $systemInfo
+	 * @return array<string, mixed>|null
+	 */
+	public static function normalizeCapabilities(array $status, array $systemInfo): ?array
+	{
+		$out = [];
+
+		$toolhead = is_array($status['toolhead'] ?? null) ? $status['toolhead'] : [];
+		$axisMax = $toolhead['axis_maximum'] ?? null; // [x, y, z(, e)]
+		$axisMin = $toolhead['axis_minimum'] ?? null;
+		if (is_array($axisMax) && isset($axisMax[0], $axisMax[1], $axisMax[2])) {
+			$minX = is_array($axisMin) && isset($axisMin[0]) ? (float) $axisMin[0] : 0.0;
+			$minY = is_array($axisMin) && isset($axisMin[1]) ? (float) $axisMin[1] : 0.0;
+			$minZ = is_array($axisMin) && isset($axisMin[2]) ? (float) $axisMin[2] : 0.0;
+			$out['build_volume'] = [
+				'x' => (int) round((float) $axisMax[0] - $minX),
+				'y' => (int) round((float) $axisMax[1] - $minY),
+				'z' => (int) round((float) $axisMax[2] - $minZ),
+			];
+		}
+
+		// Extruder count: Klipper exposes extruder, extruder1, extruder2, ...
+		// as separate config sections; count them from the configfile settings
+		// if present, else infer 1 when a toolhead exists.
+		$configfile = is_array($status['configfile'] ?? null) ? $status['configfile'] : [];
+		$settings = is_array($configfile['settings'] ?? null) ? $configfile['settings'] : [];
+		$extruders = 0;
+		foreach (array_keys($settings) as $section) {
+			if ($section === 'extruder' || preg_match('/^extruder\d+$/', (string) $section)) {
+				$extruders++;
+			}
+		}
+		if ($extruders === 0 && $toolhead !== []) {
+			$extruders = 1;
+		}
+		if ($extruders > 0) {
+			$out['extruders'] = $extruders;
+		}
+
+		// Enclosure heuristic: a chamber heater/temperature section implies one.
+		foreach (array_keys($settings) as $section) {
+			$s = (string) $section;
+			if (str_contains($s, 'chamber') || $s === 'temperature_sensor chamber') {
+				$out['has_enclosure'] = true;
+				break;
+			}
+		}
+
+		// Machine model / OS from system_info where Moonraker provides it. Model
+		// often lives under cpu_info (hardware_desc / cpu_desc / model); many
+		// controller boards leave these blank, which we tolerate.
+		$distro = is_array($systemInfo['distribution'] ?? null) ? $systemInfo['distribution'] : [];
+		$cpu = is_array($systemInfo['cpu_info'] ?? null) ? $systemInfo['cpu_info'] : [];
+		foreach ([$systemInfo['model'] ?? '', $cpu['hardware_desc'] ?? '', $cpu['cpu_desc'] ?? '', $cpu['model'] ?? ''] as $cand) {
+			if (is_string($cand) && trim($cand) !== '') {
+				$out['model'] = trim($cand);
+				break;
+			}
+		}
+		if (isset($distro['name']) && is_string($distro['name']) && $distro['name'] !== '') {
+			$out['os'] = $distro['name'];
+		}
+
+		return $out === [] ? null : $out;
+	}
+
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function pause(): JSONResponse
@@ -703,6 +814,41 @@ class PrinterController extends Controller
 
 		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {
 			$this->logger->warning('PrinterController Moonraker request failed', [
+				'path' => $path,
+				'http' => $httpCode,
+				'error' => $error,
+			]);
+			return null;
+		}
+
+		$data = json_decode((string) $responseBody, true);
+		return is_array($data) ? $data : ['result' => $responseBody];
+	}
+
+	/**
+	 * Read-only GET against Moonraker (for endpoints that only accept GET, e.g.
+	 * machine/system_info). Same resolve/timeout/logging discipline as the POST
+	 * helper; returns the decoded array or null on failure.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function moonrakerGet(string $path, ?string $printerId = null): ?array
+	{
+		$url = rtrim($this->config->resolveMoonrakerUrl($printerId), '/') . '/' . ltrim($path, '/');
+
+		$ch = curl_init();
+		curl_setopt($ch, CURLOPT_URL, $url);
+		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+		curl_setopt($ch, CURLOPT_TIMEOUT, self::DEFAULT_TIMEOUT_SECONDS);
+		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+
+		$responseBody = curl_exec($ch);
+		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+		$error = curl_error($ch);
+		curl_close($ch);
+
+		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {
+			$this->logger->warning('PrinterController Moonraker GET failed', [
 				'path' => $path,
 				'http' => $httpCode,
 				'error' => $error,
