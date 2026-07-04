@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.19.1] - 2026-07-03
+
+Test-coverage backfill for high-risk untested paths, plus docs housekeeping. No
+runtime behaviour change.
+
+### Tests
+
+- **SlicerProxyController** — new `SlicerProxyControllerTest`: upstream-path
+  mapping (`slice/stream` → `api/slice/stream`, api/ prefixing), the tightened
+  endpoint allowlist (accepts the used endpoints, rejects `api/admin/*` etc.),
+  and query-string sanitization (strips `_route`/`_url`, RFC3986 re-encode).
+- **AdminController** — new `AdminControllerTest` for the printer-discovery
+  candidate derivation (explicit hosts win; /24 sweep from configured IP or an
+  admin subnet; `.local` fallbacks for non-IP hosts; 260 cap). The pure logic was
+  extracted into a static `buildDiscoveryCandidates()` for testability (no
+  behaviour change).
+- **Sidecar presets resolver** — new `resolve_triple` tests: happy path,
+  compatibility repair (incompatible process/filament swapped for a compatible
+  one), unknown-printer error, and auto-supplied filament when none given.
+- Totals: 44 phpunit, 28 adapter, 178 vitest.
+
+### Docs
+
+- Marked the three superseded plan docs (external forge-slicer era) with
+  obsolete/completed banners pointing at the current architecture, rather than
+  deleting them (the changelog history links to them).
+- `.gitignore` now excludes local `docs/*.stl` / `docs/*.3mf` dev fixtures.
+
 ## [1.19.0] - 2026-07-03
 
 Surface-quality slice overrides.

@@ -438,6 +438,88 @@ def test_pause_injection_rejects_unsafe_command():
     assert n == 0
 
 
+def _fake_index(by_name, cache):
+    """A PresetIndex with its filesystem scan replaced by in-memory data.
+    by_name: {kind: {name: path}}; cache: {path: parsed-json}.
+    """
+    from presets import PresetIndex
+    idx = PresetIndex.__new__(PresetIndex)  # skip __init__ (no fs scan)
+    idx._by_name = by_name
+    idx._cache = cache
+    return idx
+
+
+def test_resolve_triple_happy_path():
+    from presets import resolve_triple
+    idx = _fake_index(
+        by_name={
+            "machine": {"P1 0.4": "/m/p1.json"},
+            "process": {"0.2 Std @P1": "/pr/std.json"},
+            "filament": {"PLA @P1": "/f/pla.json"},
+        },
+        cache={
+            "/pr/std.json": {"compatible_printers": ["P1 0.4"]},
+            "/f/pla.json": {"compatible_printers": ["P1 0.4"]},
+        },
+    )
+    m, p, fs, warn = resolve_triple(idx, "P1 0.4", "0.2 Std @P1", ["PLA @P1"])
+    assert m == "/m/p1.json"
+    assert p == "/pr/std.json"
+    assert fs == ["/f/pla.json"]
+    assert warn == []
+
+
+def test_resolve_triple_repairs_incompatible_process_and_filament():
+    from presets import resolve_triple
+    idx = _fake_index(
+        by_name={
+            "machine": {"P1 0.4": "/m/p1.json"},
+            "process": {"good @P1": "/pr/good.json", "bad @P2": "/pr/bad.json"},
+            "filament": {"good f @P1": "/f/good.json", "bad f @P2": "/f/bad.json"},
+        },
+        cache={
+            "/pr/good.json": {"compatible_printers": ["P1 0.4"]},
+            "/pr/bad.json": {"compatible_printers": ["P2 0.4"]},
+            "/f/good.json": {"compatible_printers": ["P1 0.4"]},
+            "/f/bad.json": {"compatible_printers": ["P2 0.4"]},
+        },
+    )
+    m, p, fs, warn = resolve_triple(idx, "P1 0.4", "bad @P2", ["bad f @P2"])
+    # incompatible selections are swapped for compatible ones
+    assert p == "/pr/good.json"
+    assert fs == ["/f/good.json"]
+    assert any("not compatible" in w for w in warn)
+
+
+def test_resolve_triple_unknown_printer_raises():
+    from presets import resolve_triple
+    idx = _fake_index({"machine": {}, "process": {}, "filament": {}}, {})
+    raised = False
+    try:
+        resolve_triple(idx, "No Such Printer", "", [])
+    except ValueError as e:
+        raised = "unknown printer" in str(e)
+    assert raised
+
+
+def test_resolve_triple_supplies_filament_when_none_given():
+    from presets import resolve_triple
+    idx = _fake_index(
+        by_name={
+            "machine": {"P1 0.4": "/m/p1.json"},
+            "process": {"std @P1": "/pr/std.json"},
+            "filament": {"PLA @P1": "/f/pla.json"},
+        },
+        cache={
+            "/pr/std.json": {"compatible_printers": ["P1 0.4"]},
+            "/f/pla.json": {"compatible_printers": ["P1 0.4"]},
+        },
+    )
+    m, p, fs, warn = resolve_triple(idx, "P1 0.4", "std @P1", [])
+    assert fs == ["/f/pla.json"]
+    assert any("no usable filament" in w for w in warn)
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t

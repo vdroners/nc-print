@@ -73,24 +73,34 @@ class AdminController extends Controller
 	public function discoverPrinters(): JSONResponse
 	{
 		$params = $this->request->getParams();
-		$port = 7125;
-		$candidates = [];
+		$configured = (string) $this->config->getAppValue(
+			Application::APP_ID,
+			ConfigService::KEY_MOONRAKER_INTERNAL_URL,
+			ConfigService::DEFAULT_MOONRAKER_INTERNAL_URL,
+		);
+		$candidates = self::buildDiscoveryCandidates($params, $configured);
+		$found = $this->probeMoonraker($candidates, 7125);
+		return new JSONResponse(['ok' => true, 'printers' => $found]);
+	}
 
-		// Explicit host list wins (comma/space separated host or host:port).
+	/**
+	 * Pure candidate-host list for discovery. An explicit `hosts` list wins;
+	 * otherwise a /24 sweep derived from an admin `subnet` or the configured
+	 * Moonraker IP, plus common .local names. Deduped and capped at 260.
+	 * @param array<string, mixed> $params
+	 * @return list<string>
+	 */
+	public static function buildDiscoveryCandidates(array $params, string $configuredUrl): array
+	{
+		$candidates = [];
 		$rawHosts = trim((string) ($params['hosts'] ?? ''));
 		if ($rawHosts !== '') {
 			foreach (preg_split('/[\s,]+/', $rawHosts, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $h) {
 				$candidates[] = $h;
 			}
 		} else {
-			// Derive a /24 sweep from the configured Moonraker host if it is an IP.
-			$configured = (string) $this->config->getAppValue(
-				Application::APP_ID,
-				ConfigService::KEY_MOONRAKER_INTERNAL_URL,
-				ConfigService::DEFAULT_MOONRAKER_INTERNAL_URL,
-			);
 			$base = null;
-			$parts = @parse_url($configured);
+			$parts = @parse_url($configuredUrl);
 			if (is_array($parts) && !empty($parts['host']) && filter_var($parts['host'], FILTER_VALIDATE_IP)) {
 				$base = $parts['host'];
 			}
@@ -107,7 +117,6 @@ class AdminController extends Controller
 					$candidates[] = "$prefix.$i";
 				}
 			}
-			// Common hostnames as a fallback.
 			foreach (['mainsail.local', 'fluidd.local', 'voron.local', 'printer.local'] as $name) {
 				$candidates[] = $name;
 			}
@@ -118,9 +127,7 @@ class AdminController extends Controller
 		if (count($candidates) > 260) {
 			$candidates = array_slice($candidates, 0, 260);
 		}
-
-		$found = $this->probeMoonraker($candidates, $port);
-		return new JSONResponse(['ok' => true, 'printers' => $found]);
+		return $candidates;
 	}
 
 	/**

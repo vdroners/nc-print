@@ -10,3 +10,8 @@
 # Python bytecode from adapter compile-checks / tests.
 __pycache__/
 *.pyc
+# Local test/dev model fixtures (not part of the app).
+/docs/*.3mf
+/docs/*.3MF
+/docs/*.stl
+/docs/*.STL
