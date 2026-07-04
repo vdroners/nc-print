@@ -30,6 +30,11 @@ external slicer service** and no NC-GCS dependency.
 - **Multi-object plates** — add several models and auto-arrange them on one plate
 - **Calibration suite** — one-click flow-rate models and a parametric
   temperature tower
+- **Pause / filament change at height** — insert M600 (filament change) or M601
+  (pause) at chosen Z heights, for multi-colour prints, embedding hardware, or
+  inspection
+- **Material breakdown + cost** — model vs support filament (g) and estimated
+  cost, computed per feature from the sliced G-code
 - Save G-code beside the model in Nextcloud Files
 
 **Print monitor (Moonraker)**
