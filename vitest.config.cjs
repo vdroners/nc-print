@@ -11,6 +11,7 @@ module.exports = defineConfig({
 			['src/__tests__/console.spec.js', 'happy-dom'],
 			['src/__tests__/slice-stats.spec.js', 'happy-dom'],
 			['src/__tests__/materials.spec.js', 'happy-dom'],
+			['src/__tests__/eta.spec.js', 'happy-dom'],
 		],
 		include: ['src/__tests__/**/*.spec.js'],
 		clearMocks: true,

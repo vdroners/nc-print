@@ -16,6 +16,7 @@ import { fetchConfig } from '@/services/config-api.js'
 import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
+import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
@@ -33,6 +34,11 @@ const JOB_HISTORY_MAX = 20
 const RECENT_MODELS_MAX = 5
 const PRESETS_KEY = 'nc_print_presets_v1'
 const NOTIF_PROMPT_KEY = 'nc_print_notif_prompted_v1'
+
+/** Find a profile row by id (string-compared), tolerant of number/string ids. */
+function findById(list, id) {
+	return Array.isArray(list) ? list.find(p => String(p.id) === String(id)) : undefined
+}
 
 function loadPrefs() {
 	try {
@@ -264,6 +270,10 @@ export const usePrintStore = defineStore('print', {
 			printing: false,
 			error: '',
 		},
+		// Smart-ETA prediction for the current slice (learned slicer-vs-actual
+		// correction). null until predicted; { predicted_minutes, multiplier,
+		// samples, confidence }.
+		etaPrediction: null,
 		printerState: {
 			connected: false,
 			state: 'unknown',
@@ -1000,6 +1010,68 @@ export const usePrintStore = defineStore('print', {
 			return changed
 		},
 
+		/**
+		 * Smart-ETA: ask the backend for a learned slicer-vs-actual adjusted
+		 * estimate for the current slice. Best-effort — failures are swallowed so
+		 * the slice result still renders. Populates `etaPrediction`.
+		 */
+		async predictEta() {
+			const slicerMinutes = (this.sliceJob.estimatedTimeS || 0) / 60
+			if (slicerMinutes <= 0) {
+				this.etaPrediction = null
+				return null
+			}
+			try {
+				const pred = await predictEtaApi({
+					slicerMinutes,
+					printerId: this.selection.printerId || this.selectedPrinterId || '',
+					material: this._currentFilamentType(),
+					nozzleDiameter: this._currentNozzleDiameter(),
+				})
+				// Only surface a correction once the bucket has learned something.
+				this.etaPrediction = (pred && pred.samples > 0) ? pred : null
+				return this.etaPrediction
+			} catch (e) {
+				this.etaPrediction = null
+				return null
+			}
+		},
+
+		/**
+		 * Smart-ETA: record a finished print (slicer estimate vs actual duration)
+		 * so the printer/material/nozzle bucket learns. Best-effort.
+		 * @param {number} actualSeconds
+		 */
+		async recordEta(actualSeconds) {
+			const slicerMinutes = (this.sliceJob.estimatedTimeS || 0) / 60
+			const actualMinutes = (actualSeconds || 0) / 60
+			if (slicerMinutes <= 0 || actualMinutes <= 0) {
+				return null
+			}
+			try {
+				return await recordEtaApi({
+					slicerMinutes,
+					actualMinutes,
+					printerId: this.selection.printerId || this.selectedPrinterId || '',
+					material: this._currentFilamentType(),
+					nozzleDiameter: this._currentNozzleDiameter(),
+				})
+			} catch (e) {
+				return null
+			}
+		},
+
+		_currentFilamentType() {
+			const fil = findById(this.profiles.filaments, this.selection.filamentId)
+			return fil?.type || fil?.name || ''
+		},
+
+		_currentNozzleDiameter() {
+			const printer = findById(this.profiles.printers, this.selection.printerId)
+			const d = printer?.nozzle_diameter ?? printer?.nozzleDiameter
+			return Number.isFinite(+d) && +d > 0 ? +d : 0.4
+		},
+
 		async loadConfig() {
 			try {
 				this.config = await fetchConfig()
@@ -1241,6 +1313,8 @@ export const usePrintStore = defineStore('print', {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintComplete(this.printerState.filename)
 				toastSuccess('Print complete')
+				// Feed the smart-ETA learner the slicer-vs-actual pair (best-effort).
+				this.recordEta(this.printerState.totalDuration ?? this.printerState.printDuration)
 			} else if (nextState === 'error' && ['printing', 'paused'].includes(prevState)) {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintFailed(this.printerState.message)
@@ -1442,6 +1516,7 @@ export const usePrintStore = defineStore('print', {
 				const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
 				this.sliceJob.gcodeFilename = `${stem}.gcode`
 				this.sliceJob.status = 'done'
+				this.predictEta()
 
 				if (this.sliceJob.jobId) {
 					try {
@@ -1508,6 +1583,7 @@ export const usePrintStore = defineStore('print', {
 			const stem = (this.model.name || 'plate').replace(/\.[^.]+$/, '')
 			this.sliceJob.gcodeFilename = `${stem}-plate.gcode`
 			this.sliceJob.status = 'done'
+			this.predictEta()
 			if (this.sliceJob.jobId) {
 				try {
 					this.sliceJob.gcodeBlob = await downloadGcode(this.sliceJob.jobId)

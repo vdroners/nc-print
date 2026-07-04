@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.23.0] - 2026-07-03
+
+**Smart ETA** — learns each printer's slicer-vs-actual time delta and shows a
+corrected prediction on the slice result. Ported (algorithm) from the
+3dprintforge ETA predictor; storage is app-config (no schema).
+
+### Added
+
+- **EtaLearningService** (`lib/Service/EtaLearningService.php`): EWMA
+  (actual/slicer) multiplier per `(printerId, material, nozzleDiameter)` bucket,
+  α=0.25, stored as an app-config JSON blob. `predict()` returns an adjusted
+  estimate + multiplier + samples + confidence (saturates at 10 samples);
+  `recordCompletion()` updates the EWMA, clamping ratios to the 0.3–3.0 sanity
+  band (paused prints / tracking bugs are skipped). Unknown buckets and
+  missing-printer contexts echo the slicer estimate unchanged.
+- **EtaController** + routes: `POST /api/eta/predict`, `POST /api/eta/record`,
+  `GET /api/eta/stats` — all access-gated like the rest of the app.
+- **Frontend**: `eta-api.js` (predict/record); the print store predicts on
+  slice-done (only surfaces a correction once the bucket has learned ≥1 print)
+  and records on print completion (slicer estimate vs actual duration). The
+  slice result panel shows a "Predicted (learned)" row with the corrected time
+  and a "±X% vs slicer · N prints · Y% confidence" note.
+
+### Tests
+
+- PHP: new `EtaLearningServiceTest` (8) — unknown bucket / no-printer echo the
+  estimate; first record seeds multiplier=ratio; EWMA converges toward a
+  persistently-long ratio; confidence grows with samples and saturates;
+  out-of-band and non-positive/missing inputs are rejected; buckets are keyed by
+  material + nozzle. Added a minimal `OCP\IConfig` test stub. (44 → 52 phpunit.)
+- Frontend: new `eta.spec` (7) — eta-api predict/record payloads; store
+  predict/record wiring (surfaces only when samples>0, no-ops without estimates,
+  posts minutes). (189 → 196 vitest.)
+
 ## [1.22.0] - 2026-07-03
 
 Multi-color **purge / color-order optimizer** — recommend the filament load

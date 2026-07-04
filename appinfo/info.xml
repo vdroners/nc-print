@@ -7,7 +7,7 @@
 	<description><![CDATA[NC 3D Print — standalone Nextcloud app that ships its own headless Orca slicing
 engine (the nc-print-slicer sidecar), Moonraker printer control, and live camera monitoring.
 No external slicer service and no NC-GCS dependency required.]]></description>
-	<version>1.22.0</version>
+	<version>1.23.0</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author>NC-GCS Program</author>
 	<namespace>NcPrint</namespace>

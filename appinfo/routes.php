@@ -25,6 +25,10 @@ return [
 		['name' => 'printer#consoleCommand', 'url' => '/api/printer/console', 'verb' => 'POST'],
 		['name' => 'printer#upload', 'url' => '/api/printer/upload', 'verb' => 'POST'],
 
+		['name' => 'eta#predict', 'url' => '/api/eta/predict', 'verb' => 'POST'],
+		['name' => 'eta#record', 'url' => '/api/eta/record', 'verb' => 'POST'],
+		['name' => 'eta#stats', 'url' => '/api/eta/stats', 'verb' => 'GET'],
+
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'GET', 'requirements' => ['path' => '.+']],
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'POST', 'requirements' => ['path' => '.+'], 'postfix' => 'slicer_post'],
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'PUT', 'requirements' => ['path' => '.+'], 'postfix' => 'slicer_put'],

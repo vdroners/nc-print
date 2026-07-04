@@ -12,6 +12,13 @@ interface IRequest
 	public function getUploadedFile(string $key);
 }
 
+interface IConfig
+{
+	public function getAppValue(string $appName, string $key, string $default = ''): string;
+
+	public function setAppValue(string $appName, string $key, string $value): void;
+}
+
 namespace OCP\AppFramework;
 
 use OCP\IRequest;

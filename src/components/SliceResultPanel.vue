@@ -19,6 +19,26 @@ export default {
 		printTimeLabel() {
 			return formatPrintTime(this.job.estimatedTimeS)
 		},
+		etaPrediction() {
+			return this.printStore.etaPrediction
+		},
+		etaPredictedLabel() {
+			const p = this.etaPrediction
+			if (!p || !(p.predicted_minutes > 0)) {
+				return null
+			}
+			return formatPrintTime(Math.round(p.predicted_minutes * 60))
+		},
+		etaConfidenceLabel() {
+			const p = this.etaPrediction
+			if (!p) {
+				return ''
+			}
+			const pct = Math.round((p.confidence || 0) * 100)
+			const sign = p.multiplier >= 1 ? '+' : '−'
+			const deltaPct = Math.abs(Math.round((p.multiplier - 1) * 100))
+			return `${sign}${deltaPct}% vs slicer · ${p.samples} prints · ${pct}% confidence`
+		},
 		gcodeKb() {
 			if (!this.job.gcodeSizeBytes) {
 				return null
@@ -115,6 +135,13 @@ export default {
 			<div>
 				<dt>Print time</dt>
 				<dd>{{ printTimeLabel }}</dd>
+			</div>
+			<div v-if="etaPredictedLabel" class="nc-print-slice-result__eta">
+				<dt>Predicted <span class="nc-print-slice-result__eta-tag">learned</span></dt>
+				<dd>
+					{{ etaPredictedLabel }}
+					<span class="nc-print-slice-result__eta-note">{{ etaConfidenceLabel }}</span>
+				</dd>
 			</div>
 			<div>
 				<dt>Filament</dt>
@@ -225,5 +252,24 @@ export default {
 
 .nc-print-slice-result--embedded .nc-print-slice-result__list {
 	margin: 0;
+}
+
+.nc-print-slice-result__eta-tag {
+	display: inline-block;
+	margin-left: 6px;
+	padding: 0 6px;
+	border-radius: 999px;
+	font-size: 0.62rem;
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	background: color-mix(in srgb, var(--nc-app-accent, #4c8eda) 22%, transparent);
+	color: var(--nc-app-accent, #4c8eda);
+	vertical-align: middle;
+}
+
+.nc-print-slice-result__eta-note {
+	display: block;
+	color: var(--nc-gcs-text-muted, #8b949e);
+	font-size: var(--nc-gcs-text-sm, 0.75rem);
 }
 </style>
