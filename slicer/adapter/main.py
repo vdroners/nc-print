@@ -44,6 +44,11 @@ from calibration import (
 )
 from calibration_gcode import generate as calib_generate
 from calibration_gcode import list_gcode_calibrations
+from filament_materials import (
+    get_all_materials,
+    get_material_by_id,
+    get_materials_by_category,
+)
 from gcode_postprocess import inject_pauses
 from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
@@ -606,6 +611,28 @@ async def calibration_generate(request: Request) -> JSONResponse:
         "filament_g": result.get("filament_g"),
         "gcode_size": os.path.getsize(gcode_path),
     })
+
+
+@app.get("/api/materials")
+async def materials_list(request: Request) -> JSONResponse:
+    """Filament material reference database (15 common materials).
+
+    Optional ?category= filters to one of: standard, engineering, composite,
+    flexible, specialty, support. Data-only — no slicing.
+    """
+    category = request.query_params.get("category")
+    materials = get_materials_by_category(category) if category else get_all_materials()
+    return JSONResponse({"materials": materials, "count": len(materials)})
+
+
+@app.get("/api/materials/{material_id}")
+async def material_detail(material_id: str) -> JSONResponse:
+    """A single material's full reference entry, or 404 if unknown."""
+    m = get_material_by_id(material_id)
+    if not m:
+        return JSONResponse({"error": "not_found",
+                             "message": f"unknown material '{material_id}'"}, 404)
+    return JSONResponse(m)
 
 
 @app.post("/api/calibration/{calib_id}/slice")

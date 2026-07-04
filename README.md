@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.20.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.21.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -37,6 +37,10 @@ external slicer service** and no NC-GCS dependency.
   inspection
 - **Material breakdown + cost** — model vs support filament (g) and estimated
   cost, computed per feature from the sliced G-code
+- **Filament material reference** — a built-in database of 15 common materials
+  (PLA/PETG/ABS/ASA/TPU/PA/PC/composites/supports) with recommended nozzle/bed/
+  chamber temps, drying, plate compatibility, properties, tips and warnings; a
+  "use these temps" action seeds the slice overrides
 - **Surface-quality overrides** — ironing, fuzzy skin, seam position, and
   adaptive layer height, applied on top of the process profile
 - Save G-code beside the model in Nextcloud Files

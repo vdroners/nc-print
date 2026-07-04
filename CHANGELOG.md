@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.21.0] - 2026-07-03
+
+Filament **material reference database** — a built-in catalog of 15 common
+materials with a browsable info panel and one-click temperature defaults, ported
+from the 3dprintforge material reference.
+
+### Added
+
+- **Material database** (sidecar `filament_materials.py`): 15 materials
+  (PLA, PLA-CF, PETG, PETG-CF, ABS, ASA, TPU, PA/Nylon, PA-CF, PA-GF, PC, PVA,
+  PVB, HIPS, PET-CF) with recommended/min/max nozzle, bed and chamber temps,
+  print speed, retraction, fan, drying, per-plate compatibility, an 8-axis
+  property profile, and tips/warnings. Includes id / name (fuzzy) / category
+  lookups. Data-only — no slicing.
+- **Adapter endpoints**: `GET /api/materials` (optional `?category=` filter) and
+  `GET /api/materials/{id}`. Added `api/materials` to the slicer proxy allowlist.
+- **UI**: new `MaterialInfoPanel` on the Slice tab — category chips, a material
+  card grid, and a detail view (temps, drying, enclosure/hardened-nozzle flags,
+  property bars, tips, warnings) with a **Use these temps** button that seeds the
+  slice nozzle/bed overrides (new `applyMaterialTemps` store action; expands the
+  override section so the change is visible).
+
+### Tests
+
+- Adapter: material count (15), required fields per entry, nozzle temp ordering,
+  a known entry's temps, category filter, and name lookup (Nylon→pa, PA-CF, a
+  branded compound name, empty/unknown). (+2 adapter → 33.)
+- Frontend: new `materials.spec` — `materials-api` list/category/by-id calls and
+  the `applyMaterialTemps` store action (seeds overrides + expands section;
+  no-op for temp-less input). (+5 vitest → 187.)
+
 ## [1.20.0] - 2026-07-03
 
 Calibration **generator suite** — seven procedural tuning prints that emit

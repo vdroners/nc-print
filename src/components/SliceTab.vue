@@ -15,6 +15,7 @@ import SliceHandoffCard from './SliceHandoffCard.vue'
 import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 import ArrangePlate from './ArrangePlate.vue'
 import CalibrationPanel from './CalibrationPanel.vue'
+import MaterialInfoPanel from './MaterialInfoPanel.vue'
 import PausePlanner from './PausePlanner.vue'
 import { previewUrl } from '@/services/slicer-api.js'
 
@@ -34,6 +35,7 @@ export default {
 		ErrorRecoveryCard,
 		ArrangePlate,
 		CalibrationPanel,
+		MaterialInfoPanel,
 		PausePlanner,
 	},
 	data() {
@@ -193,6 +195,10 @@ export default {
 
 			<div class="nc-print-card nc-print-card--inset">
 				<CalibrationPanel />
+			</div>
+
+			<div class="nc-print-card nc-print-card--inset">
+				<MaterialInfoPanel />
 			</div>
 
 			<div class="nc-print-card">

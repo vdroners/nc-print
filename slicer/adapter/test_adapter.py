@@ -564,6 +564,34 @@ def test_calibration_generate_validates():
     assert raised2
 
 
+def test_filament_materials_catalog():
+    from filament_materials import get_all_materials, get_material_by_id, get_materials_by_category
+    mats = get_all_materials()
+    assert len(mats) == 15
+    ids = {m["id"] for m in mats}
+    assert {"pla", "petg", "abs", "tpu", "pa", "pc"} <= ids
+    # Every entry has the fields the UI depends on.
+    for m in mats:
+        for key in ("nozzle_temp", "bed_temp", "properties", "drying", "category"):
+            assert key in m, f"{m['id']} missing {key}"
+        assert m["nozzle_temp"]["min"] <= m["nozzle_temp"]["recommended"] <= m["nozzle_temp"]["max"]
+    pla = get_material_by_id("PLA".lower())
+    assert pla["nozzle_temp"]["recommended"] == 210
+    assert pla["bed_temp"]["recommended"] == 55
+    comps = get_materials_by_category("composite")
+    assert len(comps) == 5 and all(m["category"] == "composite" for m in comps)
+
+
+def test_filament_material_name_lookup():
+    from filament_materials import get_material_by_name, get_material_by_id
+    assert get_material_by_name("Nylon")["id"] == "pa"
+    assert get_material_by_name("PA-CF")["id"] == "pa-cf"
+    # Compound / branded names fall back to a substring match.
+    assert get_material_by_name("Bambu PLA Basic")["id"] == "pla"
+    assert get_material_by_name("") is None
+    assert get_material_by_id("no-such-id") is None
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t

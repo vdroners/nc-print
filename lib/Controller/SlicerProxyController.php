@@ -218,6 +218,7 @@ class SlicerProxyController extends Controller
 		'api/jobs/',
 		'api/mesh/',
 		'api/calibration',  // covers list + calibration/{id}/slice + calibration/generate
+		'api/materials',    // filament material reference DB (list + by-id)
 	];
 
 	private function isAllowedSlicerPath(string $upstreamPath): bool

@@ -971,6 +971,35 @@ export const usePrintStore = defineStore('print', {
 			savePrefs({ overrides: { ...this.overrides } })
 		},
 
+		/**
+		 * Seed the nozzle/bed temperature overrides from a material reference
+		 * entry (MaterialInfoPanel "use these temps"). Expands the override
+		 * section so the change is visible, and persists.
+		 * @param {{ nozzle_temp?: { recommended?: number }, bed_temp?: { recommended?: number } }} material
+		 * @returns {boolean} whether any field was set
+		 */
+		applyMaterialTemps(material) {
+			if (!material || typeof material !== 'object') {
+				return false
+			}
+			const nozzle = material.nozzle_temp?.recommended
+			const bed = material.bed_temp?.recommended
+			let changed = false
+			if (Number.isFinite(nozzle)) {
+				this.overrides.nozzleTemp = nozzle
+				changed = true
+			}
+			if (Number.isFinite(bed)) {
+				this.overrides.bedTemp = bed
+				changed = true
+			}
+			if (changed) {
+				this.overridesCollapsed = false
+				this._persistOverrides()
+			}
+			return changed
+		},
+
 		async loadConfig() {
 			try {
 				this.config = await fetchConfig()
