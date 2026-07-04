@@ -8,6 +8,7 @@ module.exports = merge(baseConfig, {
 	entry: {
 		main: path.resolve(__dirname, 'src', 'main.js'),
 		admin: path.resolve(__dirname, 'src', 'admin-settings.js'),
+		dashboard: path.resolve(__dirname, 'src', 'dashboard.js'),
 		'files-action': path.resolve(__dirname, 'src', 'files-action', 'index.js'),
 	},
 	output: {

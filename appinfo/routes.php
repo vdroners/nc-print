@@ -27,6 +27,7 @@ return [
 		['name' => 'printer#upload', 'url' => '/api/printer/upload', 'verb' => 'POST'],
 
 		['name' => 'printer_discovery#discover', 'url' => '/api/printers/discover', 'verb' => 'POST'],
+		['name' => 'print_event#notifyTransition', 'url' => '/api/events/print-transition', 'verb' => 'POST'],
 
 		['name' => 'eta#predict', 'url' => '/api/eta/predict', 'verb' => 'POST'],
 		['name' => 'eta#record', 'url' => '/api/eta/record', 'verb' => 'POST'],

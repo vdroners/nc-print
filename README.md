@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.25.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.26.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -70,6 +70,13 @@ external slicer service** and no NC-GCS dependency.
 
 All Part B monitoring panels feature-detect from Moonraker `/server/info` and
 hide when the corresponding plugin is absent.
+
+**Native Nextcloud integration**
+- **Notifications** — print complete/failed ring the Nextcloud notification bell
+- **Activity stream** — print started/completed/failed events (with filename,
+  printer and duration) appear in the Activity app
+- **Dashboard widget** — "3D printer status" tile shows the active printer's
+  state, progress, ETA and temps at a glance, with a deep link into the app
 
 ## Architecture
 

@@ -18,6 +18,7 @@ import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
 import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi } from '@/services/printers-api.js'
+import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
@@ -1516,16 +1517,39 @@ export const usePrintStore = defineStore('print', {
 			if (this._lastNotifiedPrintState === key) {
 				return
 			}
+			const durationS = this.printerState.totalDuration ?? this.printerState.printDuration
 			if (nextState === 'complete' && ['printing', 'paused'].includes(prevState)) {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintComplete(this.printerState.filename)
 				toastSuccess('Print complete')
 				// Feed the smart-ETA learner the slicer-vs-actual pair (best-effort).
-				this.recordEta(this.printerState.totalDuration ?? this.printerState.printDuration)
+				this.recordEta(durationS)
+				// Publish to the Nextcloud bell + Activity stream (best-effort).
+				this._publishPrintTransition('complete', durationS)
 			} else if (nextState === 'error' && ['printing', 'paused'].includes(prevState)) {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintFailed(this.printerState.message)
 				toastError('Print failed', new Error(this.printerState.message || 'Printer error'))
+				this._publishPrintTransition('error', durationS)
+			}
+		},
+
+		/**
+		 * Publish a print-lifecycle transition to Nextcloud (notification bell +
+		 * Activity). Best-effort — swallows failures so it never disrupts the UI.
+		 * @param {'complete'|'error'|'started'} transition
+		 * @param {number} [durationS]
+		 */
+		_publishPrintTransition(transition, durationS) {
+			try {
+				void notifyPrintTransitionApi({
+					transition,
+					filename: this.printerState.filename || this.sliceJob.gcodeFilename || '',
+					printer: this.activeTargetPrinter?.name || '',
+					durationS,
+				})
+			} catch (e) {
+				// ignore — bell/activity is non-critical
 			}
 		},
 

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace OCA\NcPrint\AppInfo;
 
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
+use OCA\NcPrint\Dashboard\PrinterStatusWidget;
 use OCA\NcPrint\Listener\LoadFilesActions;
+use OCA\NcPrint\Notification\Notifier;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -27,6 +29,13 @@ class Application extends App implements IBootstrap
 			LoadAdditionalScriptsEvent::class,
 			LoadFilesActions::class,
 		);
+
+		// Native Nextcloud surfaces: notification bell + a Dashboard widget for
+		// at-a-glance printer status. The Activity provider/setting are declared
+		// in info.xml's <activity> block (there is no bootstrap registrar for
+		// them).
+		$context->registerNotifierService(Notifier::class);
+		$context->registerDashboardWidget(PrinterStatusWidget::class);
 	}
 
 	public function boot(IBootContext $context): void

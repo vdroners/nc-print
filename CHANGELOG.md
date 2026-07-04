@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.26.0] - 2026-07-04
+
+**Native Nextcloud integration.** Print lifecycle now shows up where Nextcloud
+users expect it: the notification bell, the Activity stream, and a Dashboard
+widget.
+
+### Added
+
+- **Notifications** (`INotifier`): print complete/failed publish to the Nextcloud
+  notification bell. New `lib/Notification/Notifier.php`, registered via
+  `registerNotifierService`.
+- **Activity stream** (`IProvider` + `ISetting`): `print_started` /
+  `print_completed` / `print_failed` events (filename, printer, duration) render
+  in the Activity app with a per-user toggle. New `lib/Activity/Provider.php` +
+  `lib/Activity/Setting.php`, declared in `info.xml`'s `<activity>` block.
+- **Dashboard widget** (`IWidget`): a "3D printer status" tile showing the active
+  printer's state, progress bar, ETA and temps, with a deep link into the app.
+  New `lib/Dashboard/PrinterStatusWidget.php` (registered via
+  `registerDashboardWidget`) + a self-contained `dashboard` frontend entry
+  (`src/dashboard.js` + `DashboardWidget.vue`, polling `/api/printer/state`).
+- **Transition bridge**: new group-gated `POST /api/events/print-transition`
+  (`PrintEventController`) publishes the notification + activity for the current user.
+  The store calls it where it already detects the printing→complete /
+  printing→error edge (`_maybeNotifyPrintTransition`); browser notifications stay
+  as a complement. New `src/services/events-api.js`.
+
+### Tests
+
+- PHP: new `PrintEventControllerTest` (2) — human-duration formatting +
+  bad-input rejection. (63 → 65 phpunit.)
+- Frontend: new `events.spec` (4) — events-api payload; store publishes on
+  complete/error, not on non-terminal transitions. (211 → 215 vitest.)
+
 ## [1.25.0] - 2026-07-04
 
 **Live printer capability detection.** Selecting a printer now queries
