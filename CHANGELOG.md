@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.31.0] - 2026-07-04
+
+**Per-object slice settings** — different overrides per model on a multi-object
+plate, via OrcaSlicer's `Metadata/model_settings.config` (which the shipped
+engine reads). Verified end-to-end: a 2-object plate with object A at 1 wall and
+object B at 6 walls slices each independently (54 inner-wall sections — exactly
+between the all-1 → 1 and all-6 → 107 references).
+
+### Added
+
+- `mesh3mf.stls_to_multiobject_3mf(object_overrides=…)` writes
+  `Metadata/model_settings.config` with per-`<object>` `<metadata key value>`,
+  mapping frontend override keys to engine process keys via the new
+  `overrides.map_process_override` (shared with the global override path).
+- Adapter slice endpoint accepts an `object_overrides` multipart field (array
+  aligned to the models list); threaded into the 3MF author. Bad/empty entries
+  are ignored.
+- `sliceStreamMulti({ objectOverrides })` sends the field only when at least one
+  object has settings.
+- **UI**: `ArrangePlate` gains a per-object "⚙ per-object" toggle on each added
+  model with a compact editor (walls, layer height, infill %, infill pattern,
+  supports) — these override the global slice settings for that model only. The
+  prepared model uses the global settings (index 0).
+
+### Tests
+
+- Adapter (+3 → 45): `model_settings.config` authored with the right per-object
+  metadata; omitted when no/empty/unknown overrides; `map_process_override`
+  reuses engine keys and rejects filament-scoped/unknown/empty.
+- Frontend (+3 → 227): new `slice-multi.spec` — `sliceStreamMulti` sends
+  `object_overrides` only when an object has settings, omits it otherwise.
+
 ## [1.30.0] - 2026-07-04
 
 **Update-trigger** — the update banner is now actionable for admins: trigger a

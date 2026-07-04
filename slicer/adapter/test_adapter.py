@@ -677,6 +677,58 @@ def test_overrides_new_quality_keys_map_to_engine_keys():
     assert unknown == []
 
 
+def test_multiobject_3mf_writes_per_object_settings():
+    import tempfile as tf
+    import zipfile
+    from mesh3mf import stls_to_multiobject_3mf
+    cube = _binary_cube()
+    out = tf.mktemp(suffix=".3mf")
+    try:
+        stls_to_multiobject_3mf(
+            [cube, cube], out,
+            object_overrides=[{"perimeters": 1}, {"perimeters": 6, "infill_density": 80}])
+        z = zipfile.ZipFile(out)
+        assert "Metadata/model_settings.config" in z.namelist()
+        cfg = z.read("Metadata/model_settings.config").decode()
+        # object 1 -> wall_loops=1; object 2 -> wall_loops=6 + sparse_infill_density=80%
+        assert '<object id="1">' in cfg
+        assert 'key="wall_loops" value="1"' in cfg
+        assert '<object id="2">' in cfg
+        assert 'key="wall_loops" value="6"' in cfg
+        assert 'key="sparse_infill_density" value="80%"' in cfg
+    finally:
+        if os.path.exists(out):
+            os.unlink(out)
+
+
+def test_multiobject_3mf_omits_config_when_no_overrides():
+    import tempfile as tf
+    import zipfile
+    from mesh3mf import stls_to_multiobject_3mf
+    cube = _binary_cube()
+    out = tf.mktemp(suffix=".3mf")
+    try:
+        # No object_overrides at all -> no model_settings.config part.
+        stls_to_multiobject_3mf([cube, cube], out)
+        assert "Metadata/model_settings.config" not in zipfile.ZipFile(out).namelist()
+        # Empty dicts / unknown keys -> still no config (nothing valid to write).
+        stls_to_multiobject_3mf([cube, cube], out, object_overrides=[{}, {"nonsense_key": 1}])
+        assert "Metadata/model_settings.config" not in zipfile.ZipFile(out).namelist()
+    finally:
+        if os.path.exists(out):
+            os.unlink(out)
+
+
+def test_map_process_override_reuses_engine_keys():
+    from overrides import map_process_override
+    assert map_process_override("perimeters", 3) == ("wall_loops", "3")
+    assert map_process_override("infill_density", 0.55) == ("sparse_infill_density", "55%")
+    # filament-scoped or unknown keys are not per-object process settings.
+    assert map_process_override("nozzle_temperature", 210) is None
+    assert map_process_override("bogus", 1) is None
+    assert map_process_override("perimeters", "") is None
+
+
 def test_overrides_wipe_prime_tower_keys():
     from overrides import split_overrides
     process, filament, unknown = split_overrides({

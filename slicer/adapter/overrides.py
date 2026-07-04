@@ -115,6 +115,24 @@ def _fmt(kind: str, value) -> str | None:
     return None
 
 
+def map_process_override(key: str, raw) -> tuple[str, str] | None:
+    """Map ONE frontend override key+value to (engine_key, string_value) for a
+    PROCESS-scoped key, or None if the key is unknown / not process-scoped / the
+    value is empty. Used by the per-object 3MF authoring so per-object settings
+    reuse the exact same key mapping + formatting as the global overrides.
+    """
+    spec = _MAP.get(key)
+    if not spec:
+        return None
+    engine_key, scope, kind = spec
+    if scope != "process":
+        return None
+    val = _fmt(kind, raw)
+    if val is None:
+        return None
+    return engine_key, val
+
+
 def split_overrides(overrides: dict) -> tuple[dict, dict, list[str]]:
     """Return (process_patch, filament_patch, unknown_keys).
 

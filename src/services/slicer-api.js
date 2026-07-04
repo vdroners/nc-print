@@ -176,6 +176,7 @@ export async function sliceStreamMulti({
 	filamentIds = [],
 	processId,
 	overrides = {},
+	objectOverrides = null,
 	arrange = true,
 	signal,
 	onEvent,
@@ -193,6 +194,11 @@ export async function sliceStreamMulti({
 	form.append('process_id', processId || '')
 	form.append('filament_ids', JSON.stringify(filamentIds || []))
 	form.append('overrides', JSON.stringify(overrides || {}))
+	// Per-object process overrides, aligned to the models list (index 0 = the
+	// first model part). Only sent when at least one object has settings.
+	if (Array.isArray(objectOverrides) && objectOverrides.some(o => o && Object.keys(o).length)) {
+		form.append('object_overrides', JSON.stringify(objectOverrides))
+	}
 	form.append('arrange', arrange ? '1' : '0')
 
 	const response = await fetch(`${apiBase()}/slice/stream`, {

@@ -204,7 +204,8 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
     msg = BytesParser(policy=HTTP).parsebytes(hdr + body)
     fields: dict = {"model": None, "models": [], "arrange": False,
                     "printer_id": "", "process_id": "",
-                    "filament_ids": [], "overrides": {}, "pauses": []}
+                    "filament_ids": [], "overrides": {}, "pauses": [],
+                    "object_overrides": []}
     for part in msg.iter_parts():
         cd = part.get("Content-Disposition", "")
         name = None
@@ -243,6 +244,14 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
                 fields["pauses"] = v if isinstance(v, list) else []
             except Exception:  # noqa: BLE001
                 fields["pauses"] = []
+        elif name == "object_overrides":
+            # Per-object process overrides, aligned to the models list:
+            # [{key:value,...}, ...]. Non-list / bad JSON -> ignored.
+            try:
+                v = json.loads(payload.decode() or "[]")
+                fields["object_overrides"] = v if isinstance(v, list) else []
+            except Exception:  # noqa: BLE001
+                fields["object_overrides"] = []
         else:
             fields[name] = payload.decode(errors="replace").strip()
     return fields
@@ -470,7 +479,9 @@ async def slice_stream(request: Request) -> Response:
     do_arrange = multi or fields["arrange"]
     try:
         if multi:
-            stls_to_multiobject_3mf(models, model_3mf)
+            stls_to_multiobject_3mf(
+                models, model_3mf,
+                object_overrides=fields.get("object_overrides") or None)
         else:
             stl_bytes_to_3mf(models[0], model_3mf)
     except Exception as exc:  # noqa: BLE001

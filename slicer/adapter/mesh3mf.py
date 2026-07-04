@@ -169,11 +169,55 @@ def _parse_and_check(stl: bytes):
     return verts, tris
 
 
-def stls_to_multiobject_3mf(stls: list[bytes], out_path: str) -> tuple[int, int]:
+def _model_settings_config(object_overrides: list[dict] | None, count: int) -> str | None:
+    """Build OrcaSlicer's Metadata/model_settings.config for per-object settings.
+
+    `object_overrides[i]` (aligned to the STL list, 1-based object ids) is a dict
+    of FRONTEND override keys -> values; each is mapped to the engine process key
+    via overrides.map_process_override so per-object and global overrides share
+    one mapping. Objects with no (or no valid) overrides are omitted. Returns the
+    config XML, or None when nothing to write.
+    """
+    if not object_overrides:
+        return None
+    from overrides import map_process_override
+
+    blocks = []
+    for idx in range(count):
+        ov = object_overrides[idx] if idx < len(object_overrides) else None
+        if not isinstance(ov, dict) or not ov:
+            continue
+        metas = []
+        for key, raw in ov.items():
+            mapped = map_process_override(key, raw)
+            if mapped is None:
+                continue
+            ek, val = mapped
+            metas.append(f'<metadata key="{_xml_attr(ek)}" value="{_xml_attr(val)}"/>')
+        if metas:
+            blocks.append(f'<object id="{idx + 1}">{"".join(metas)}</object>')
+    if not blocks:
+        return None
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            f'<config>{"".join(blocks)}</config>')
+
+
+def _xml_attr(s: str) -> str:
+    return (str(s).replace("&", "&amp;").replace('"', "&quot;")
+            .replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def stls_to_multiobject_3mf(
+    stls: list[bytes],
+    out_path: str,
+    object_overrides: list[dict] | None = None,
+) -> tuple[int, int]:
     """Write a 3MF containing one <object> per input STL.
 
     Each object is placed at the origin (identity transform); the engine's
-    `--arrange` positions them on the plate. Returns (object_count, total_tris).
+    `--arrange` positions them on the plate. When `object_overrides` is given,
+    also writes Metadata/model_settings.config so the engine applies per-object
+    process settings. Returns (object_count, total_tris).
     """
     if not stls:
         raise ValueError("no models supplied")
@@ -198,8 +242,11 @@ def stls_to_multiobject_3mf(stls: list[bytes], out_path: str) -> tuple[int, int]
         f'<build>{"".join(build_xml)}</build>'
         "</model>"
     )
+    settings_cfg = _model_settings_config(object_overrides, len(stls))
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("[Content_Types].xml", _CONTENT_TYPES)
         z.writestr("_rels/.rels", _RELS)
         z.writestr("3D/3dmodel.model", model)
+        if settings_cfg is not None:
+            z.writestr("Metadata/model_settings.config", settings_cfg)
     return len(stls), total_tris
