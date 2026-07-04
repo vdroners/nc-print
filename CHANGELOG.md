@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.22.0] - 2026-07-03
+
+Multi-color **purge / color-order optimizer** — recommend the filament load
+order that minimises total purge, using OrcaSlicer's flush model. Ported from
+the 3dprintforge flush-calc / color-order / color-names modules.
+
+### Added
+
+- **Flush model + optimizer** (sidecar `color_order.py`): a faithful port of
+  OrcaSlicer's RGB flush volume (`flush_volume_mm3` — HSV distance + luminance
+  asymmetry, so switching to a lighter color costs more purge), an asymmetric-TSP
+  `optimize_color_order` (brute-force for ≤8 colors, nearest-neighbour + 2-opt
+  above), `mm3_to_grams`, and `basic_color_name` (nearest palette match). Pure
+  math — no slicing.
+- **Adapter endpoint**: `POST /api/color-order` (`{colors, density?}`) → optimised
+  cyclic order + orderedColors + basic names + grams saved vs load-as-listed.
+  Added `api/color-order` to the slicer proxy allowlist.
+- **UI**: new `ColorOrderPanel` on the Slice tab (near the pause/filament-change
+  planner) — add/remove color rows with a swatch + hex input, an "Optimize order"
+  button, and a result showing the recommended load sequence with color names and
+  the purge saved.
+
+### Tests
+
+- Adapter: flush asymmetry (dark→light > light→dark) + clamp band + same-color/
+  bad-hex minimum; optimizer reduces purge and matches the true min cycle cost;
+  trivial N=0/1/2 cases; large-set heuristic path (10 colors → nn+2opt); color
+  naming nearest match. (+5 adapter → 38.)
+- Frontend: new `color-order-api.spec` — posts colors (and density) and returns
+  the optimised result. (+2 vitest → 189.)
+
 ## [1.21.0] - 2026-07-03
 
 Filament **material reference database** — a built-in catalog of 15 common

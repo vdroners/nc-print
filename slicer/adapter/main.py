@@ -49,6 +49,7 @@ from filament_materials import (
     get_material_by_id,
     get_materials_by_category,
 )
+from color_order import optimize_color_order, basic_color_name
 from gcode_postprocess import inject_pauses
 from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
@@ -633,6 +634,36 @@ async def material_detail(material_id: str) -> JSONResponse:
         return JSONResponse({"error": "not_found",
                              "message": f"unknown material '{material_id}'"}, 404)
     return JSONResponse(m)
+
+
+@app.post("/api/color-order")
+async def color_order(request: Request) -> JSONResponse:
+    """Recommend the filament color load order that minimises total purge.
+
+    Body: {colors: ["#RRGGBB", ...], density?: g/cm3}. Returns the optimised
+    cyclic order + orderedColors (with basic names) + purge saved vs
+    load-as-listed. Pure math — no slicing, no side effects.
+    """
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    colors = payload.get("colors")
+    if not isinstance(colors, list):
+        return JSONResponse({"error": "bad_request",
+                             "message": "colors must be an array of #RRGGBB strings"}, 400)
+    colors = [str(c) for c in colors]
+    if len(colors) > 32:
+        return JSONResponse({"error": "too_many_colors",
+                             "message": "at most 32 colors"}, 400)
+    density = payload.get("density")
+    try:
+        density = float(density) if density is not None else 1.24
+    except (TypeError, ValueError):
+        density = 1.24
+    result = optimize_color_order(colors, density)
+    result["names"] = [basic_color_name(c) for c in result["orderedColors"]]
+    return JSONResponse(result)
 
 
 @app.post("/api/calibration/{calib_id}/slice")

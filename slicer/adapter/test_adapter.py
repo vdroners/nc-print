@@ -592,6 +592,65 @@ def test_filament_material_name_lookup():
     assert get_material_by_id("no-such-id") is None
 
 
+def test_flush_volume_is_asymmetric_and_clamped():
+    from color_order import flush_volume_mm3, MIN_FLUSH_VOL, MAX_FLUSH_VOL
+    # Switching to a lighter color costs more purge than going darker.
+    to_light = flush_volume_mm3("#000000", "#FFFFFF")
+    to_dark = flush_volume_mm3("#FFFFFF", "#000000")
+    assert to_light > to_dark
+    # Every result is within the clamp band.
+    for a, b in [("#000000", "#FFFFFF"), ("#FF0000", "#00FF00"), ("#123456", "#654321")]:
+        v = flush_volume_mm3(a, b)
+        assert MIN_FLUSH_VOL <= v <= MAX_FLUSH_VOL
+    # Same color / bad hex fall back to the minimum.
+    assert flush_volume_mm3("#808080", "#808080") == MIN_FLUSH_VOL
+    assert flush_volume_mm3("nope", "#000000") == MIN_FLUSH_VOL
+
+
+def test_optimize_color_order_reduces_purge():
+    from color_order import optimize_color_order, cycle_cost, build_matrix
+    # A deliberately bad load order (alternating light/dark) has slack to save.
+    colors = ["#FFFFFF", "#000000", "#EEEEEE", "#111111"]
+    r = optimize_color_order(colors)
+    assert r["method"] == "brute-force"
+    assert r["optimizedFlushMm3"] <= r["baselineFlushMm3"]
+    assert r["savedMm3"] > 0 and r["savedG"] > 0
+    # The reported optimum is truly the min cycle cost over the fixed-0 tours.
+    m = build_matrix(colors)
+    assert cycle_cost(r["order"], m) == min(
+        cycle_cost([0, *p], m)
+        for p in __import__("itertools").permutations(range(1, len(colors)))
+    )
+
+
+def test_optimize_color_order_trivial_cases():
+    from color_order import optimize_color_order
+    assert optimize_color_order([])["order"] == []
+    one = optimize_color_order(["#FF0000"])
+    assert one["order"] == [0] and one["method"] == "trivial"
+    two = optimize_color_order(["#FF0000", "#00FF00"])
+    assert set(two["order"]) == {0, 1} and two["savedMm3"] >= 0
+
+
+def test_optimize_large_set_uses_heuristic():
+    from color_order import optimize_color_order
+    # 10 colors > BRUTE_LIMIT(8) -> nearest-neighbour + 2-opt path.
+    colors = [f"#{i * 25 % 256:02X}0000" for i in range(10)]
+    r = optimize_color_order(colors)
+    assert r["method"] == "nn+2opt"
+    assert len(r["order"]) == 10 and set(r["order"]) == set(range(10))
+
+
+def test_basic_color_name_nearest_match():
+    from color_order import basic_color_name
+    assert basic_color_name("#FE0102") == "Red"
+    assert basic_color_name("#808080") == "Gray"
+    assert basic_color_name("#FFFFFF") == "White"
+    # Bad input returns None; a color far from every palette entry also None.
+    assert basic_color_name("xyz") is None
+    assert basic_color_name("") is None
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t

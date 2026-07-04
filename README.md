@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.21.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.22.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -35,6 +35,10 @@ external slicer service** and no NC-GCS dependency.
 - **Pause / filament change at height** — insert M600 (filament change) or M601
   (pause) at chosen Z heights, for multi-colour prints, embedding hardware, or
   inspection
+- **Multi-colour purge optimizer** — enter the plate's filament colours and get
+  the load order that minimises total purge, using OrcaSlicer's flush model
+  (asymmetric — switching to a lighter colour wastes more); shows grams saved vs
+  loading as listed
 - **Material breakdown + cost** — model vs support filament (g) and estimated
   cost, computed per feature from the sliced G-code
 - **Filament material reference** — a built-in database of 15 common materials
