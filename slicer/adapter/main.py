@@ -50,13 +50,21 @@ from filament_materials import (
     get_materials_by_category,
 )
 from color_order import optimize_color_order, basic_color_name
+from gcode_linter import lint_gcode
 from gcode_postprocess import inject_pauses
+from gcode_reference import get_reference, list_reference, search_reference
 from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf, stls_to_multiobject_3mf
 from mesh_analyze import analyze_stl
 from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
+from printer_presets import (
+    find_printer_preset,
+    list_all_capabilities,
+    list_all_presets,
+    list_printer_presets_for_vendor,
+)
 
 ENGINE_BASE = os.environ.get("ENGINE_BASE", "http://127.0.0.1:8765").rstrip("/")
 ENGINE_BIN = os.environ.get("ORCA_BIN", "/opt/orca/3dprintforge-slicer")
@@ -675,6 +683,71 @@ async def color_order(request: Request) -> JSONResponse:
     result = optimize_color_order(colors, density)
     result["names"] = [basic_color_name(c) for c in result["orderedColors"]]
     return JSONResponse(result)
+
+
+@app.post("/api/gcode/lint")
+async def gcode_lint(request: Request) -> JSONResponse:
+    """Static-analysis lint of g-code. Body: {job_id} to lint a sliced job's
+    gcode, or {text} for raw source; optional {firmware}. Returns
+    {issues, stats}."""
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    firmware = str(payload.get("firmware", "auto"))
+    text = payload.get("text")
+    if not text:
+        job_id = str(payload.get("job_id", ""))
+        job = _JOBS.get(job_id)
+        if not job or not os.path.exists(job["gcode"]):
+            return JSONResponse({"error": "not_found",
+                                 "message": "no gcode for that job_id"}, 404)
+        try:
+            with open(job["gcode"], encoding="ascii", errors="ignore") as fh:
+                text = fh.read()
+        except Exception:  # noqa: BLE001
+            return JSONResponse({"error": "read_failed",
+                                 "message": "could not read gcode"}, 500)
+    if not isinstance(text, str) or not text.strip():
+        return JSONResponse({"error": "bad_request",
+                             "message": "provide job_id or non-empty text"}, 400)
+    return JSONResponse(lint_gcode(text, firmware))
+
+
+@app.get("/api/gcode/reference")
+async def gcode_reference(request: Request) -> JSONResponse:
+    """G-code reference. ?code=M104 → one entry; ?q=/&category=/&firmware= →
+    filtered list; no params → the whole table."""
+    code = request.query_params.get("code")
+    if code:
+        entry = get_reference(code)
+        if not entry:
+            return JSONResponse({"error": "not_found", "message": f"unknown code {code}"}, 404)
+        return JSONResponse(entry)
+    q = request.query_params.get("q", "")
+    category = request.query_params.get("category", "")
+    firmware = request.query_params.get("firmware", "")
+    if q or category or firmware:
+        return JSONResponse({"reference": search_reference(q, category, firmware)})
+    return JSONResponse({"reference": list_reference()})
+
+
+@app.get("/api/printer-presets")
+async def printer_presets(request: Request) -> JSONResponse:
+    """Static printer model presets. ?vendor=&model= → one; ?vendor= → vendor
+    list; none → all + the capability vocabulary."""
+    vendor = request.query_params.get("vendor", "")
+    model = request.query_params.get("model", "")
+    if vendor and model:
+        p = find_printer_preset(vendor, model)
+        if not p:
+            return JSONResponse({"error": "not_found",
+                                 "message": f"no preset for {vendor} {model}"}, 404)
+        return JSONResponse(p)
+    if vendor:
+        return JSONResponse({"presets": list_printer_presets_for_vendor(vendor)})
+    return JSONResponse({"presets": list_all_presets(),
+                         "capabilities": list_all_capabilities()})
 
 
 @app.post("/api/calibration/{calib_id}/slice")

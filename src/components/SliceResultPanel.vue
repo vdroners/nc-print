@@ -2,11 +2,31 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { formatPrintTime, mergeProfileSettings, estimateFilamentCost, resolveFilamentPricePerKg } from '@/services/slicer-utils.js'
+import { lintGcode } from '@/services/analysis-api.js'
 
 export default {
 	name: 'SliceResultPanel',
 	props: {
 		embedded: { type: Boolean, default: false },
+	},
+	data() {
+		return {
+			lint: null,       // { issues, stats } | null
+			lintBusy: false,
+			lintOpen: false,
+			lintedJobId: null,
+		}
+	},
+	watch: {
+		// Lint automatically once a slice completes (new job id).
+		'job.jobId': {
+			immediate: true,
+			handler(jobId) {
+				if (jobId && this.job.status === 'done' && jobId !== this.lintedJobId) {
+					this.runLint(jobId)
+				}
+			},
+		},
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -15,6 +35,18 @@ export default {
 		},
 		show() {
 			return this.job.status === 'done'
+		},
+		lintCounts() {
+			const c = { error: 0, warning: 0, info: 0 }
+			for (const i of (this.lint?.issues || [])) {
+				if (c[i.severity] != null) {
+					c[i.severity]++
+				}
+			}
+			return c
+		},
+		hasLintIssues() {
+			return (this.lint?.issues?.length || 0) > 0
 		},
 		printTimeLabel() {
 			return formatPrintTime(this.job.estimatedTimeS)
@@ -137,6 +169,21 @@ export default {
 	},
 	methods: {
 		formatPrintTime,
+		async runLint(jobId) {
+			const id = jobId || this.job.jobId
+			if (!id) {
+				return
+			}
+			this.lintBusy = true
+			try {
+				this.lint = await lintGcode({ jobId: id })
+				this.lintedJobId = id
+			} catch (e) {
+				this.lint = null
+			} finally {
+				this.lintBusy = false
+			}
+		},
 		download() {
 			this.printStore.downloadGcodeLocal()
 		},
@@ -232,6 +279,34 @@ export default {
 				<dd>{{ job.savedDavPath }}</dd>
 			</div>
 		</dl>
+
+		<div v-if="lintBusy || lint" class="nc-print-slice-result__checks">
+			<button
+				type="button"
+				class="nc-print-slice-result__checks-head"
+				:aria-expanded="String(lintOpen)"
+				@click="lintOpen = !lintOpen">
+				<span>G-code checks</span>
+				<span v-if="lintBusy" class="nc-print-slice-result__checks-muted">checking…</span>
+				<span v-else-if="!hasLintIssues" class="nc-print-slice-result__checks-ok">✓ no issues</span>
+				<span v-else class="nc-print-slice-result__checks-badges">
+					<span v-if="lintCounts.error" class="nc-print-chk nc-print-chk--error">{{ lintCounts.error }} error</span>
+					<span v-if="lintCounts.warning" class="nc-print-chk nc-print-chk--warn">{{ lintCounts.warning }} warn</span>
+					<span v-if="lintCounts.info" class="nc-print-chk nc-print-chk--info">{{ lintCounts.info }} info</span>
+				</span>
+			</button>
+			<ul v-if="lintOpen && hasLintIssues" class="nc-print-slice-result__checks-list">
+				<li
+					v-for="(iss, idx) in lint.issues"
+					:key="idx"
+					class="nc-print-chk-row"
+					:class="'nc-print-chk-row--' + iss.severity">
+					<span class="nc-print-chk-row__sev">{{ iss.severity }}</span>
+					<span class="nc-print-chk-row__msg">{{ iss.message }}<span v-if="iss.line" class="nc-print-chk-row__line"> (line {{ iss.line }})</span></span>
+				</li>
+			</ul>
+		</div>
+
 		<p
 			v-if="job.error && !job.gcodeBlob"
 			style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-warning, #eab308); margin: 8px 0 0;">
@@ -298,6 +373,42 @@ export default {
 .nc-print-slice-result__feat-cost {
 	color: var(--nc-gcs-text-muted, #8b949e);
 }
+
+.nc-print-slice-result__checks {
+	margin-top: 8px;
+	border: 1px solid var(--color-border, #30363d);
+	border-radius: 8px;
+	overflow: hidden;
+}
+.nc-print-slice-result__checks-head {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	justify-content: space-between;
+	appearance: none;
+	background: var(--color-background-hover, #21262d);
+	border: none;
+	color: inherit;
+	padding: 8px 10px;
+	font-size: 0.82rem;
+	cursor: pointer;
+	text-align: left;
+}
+.nc-print-slice-result__checks-ok { color: var(--color-success, #4caf50); font-size: 0.78rem; }
+.nc-print-slice-result__checks-muted { color: var(--color-text-maxcontrast, #8b949e); font-size: 0.78rem; }
+.nc-print-slice-result__checks-badges { display: inline-flex; gap: 6px; }
+.nc-print-chk { font-size: 0.68rem; padding: 1px 7px; border-radius: 999px; }
+.nc-print-chk--error { background: color-mix(in srgb, var(--color-error, #e5534b) 22%, transparent); color: var(--color-error, #e5534b); }
+.nc-print-chk--warn { background: color-mix(in srgb, var(--color-warning, #d9a441) 22%, transparent); color: var(--color-warning, #d9a441); }
+.nc-print-chk--info { background: color-mix(in srgb, var(--color-primary, #4c8eda) 18%, transparent); color: var(--color-primary, #4c8eda); }
+.nc-print-slice-result__checks-list { list-style: none; margin: 0; padding: 6px 10px; display: flex; flex-direction: column; gap: 5px; }
+.nc-print-chk-row { display: flex; gap: 8px; font-size: 0.78rem; align-items: baseline; }
+.nc-print-chk-row__sev { flex: 0 0 52px; text-transform: uppercase; font-size: 0.62rem; padding-top: 2px; }
+.nc-print-chk-row--error .nc-print-chk-row__sev { color: var(--color-error, #e5534b); }
+.nc-print-chk-row--warning .nc-print-chk-row__sev { color: var(--color-warning, #d9a441); }
+.nc-print-chk-row--info .nc-print-chk-row__sev { color: var(--color-text-maxcontrast, #8b949e); }
+.nc-print-chk-row__line { color: var(--color-text-maxcontrast, #8b949e); }
 
 .nc-print-slice-result__eta-tag {
 	display: inline-block;

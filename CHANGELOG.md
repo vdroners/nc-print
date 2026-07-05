@@ -1,5 +1,42 @@
 # Changelog
 
+## [1.32.0] - 2026-07-04
+
+Forge port round 4 — four self-contained analysis/reference modules ported from
+3dprintforge (verified pure-logic/data, no external deps).
+
+### Added
+
+- **G-code linter** (`slicer/adapter/gcode_linter.py`, faithful port of
+  `gcode-linter.js`): 13 static-analysis rules on sliced g-code (no-homing, hotend/
+  bed/chamber over-temp, cold-extrusion, missing extruder mode, excessive Z-hop,
+  retract density / none, tool-swap-without-temp, Marlin↔Klipper flavour
+  mismatch). New `POST /api/gcode/lint` ({job_id} or {text}, optional firmware) →
+  `{issues,stats}`. **UI**: a "G-code checks" section in `SliceResultPanel` that
+  lints automatically on slice-done and shows error/warning/info counts +
+  a collapsible issue list before Send-to-printer (non-blocking).
+- **STL printability** (`mesh_analyze.py`): overhang fraction (area-weighted,
+  >45°), bridge-candidate count/area, and best-orientation suggestion (7
+  axis-aligned flips ranked by overhang) — returned from `/api/mesh/analyze` as a
+  new `printability` block + overhang/orientation `warnings`. (Backend + endpoint;
+  the live viewport panel keeps its own browser-side overhang calc.)
+- **G-code reference** (`gcode_reference.py` + `gcode_reference_data.json`, 85
+  M/G-code entries): `GET /api/gcode/reference` (`?code=` / `?q=` / `?category=` /
+  `?firmware=`). Backend + client (`analysis-api.js`).
+- **Printer model presets** (`printer_presets.py` + `printer_model_presets.json`,
+  18 models): static build-volume / nozzle-count / capabilities lookup via
+  `GET /api/printer-presets` (`?vendor=&model=`). Reference DB (live Moonraker
+  detection stays authoritative for connected printers). Backend + client.
+- Proxy allowlist: added `api/gcode` + `api/printer-presets`.
+
+### Tests
+
+- Adapter (+5 → 50): linter flags/passes + firmware flavour; reference
+  lookup/search; presets lookup (18, H2D, unknown, capability union); mesh
+  printability (cube overhang ≈1/6, bridges, orientation ranking).
+- Frontend (+5 → 232): new `analysis-api.spec` — lint payload (job_id/text),
+  reference lookup + 404→null, search query string, preset 404→null.
+
 ## [1.31.0] - 2026-07-04
 
 **Per-object slice settings** — different overrides per model on a multi-object

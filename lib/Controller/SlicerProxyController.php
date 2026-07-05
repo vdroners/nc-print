@@ -220,6 +220,8 @@ class SlicerProxyController extends Controller
 		'api/calibration',  // covers list + calibration/{id}/slice + calibration/generate
 		'api/materials',    // filament material reference DB (list + by-id)
 		'api/color-order',  // multi-color purge/flush order optimizer
+		'api/gcode',        // g-code linter (POST /lint) + reference (GET /reference)
+		'api/printer-presets', // static printer model preset lookup
 	];
 
 	private function isAllowedSlicerPath(string $upstreamPath): bool

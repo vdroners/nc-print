@@ -787,6 +787,78 @@ def test_breakdown_separates_adhesion_bucket():
     assert abs(b["total_filament_g"] - total) < 0.01
 
 
+def test_gcode_linter_flags_and_passes():
+    from gcode_linter import lint_gcode
+    # A bad file: move before homing + over-temp set.
+    bad = "G1 X0 Y0\nM104 S400\nG1 X1 E5\n"
+    codes = {i["code"] for i in lint_gcode(bad)["issues"]}
+    assert "no-homing" in codes
+    assert "hotend-too-hot" in codes
+    # Cold extrusion: extrude while the hotend is set to 0 (below 150°C min).
+    cold = "G28\nM104 S0\nM83\nG1 X1 E5\n"
+    cold_codes = {i["code"] for i in lint_gcode(cold)["issues"]}
+    assert "cold-extrusion" in cold_codes
+    # A clean file: no issues.
+    good = "G28\nM104 S210\nM109 S210\nM83\nG1 X0 Y0 Z0.2 F3000\nG1 X10 E1 F1200\n"
+    r = lint_gcode(good)
+    assert r["issues"] == []
+    assert r["stats"]["commands"] == 6
+
+
+def test_gcode_linter_firmware_flavour():
+    from gcode_linter import lint_gcode
+    codes = {i["code"] for i in lint_gcode("G28\nBED_MESH_CALIBRATE\n", firmware="marlin")["issues"]}
+    assert "klipper-cmd-in-marlin" in codes
+    # auto firmware does not flag flavour mismatches
+    codes2 = {i["code"] for i in lint_gcode("G28\nBED_MESH_CALIBRATE\n", firmware="auto")["issues"]}
+    assert "klipper-cmd-in-marlin" not in codes2
+
+
+def test_gcode_reference_lookup_and_search():
+    from gcode_reference import get_reference, search_reference, list_reference
+    assert len(list_reference()) >= 80
+    m104 = get_reference("m104")  # case-insensitive
+    assert m104 and m104["category"] == "temperature"
+    assert get_reference("NOPE") is None
+    temps = search_reference(category="temperature")
+    assert temps and all(e["category"] == "temperature" for e in temps)
+    klipper = search_reference(firmware="klipper")
+    assert any(e["code"] == "BED_MESH_CALIBRATE" for e in klipper)
+
+
+def test_printer_presets_lookup():
+    from printer_presets import find_printer_preset, list_all_presets, list_all_capabilities
+    assert len(list_all_presets()) == 18
+    h2d = find_printer_preset("bambu", "H2D")  # case/space-insensitive
+    assert h2d and h2d["nozzle_count"] == 2
+    assert find_printer_preset("nobody", "nothing") is None
+    caps = list_all_capabilities()
+    assert isinstance(caps, list) and "dual_extruder" in caps
+
+
+def test_mesh_printability_overhang_and_orientation():
+    from mesh_analyze import analyze_stl
+    # A 20mm cube: exactly one of six faces points straight down -> 1/6 overhang.
+    V = [(0, 0, 0), (20, 0, 0), (20, 20, 0), (0, 20, 0),
+         (0, 0, 20), (20, 0, 20), (20, 20, 20), (0, 20, 20)]
+    F = [(0, 2, 1), (0, 3, 2), (4, 5, 6), (4, 6, 7), (0, 1, 5), (0, 5, 4),
+         (1, 2, 6), (1, 6, 5), (2, 3, 7), (2, 7, 6), (3, 0, 4), (3, 4, 7)]
+    buf = b"\0" * 80 + struct.pack("<I", len(F))
+    for a, b, c in F:
+        buf += struct.pack("<3f", 0, 0, 0)
+        for v in (V[a], V[b], V[c]):
+            buf += struct.pack("<3f", *v)
+        buf += struct.pack("<H", 0)
+    r = analyze_stl(buf)
+    p = r["printability"]
+    assert abs(p["overhang_fraction"] - (1 / 6)) < 0.02
+    assert p["bridges"]["count"] >= 1  # the top face
+    # orientation suggestions present + sorted ascending by overhang
+    sug = p["orientation_suggestions"]
+    assert len(sug) == 7
+    assert sug[0]["overhang_fraction"] <= sug[-1]["overhang_fraction"]
+
+
 def test_kill_proc_terminates_running_process():
     import subprocess as sp
     import time as _t
