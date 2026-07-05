@@ -61,3 +61,8 @@ docker exec nc-print-slicer python3 /opt/adapter/smoke_test.py   # STL → gcode
 ```
 
 See [VERIFY.md](VERIFY.md) for the acceptance matrix.
+
+## Troubleshooting
+
+- [K1 Max "unknown error" (key61)](troubleshooting/printer-unknown-error-key61.md) — Klipper
+  `Unknown command:T0` / `BOX_ENABLE_CFS_PRINT` popups on Creality K1 Max without CFS.
