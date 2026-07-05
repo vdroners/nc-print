@@ -13,6 +13,7 @@ export default {
 			return isHealthy(this.printStore.appStatus, {
 				has3mfError: this.printStore.has3mfError,
 				hasGcodeDownloadError: this.printStore.hasGcodeDownloadError,
+				targetPrinterConnected: this.printStore.printerState.connected,
 			})
 		},
 		recoveryCards() {
@@ -21,6 +22,9 @@ export default {
 				convertError: this.printStore.model.convertError,
 				hasGcodeDownloadError: this.printStore.hasGcodeDownloadError,
 				gcodeError: this.printStore.sliceJob.error,
+				selectedPrinterId: this.printStore.selectedPrinterId,
+				hasTargetPrinter: !!this.printStore.activeTargetPrinter?.id,
+				targetPrinterConnected: this.printStore.printerState.connected,
 			})
 			const retries = {
 				slicer_offline: () => this.printStore.loadAppStatus(),

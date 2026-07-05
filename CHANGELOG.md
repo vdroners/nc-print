@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.33.1] - 2026-07-05
+
+### Fixed
+
+- False "Slicer not configured" when nc-print-slicer sidecar is deployed but Admin slicer URL is blank (default sidecar URL counts as configured).
+- False "Printer not configured" when a target printer is selected via scan/session register; status probe uses session/admin printer URLs.
+- Health banner hides setup/offline cards when the selected target printer is connected.
+
 ## [1.33.0] - 2026-07-05
 
 ### Added

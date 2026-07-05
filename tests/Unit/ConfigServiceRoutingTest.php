@@ -74,4 +74,52 @@ class ConfigServiceRoutingTest extends TestCase
 		$url = $this->makeService($config, $resolver, $session)->resolveMoonrakerUrlOrFail('found:9');
 		$this->assertSame('http://resolved:7125', $url);
 	}
+
+	public function testIsSlicerConfiguredTrueWithDefaultSidecar(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = '') {
+				if ($key === ConfigService::KEY_SLICER_INTERNAL_URL) {
+					return '';
+				}
+				if ($key === ConfigService::KEY_SLICER_ENABLED) {
+					return 'yes';
+				}
+				return $default;
+			},
+		);
+
+		$this->assertTrue($this->makeService($config)->isSlicerConfigured());
+	}
+
+	public function testIsMoonrakerConfiguredTrueWhenSessionPrinterRegistered(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('');
+
+		$session = $this->createMock(SessionPrinterService::class);
+		$session->method('list')->willReturn([
+			['id' => 'found:k1', 'moonraker_url' => 'http://10.0.0.5:7125'],
+		]);
+
+		$this->assertTrue($this->makeService($config, null, $session)->isMoonrakerConfigured());
+	}
+
+	public function testResolveMoonrakerProbeUrlUsesSessionPrinter(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('');
+
+		$resolver = $this->createMock(InternalUrlResolver::class);
+		$resolver->method('resolveUrl')->with('http://10.0.0.9:7125')->willReturn('http://resolved:7125');
+
+		$session = $this->createMock(SessionPrinterService::class);
+		$session->method('list')->willReturn([
+			['id' => 'found:9', 'moonraker_url' => 'http://10.0.0.9:7125'],
+		]);
+
+		$url = $this->makeService($config, $resolver, $session)->resolveMoonrakerProbeUrl();
+		$this->assertSame('http://resolved:7125', $url);
+	}
 }

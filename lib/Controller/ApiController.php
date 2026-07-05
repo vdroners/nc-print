@@ -69,8 +69,12 @@ class ApiController extends Controller
 			$this->configService->isSlicerEnabled(),
 			$this->configService->isSlicerConfigured(),
 		);
+		$probePrinterId = trim((string) $this->request->getParam('printer_id', ''));
+		$moonrakerBase = $this->configService->resolveMoonrakerProbeUrl(
+			$probePrinterId !== '' ? $probePrinterId : null,
+		);
 		$moonrakerProbe = $this->probeUrl(
-			$this->configService->getMoonrakerInternalUrl() . '/server/info',
+			$moonrakerBase . '/server/info',
 			$this->configService->isMoonrakerEnabled(),
 			$this->configService->isMoonrakerConfigured(),
 		);

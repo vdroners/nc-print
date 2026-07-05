@@ -114,15 +114,31 @@ class ConfigService
 	 */
 	public function getMultiPrinters(): array
 	{
+		$session = $this->sessionPrinters->list();
 		$raw = trim($this->config->getAppValue(
 			Application::APP_ID,
 			self::KEY_MULTI_PRINTERS,
 			'',
 		));
-		if ($raw === '') {
-			if (!$this->isMoonrakerConfigured()) {
-				return [];
+		if ($raw !== '') {
+			$decoded = json_decode($raw, true);
+			if (is_array($decoded)) {
+				$out = [];
+				foreach ($decoded as $row) {
+					if (!is_array($row) || !isset($row['id']) || !is_string($row['id']) || $row['id'] === '') {
+						continue;
+					}
+					$out[] = $row;
+				}
+				if ($out !== []) {
+					return $out;
+				}
 			}
+		}
+		if ($session !== []) {
+			return $session;
+		}
+		if ($this->hasPersistedMoonrakerUrl()) {
 			return [[
 				'id' => 'default',
 				'name' => $this->getPrinterDisplayName(),
@@ -131,39 +147,17 @@ class ConfigService
 				'default' => true,
 			]];
 		}
-		$decoded = json_decode($raw, true);
-		if (!is_array($decoded)) {
-			if (!$this->isMoonrakerConfigured()) {
-				return [];
-			}
-			return [[
-				'id' => 'default',
-				'name' => $this->getPrinterDisplayName(),
-				'moonraker_url' => $this->getMoonrakerInternalUrl(),
-				'camera_url' => $this->getMoonrakerCameraUrl(),
-				'default' => true,
-			]];
-		}
-		$out = [];
-		foreach ($decoded as $row) {
-			if (!is_array($row) || !isset($row['id']) || !is_string($row['id']) || $row['id'] === '') {
-				continue;
-			}
-			$out[] = $row;
-		}
-		if ($out !== []) {
-			return $out;
-		}
-		if (!$this->isMoonrakerConfigured()) {
-			return [];
-		}
-		return [[
-			'id' => 'default',
-			'name' => $this->getPrinterDisplayName(),
-			'moonraker_url' => $this->getMoonrakerInternalUrl(),
-			'camera_url' => $this->getMoonrakerCameraUrl(),
-			'default' => true,
-		]];
+
+		return [];
+	}
+
+	private function hasPersistedMoonrakerUrl(): bool
+	{
+		return trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_MOONRAKER_INTERNAL_URL,
+			'',
+		)) !== '';
 	}
 
 	public function isMoonrakerConfigured(): bool
@@ -180,20 +174,52 @@ class ConfigService
 			self::KEY_MULTI_PRINTERS,
 			'',
 		));
-		if ($raw === '') {
-			return false;
+		if ($raw !== '') {
+			$decoded = json_decode($raw, true);
+			if (is_array($decoded) && $decoded !== []) {
+				return true;
+			}
 		}
-		$decoded = json_decode($raw, true);
-		return is_array($decoded) && $decoded !== [];
+		return $this->sessionPrinters->list() !== [];
 	}
 
 	public function isSlicerConfigured(): bool
 	{
-		return trim($this->config->getAppValue(
+		if (trim($this->config->getAppValue(
 			Application::APP_ID,
 			self::KEY_SLICER_INTERNAL_URL,
 			'',
-		)) !== '';
+		)) !== '') {
+			return true;
+		}
+		// Default sidecar URL is valid when the compose stack is deployed; avoid
+		// a false "Slicer not configured" when the operator never typed Admin URL.
+		return $this->isSlicerEnabled() && trim(self::DEFAULT_SLICER_INTERNAL_URL) !== '';
+	}
+
+	/**
+	 * Moonraker URL for the global status probe (first configured or session printer).
+	 */
+	public function resolveMoonrakerProbeUrl(?string $printerId = null): string
+	{
+		if ($printerId !== null && $printerId !== '') {
+			try {
+				return $this->resolveMoonrakerUrlOrFail($printerId);
+			} catch (\InvalidArgumentException) {
+				// Fall through to first available printer.
+			}
+		}
+		foreach ($this->sessionPrinters->list() as $row) {
+			if (isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
+				return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+			}
+		}
+		foreach ($this->getMultiPrinters() as $row) {
+			if (isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
+				return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+			}
+		}
+		return $this->getMoonrakerInternalUrl();
 	}
 
 	/**

@@ -1282,7 +1282,9 @@ export const usePrintStore = defineStore('print', {
 
 		async loadAppStatus() {
 			try {
-				const data = await fetchAppStatus()
+				const data = await fetchAppStatus({
+					printerId: this.selectedPrinterId || undefined,
+				})
 				this.appStatus = { ...data, loaded: true }
 			} catch (e) {
 				this.appStatus.loaded = true
@@ -1331,6 +1333,7 @@ export const usePrintStore = defineStore('print', {
 			this.stopPrinterPolling()
 			this.startPrinterPolling()
 			void this.fetchPrinterCapabilities(this.selectedPrinterId)
+			void this.loadAppStatus()
 		},
 
 		_resetPrinterState() {
@@ -1490,6 +1493,7 @@ export const usePrintStore = defineStore('print', {
 			)
 			this.selectedPrinterId = targetId
 			this.onPrinterTargetChange()
+			void this.loadAppStatus()
 			return targetId
 		},
 
