@@ -207,7 +207,9 @@ class MoonrakerProxyController extends Controller
 
 	private function buildTargetUrl(string $safePath): ?string
 	{
-		$base = rtrim($this->config->getMoonrakerInternalUrl(), '/');
+		$printerId = $this->request->getParam('printer_id');
+		$printerId = is_string($printerId) && $printerId !== '' ? $printerId : null;
+		$base = rtrim($this->config->resolveMoonrakerUrl($printerId), '/');
 		$parts = parse_url($base);
 		if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
 			return null;

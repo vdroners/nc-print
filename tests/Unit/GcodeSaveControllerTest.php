@@ -9,6 +9,7 @@ use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\FileFetchService;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Files\IRootFolder;
 use OCP\IRequest;
 use PHPUnit\Framework\TestCase;
 
@@ -23,6 +24,7 @@ class GcodeSaveControllerTest extends TestCase
 			$request ?? $this->createMock(IRequest::class),
 			$access,
 			$files ?? $this->createMock(FileFetchService::class),
+			$this->createMock(IRootFolder::class),
 		);
 	}
 

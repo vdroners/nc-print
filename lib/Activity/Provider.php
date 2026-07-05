@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace OCA\NcPrint\Activity;
 
 use OCA\NcPrint\AppInfo\Application;
+use OCP\Activity\Exceptions\UnknownActivityException;
 use OCP\Activity\IEvent;
 use OCP\Activity\IProvider;
 use OCP\IL10N;
@@ -28,10 +29,10 @@ class Provider implements IProvider
 	) {
 	}
 
-	public function parse(string $language, IEvent $event, ?IEvent $previousEvent = null): IEvent
+	public function parse($language, IEvent $event, ?IEvent $previousEvent = null): IEvent
 	{
 		if ($event->getApp() !== Application::APP_ID) {
-			throw new \InvalidArgumentException();
+			throw new UnknownActivityException();
 		}
 		$l = $this->l10nFactory->get(Application::APP_ID, $language);
 		$params = $event->getSubjectParameters();
@@ -57,7 +58,7 @@ class Provider implements IProvider
 				$event->setParsedSubject($this->withPrinter($l->t('Print failed: %s', [$file]), $printer, $l));
 				break;
 			default:
-				throw new \InvalidArgumentException();
+				throw new UnknownActivityException();
 		}
 
 		return $event;

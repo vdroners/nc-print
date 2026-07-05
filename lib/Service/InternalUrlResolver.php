@@ -49,7 +49,8 @@ class InternalUrlResolver
 		if (is_string($fromEnv) && $fromEnv !== '' && filter_var($fromEnv, FILTER_VALIDATE_IP)) {
 			return $fromEnv;
 		}
-		return '10.0.0.84';
+		$gateway = $this->detectBridgeGateway();
+		return $gateway ?? 'host.docker.internal';
 	}
 
 	private function dockerSlicerRelayPort(): int

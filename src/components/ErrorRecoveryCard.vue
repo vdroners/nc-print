@@ -5,7 +5,7 @@ export default {
 		kind: {
 			type: String,
 			required: true,
-			validator: v => ['slicer_offline', 'moonraker_offline', '3mf_fail', 'gcode_download_fail', 'generic'].includes(v),
+			validator: v => ['slicer_offline', 'moonraker_offline', 'slicer_setup', 'moonraker_setup', '3mf_fail', 'gcode_download_fail', 'generic'].includes(v),
 		},
 		detail: { type: String, default: '' },
 	},
@@ -13,7 +13,9 @@ export default {
 		title() {
 			const map = {
 				slicer_offline: 'Slicer offline',
+				slicer_setup: 'Slicer not configured',
 				moonraker_offline: 'Printer unreachable',
+				moonraker_setup: 'Printer not configured',
 				'3mf_fail': '3MF conversion failed',
 				gcode_download_fail: 'G-code download failed',
 				generic: 'Something went wrong',
@@ -23,9 +25,17 @@ export default {
 		steps() {
 			const map = {
 				slicer_offline: [
-					'Confirm forge-slicer is running on the server (port 8766).',
+					'Confirm the nc-print-slicer sidecar is running and reachable from this server.',
 					'Check Admin → NC 3D Print → Slicer internal URL.',
 					'Retry loading profiles after the service is healthy.',
+				],
+				slicer_setup: [
+					'Open Admin → NC 3D Print and set the slicer internal URL.',
+					'Deploy the nc-print-slicer container (see docs/INSTALL.md) if you want in-browser slicing.',
+				],
+				moonraker_setup: [
+					'Open Admin → NC 3D Print and set your Moonraker printer URL.',
+					'Use Discover printers (admin) or enter the URL manually.',
 				],
 				moonraker_offline: [
 					'Verify the printer is powered on and Moonraker responds on the LAN.',
@@ -38,7 +48,7 @@ export default {
 					'Try a smaller mesh or repair the model in your slicer.',
 				],
 				gcode_download_fail: [
-					'The slice job finished but G-code could not be downloaded from forge-slicer.',
+					'The slice job finished but G-code could not be downloaded from the slicer.',
 					'Click Retry download on the Slice tab.',
 					'If the job expired, re-slice the model.',
 				],

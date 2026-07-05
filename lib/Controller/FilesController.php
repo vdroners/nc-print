@@ -14,6 +14,7 @@ use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
@@ -23,6 +24,7 @@ class FilesController extends Controller
 		IRequest $request,
 		private AccessService $access,
 		private FileFetchService $files,
+		private IRootFolder $rootFolder,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -42,7 +44,7 @@ class FilesController extends Controller
 
 		try {
 			$user = $this->access->requireUser();
-			$root = \OC::$server->getUserFolder($user->getUID());
+			$root = $this->rootFolder->getUserFolder($user->getUID());
 			$fileId = (int) ($params['file_id'] ?? 0);
 			$davPath = (string) ($params['dav_path'] ?? '');
 			$allowGcode = !empty($params['allow_gcode']);
@@ -77,7 +79,7 @@ class FilesController extends Controller
 
 		try {
 			$user = $this->access->requireUser();
-			$root = \OC::$server->getUserFolder($user->getUID());
+			$root = $this->rootFolder->getUserFolder($user->getUID());
 			$fileId = (int) ($params['file_id'] ?? 0);
 			$davPath = (string) ($params['dav_path'] ?? '');
 			$allowGcode = !empty($params['allow_gcode']);

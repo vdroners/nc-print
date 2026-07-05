@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Util\UrlSafety;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -89,12 +90,7 @@ class CameraController extends Controller
 
 	private function isSafeCameraUrl(string $url): bool
 	{
-		$parts = parse_url($url);
-		if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
-			return false;
-		}
-		$scheme = strtolower((string) $parts['scheme']);
-		return in_array($scheme, ['http', 'https'], true);
+		return UrlSafety::isSafeHttpUrl($url);
 	}
 
 	private function normalizeImageContentType(string $contentType): string

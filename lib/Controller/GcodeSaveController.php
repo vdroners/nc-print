@@ -12,6 +12,7 @@ use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
+use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
 use OCP\IRequest;
 
@@ -23,6 +24,7 @@ class GcodeSaveController extends Controller
 		IRequest $request,
 		private AccessService $access,
 		private FileFetchService $files,
+		private IRootFolder $rootFolder,
 	) {
 		parent::__construct(Application::APP_ID, $request);
 	}
@@ -53,7 +55,7 @@ class GcodeSaveController extends Controller
 
 		try {
 			$user = $this->access->requireUser();
-			$root = \OC::$server->getUserFolder($user->getUID());
+			$root = $this->rootFolder->getUserFolder($user->getUID());
 			$model = $this->files->resolveModelNode(
 				$root,
 				$davPath !== '' ? $davPath : null,

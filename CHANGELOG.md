@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.32.1] - 2026-07-04
+
+### App Store publication readiness
+
+- Neutralized lab defaults (empty Moonraker/camera URLs, admins-only until groups configured).
+- Replaced private `\OC::$server->getUserFolder()` with `OCP\Files\IRootFolder`.
+- Admin-only printer discovery; client-safe bootstrap (no internal URLs leaked).
+- Activity provider `parse()` signature fix; Moonraker proxy respects `printer_id`.
+- HTTPS mixed-content: browser WS only with explicit `wss://`; HTTP poll fallback.
+- Camera/proxy SSRF hardening via link-local/metadata blocklist.
+- l10n (`en`/`de`), store metadata, screenshots, uninstall appconfig cleanup.
+- Release automation: `make appstore`, GitHub Actions release workflow, operator onboarding doc.
+
 ## [1.32.0] - 2026-07-04
 
 Forge port round 4 — four self-contained analysis/reference modules ported from

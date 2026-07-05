@@ -7,7 +7,9 @@ namespace OCA\NcPrint\AppInfo;
 use OCA\Files\Event\LoadAdditionalScriptsEvent;
 use OCA\NcPrint\Dashboard\PrinterStatusWidget;
 use OCA\NcPrint\Listener\LoadFilesActions;
+use OCA\NcPrint\Listener\UninstallCleanupListener;
 use OCA\NcPrint\Notification\Notifier;
+use OCP\App\Events\AppUninstallEvent;
 use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
@@ -28,6 +30,10 @@ class Application extends App implements IBootstrap
 		$context->registerEventListener(
 			LoadAdditionalScriptsEvent::class,
 			LoadFilesActions::class,
+		);
+		$context->registerEventListener(
+			AppUninstallEvent::class,
+			UninstallCleanupListener::class,
 		);
 
 		// Native Nextcloud surfaces: notification bell + a Dashboard widget for

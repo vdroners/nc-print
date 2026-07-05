@@ -21,7 +21,8 @@ DATADIR_SEED_DEST := $(ENGINE_DEST)/datadir-seed
 
 .PHONY: build test deploy gate-preflight phpunit run-phpunit ship \
 	bump-patch bump-minor \
-	slicer-fetch slicer-build slicer-up slicer-down slicer-test
+	slicer-fetch slicer-build slicer-up slicer-down slicer-test \
+	appstore appstore-sign
 
 build:
 	cd "$(ROOT)" && npm run build
@@ -160,3 +161,34 @@ gate-preflight:
 	@test -n "$$(docker ps -q -f name=$(CONTAINER))" || (echo "Container $(CONTAINER) not running — skip API gates" && exit 0)
 	docker cp "$(ROOT).vitest-gate-stamp" $(CONTAINER):$(REMOTE)/.vitest-gate-stamp
 	docker exec $(CONTAINER) php $(REMOTE)/tools/print-api-gates.php
+
+VERSION := $(shell grep -oE '<version>[0-9]+\.[0-9]+\.[0-9]+</version>' "$(ROOT)appinfo/info.xml" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+')
+STAGING := /tmp/$(APP_ID)-$(VERSION)
+TARBALL := /tmp/$(APP_ID)-$(VERSION).tar.gz
+
+# Self-contained App Store tarball (built assets + composer vendor; slicer engine excluded).
+appstore: build
+	rm -rf "$(STAGING)"
+	mkdir -p "$(STAGING)"
+	rsync -a --delete \
+		--exclude node_modules --exclude tests --exclude .git \
+		--exclude slicer/3dprintforge-slicer --exclude .phpunit.cache \
+		"$(ROOT)" "$(STAGING)/"
+	cd "$(STAGING)" && composer install --no-dev --no-interaction --optimize-autoloader
+	rm -rf "$(STAGING)/node_modules"
+	tar -czf "$(TARBALL)" -C /tmp "$(APP_ID)-$(VERSION)"
+	@echo "Release tarball: $(TARBALL)"
+
+appstore-sign: appstore
+	@test -n "$(NC_OCC)" || (echo "Set NC_OCC to your occ binary path" && exit 1)
+	@test -n "$$APP_PRIVATE_KEY" || (echo "Set APP_PRIVATE_KEY to private key file path" && exit 1)
+	@test -n "$$APP_PUBLIC_CRT" || (echo "Set APP_PUBLIC_CRT to certificate file path" && exit 1)
+	cp "$(ROOT)scripts/file_from_env.php" "$(STAGING)/file_from_env.php"
+	php "$(NC_OCC)" integrity:sign-app \
+		--privateKey="file://$(STAGING)/file_from_env.php" \
+		--certificate="file://$(STAGING)/file_from_env.php" \
+		$(APP_ID)
+	APP_PRIVATE_KEY="$$APP_PRIVATE_KEY" APP_PUBLIC_CRT="$$APP_PUBLIC_CRT" \
+	php "$(NC_OCC)" integrity:check-app $(APP_ID)
+	tar -czf "$(TARBALL)" -C /tmp "$(APP_ID)-$(VERSION)"
+	@echo "Signed tarball: $(TARBALL)"

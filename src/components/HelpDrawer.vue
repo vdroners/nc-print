@@ -133,8 +133,8 @@ export default {
 			<div v-else-if="tab === 'calibration'" role="tabpanel">
 				<h2 style="margin-top: 0;">OrcaSlicer calibration guides</h2>
 				<p style="font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-muted); margin-top: 0;">
-					NC Print slices with forge-slicer (Orca engine). Run these calibrations in desktop OrcaSlicer,
-					then export or sync profiles to the forge-slicer config directory (Help → Services).
+					NC Print slices with the nc-print-slicer sidecar (Orca engine). Run these calibrations in desktop OrcaSlicer,
+					then export or sync profiles to the slicer data directory (Help → Services).
 				</p>
 				<ul class="nc-print-help-cal-list">
 					<li v-for="link in calibrationLinks" :key="link.href">

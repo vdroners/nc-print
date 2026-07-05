@@ -1,0 +1,14 @@
+{
+	"NC 3D Print": "NC 3D Print",
+	"A 3D print starts, completes or fails": "Ein 3D-Druck startet, wird abgeschlossen oder schlägt fehl",
+	"Started printing %s": "Druck gestartet: %s",
+	"Completed print %1$s in %2$s": "Druck abgeschlossen: %1$s (%2$s)",
+	"Completed print %s": "Druck abgeschlossen: %s",
+	"Print failed: %s": "Druck fehlgeschlagen: %s",
+	"on %s": "auf %s",
+	"Print complete: %1$s (%2$s)": "Druck abgeschlossen: %1$s (%2$s)",
+	"Print complete: %s": "Druck abgeschlossen: %s",
+	"Print complete: {file}": "Druck abgeschlossen: {file}",
+	"Print failed: {file}": "Druck fehlgeschlagen: {file}",
+	"3D printer status": "3D-Druckerstatus"
+}

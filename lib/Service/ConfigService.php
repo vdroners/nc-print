@@ -27,11 +27,13 @@ class ConfigService
 	 * InternalUrlResolver. Operators can still point at an external
 	 * forge-slicer by setting the slicer_internal_url app value.
 	 */
+	/** Docker-compose idiom when operator deploys the nc-print-slicer sidecar separately. */
 	public const DEFAULT_SLICER_INTERNAL_URL = 'http://nc-print-slicer:8080';
-	public const DEFAULT_MOONRAKER_INTERNAL_URL = 'http://10.0.0.210:7125';
-	public const DEFAULT_MOONRAKER_CAMERA_URL = 'http://10.0.0.210:8080/?action=snapshot';
-	public const DEFAULT_PRINTER_DISPLAY_NAME = 'K1 Max';
-	public const DEFAULT_ALLOWED_GROUPS = '19 Labs';
+	public const DEFAULT_MOONRAKER_INTERNAL_URL = '';
+	public const DEFAULT_MOONRAKER_CAMERA_URL = '';
+	public const DEFAULT_PRINTER_DISPLAY_NAME = '3D Printer';
+	/** Empty = administrators only until groups are configured in Admin settings. */
+	public const DEFAULT_ALLOWED_GROUPS = '';
 
 	public function __construct(
 		private IConfig $config,
@@ -117,6 +119,9 @@ class ConfigService
 			'',
 		));
 		if ($raw === '') {
+			if (!$this->isMoonrakerConfigured()) {
+				return [];
+			}
 			return [[
 				'id' => 'default',
 				'name' => $this->getPrinterDisplayName(),
@@ -127,6 +132,9 @@ class ConfigService
 		}
 		$decoded = json_decode($raw, true);
 		if (!is_array($decoded)) {
+			if (!$this->isMoonrakerConfigured()) {
+				return [];
+			}
 			return [[
 				'id' => 'default',
 				'name' => $this->getPrinterDisplayName(),
@@ -142,13 +150,37 @@ class ConfigService
 			}
 			$out[] = $row;
 		}
-		return $out !== [] ? $out : [[
+		if ($out !== []) {
+			return $out;
+		}
+		if (!$this->isMoonrakerConfigured()) {
+			return [];
+		}
+		return [[
 			'id' => 'default',
 			'name' => $this->getPrinterDisplayName(),
 			'moonraker_url' => $this->getMoonrakerInternalUrl(),
 			'camera_url' => $this->getMoonrakerCameraUrl(),
 			'default' => true,
 		]];
+	}
+
+	public function isMoonrakerConfigured(): bool
+	{
+		return trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_MOONRAKER_INTERNAL_URL,
+			'',
+		)) !== '';
+	}
+
+	public function isSlicerConfigured(): bool
+	{
+		return trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_SLICER_INTERNAL_URL,
+			'',
+		)) !== '';
 	}
 
 	/**
@@ -212,6 +244,20 @@ class ConfigService
 		return array_values(array_unique($parts));
 	}
 
+	/** @return list<array<string, mixed>> */
+	public function clientSafeMultiPrinters(): array
+	{
+		$out = [];
+		foreach ($this->getMultiPrinters() as $row) {
+			$out[] = [
+				'id' => (string) ($row['id'] ?? ''),
+				'name' => (string) ($row['name'] ?? ''),
+				'default' => !empty($row['default']),
+			];
+		}
+		return $out;
+	}
+
 	/** @return array<string, mixed> */
 	public function publicBootstrap(): array
 	{
@@ -221,7 +267,9 @@ class ConfigService
 			'moonraker_enabled' => $this->isMoonrakerEnabled(),
 			'console_enabled' => $this->isConsoleEnabled(),
 			'printer_display_name' => $this->getPrinterDisplayName(),
-			'multi_printers' => $this->getMultiPrinters(),
+			'multi_printers' => $this->clientSafeMultiPrinters(),
+			'moonraker_configured' => $this->isMoonrakerConfigured(),
+			'slicer_configured' => $this->isSlicerConfigured(),
 			'slicer_proxy_base' => '/apps/' . Application::APP_ID . '/api/slicer',
 			'moonraker_proxy_base' => '/apps/' . Application::APP_ID . '/api/moonraker',
 			'camera_url' => '/apps/' . Application::APP_ID . '/api/camera/frame.jpeg',

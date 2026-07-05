@@ -67,10 +67,12 @@ class ApiController extends Controller
 		$slicerProbe = $this->probeUrl(
 			$this->configService->getSlicerInternalUrl() . '/api/health',
 			$this->configService->isSlicerEnabled(),
+			$this->configService->isSlicerConfigured(),
 		);
 		$moonrakerProbe = $this->probeUrl(
 			$this->configService->getMoonrakerInternalUrl() . '/server/info',
 			$this->configService->isMoonrakerEnabled(),
+			$this->configService->isMoonrakerConfigured(),
 		);
 
 		return new JSONResponse([
@@ -92,19 +94,24 @@ class ApiController extends Controller
 			'moonraker_latency_ms' => $moonrakerProbe['latency_ms'],
 			'moonraker_error' => $moonrakerProbe['error'],
 			'console_enabled' => $this->configService->isConsoleEnabled(),
+			'moonraker_configured' => $this->configService->isMoonrakerConfigured(),
+			'slicer_configured' => $this->configService->isSlicerConfigured(),
 			// WS-foundation feature detection: which optional Moonraker
 			// components / plugins exist so the UI can hide unsupported tabs.
 			'moonraker_features' => $this->detectMoonrakerFeatures($moonrakerProbe),
 			'printer_display_name' => $this->configService->getPrinterDisplayName(),
-			'multi_printers' => $this->configService->getMultiPrinters(),
+			'multi_printers' => $this->configService->clientSafeMultiPrinters(),
 		]);
 	}
 
 	/** @return array{ok: bool, latency_ms: int|null, error: string|null, version?: string, upstream?: string, config_dir?: string} */
-	private function probeUrl(string $url, bool $enabled): array
+	private function probeUrl(string $url, bool $enabled, bool $configured = true): array
 	{
 		if (!$enabled) {
 			return ['ok' => false, 'latency_ms' => null, 'error' => 'disabled'];
+		}
+		if (!$configured || trim($url) === '' || $url === '/api/health' || $url === '/server/info') {
+			return ['ok' => false, 'latency_ms' => null, 'error' => 'not_configured'];
 		}
 
 		$started = hrtime(true);

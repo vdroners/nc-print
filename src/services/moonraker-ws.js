@@ -128,8 +128,10 @@ export class MoonrakerWsClient {
 		this._printer = printer || null
 		this._printerId = printerId || printer?.id || null
 
-		const wsUrl = moonrakerWsUrl(printer)
-		if (wsUrl && typeof WebSocket !== 'undefined') {
+		const wsUrl = printer?.moonraker_ws_url || null
+		// Only connect when an explicit wss:// URL is configured (avoids mixed-content
+		// and leaking LAN printer addresses derived from http:// Moonraker URLs).
+		if (wsUrl && wsUrl.startsWith('wss://') && typeof WebSocket !== 'undefined') {
 			const ticket = await fetchWsTicket()
 			const connected = await this._tryWebSocket(wsUrl, ticket?.ticket)
 			if (connected) {

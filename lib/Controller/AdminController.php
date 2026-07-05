@@ -48,7 +48,11 @@ class AdminController extends Controller
 			}
 		}
 
-		foreach ([ConfigService::KEY_SLICER_ENABLED, ConfigService::KEY_MOONRAKER_ENABLED] as $boolKey) {
+		foreach ([
+			ConfigService::KEY_SLICER_ENABLED,
+			ConfigService::KEY_MOONRAKER_ENABLED,
+			ConfigService::KEY_CONSOLE_ENABLED,
+		] as $boolKey) {
 			if (array_key_exists($boolKey, $params)) {
 				$raw = $params[$boolKey];
 				$enabled = ($raw === true || $raw === 1 || $raw === '1'
@@ -78,7 +82,7 @@ class AdminController extends Controller
 		$configured = (string) $this->config->getAppValue(
 			Application::APP_ID,
 			ConfigService::KEY_MOONRAKER_INTERNAL_URL,
-			ConfigService::DEFAULT_MOONRAKER_INTERNAL_URL,
+			'',
 		);
 		$found = $this->discovery->discover($params, $configured);
 		return new JSONResponse(['ok' => true, 'printers' => $found]);

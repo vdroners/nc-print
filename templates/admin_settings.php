@@ -11,6 +11,7 @@ $keys = [
 	ConfigService::KEY_MULTI_PRINTERS,
 	ConfigService::KEY_SLICER_ENABLED,
 	ConfigService::KEY_MOONRAKER_ENABLED,
+	ConfigService::KEY_CONSOLE_ENABLED,
 ];
 $settings = [];
 foreach ($keys as $key) {
@@ -27,7 +28,8 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 <div id="nc-print-admin-settings" class="section" data-settings="<?php echo $settingsJson; ?>" data-save-url="<?php echo $saveUrl; ?>" data-discover-url="<?php echo $discoverUrl; ?>">
 	<h2>NC 3D Print</h2>
 	<p class="settings-hint">
-		Configure the owned slicing engine (nc-print-slicer), Moonraker printer access, camera snapshot URL, and group gate.
+		Configure the optional nc-print-slicer sidecar, Moonraker printer URL, camera snapshot URL, and group access.
+		Leave Moonraker URL empty until your printer is reachable from this server.
 	</p>
 
 	<form id="nc-print-admin-form" class="nc-print-admin-form">
@@ -37,11 +39,11 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 		</label>
 		<label>
 			<span>Moonraker internal URL</span>
-			<input type="url" name="<?php echo ConfigService::KEY_MOONRAKER_INTERNAL_URL; ?>" value="<?php echo htmlspecialchars((string)$_['moonraker_internal_url'], ENT_QUOTES, 'UTF-8'); ?>" required>
+			<input type="url" name="<?php echo ConfigService::KEY_MOONRAKER_INTERNAL_URL; ?>" value="<?php echo htmlspecialchars((string)$_['moonraker_internal_url'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="http://printer.local:7125">
 		</label>
 		<label>
 			<span>Camera snapshot URL</span>
-			<input type="url" name="<?php echo ConfigService::KEY_MOONRAKER_CAMERA_URL; ?>" value="<?php echo htmlspecialchars((string)$_['moonraker_camera_url'], ENT_QUOTES, 'UTF-8'); ?>" required>
+			<input type="url" name="<?php echo ConfigService::KEY_MOONRAKER_CAMERA_URL; ?>" value="<?php echo htmlspecialchars((string)$_['moonraker_camera_url'], ENT_QUOTES, 'UTF-8'); ?>" placeholder="http://printer.local:8080/?action=snapshot">
 		</label>
 		<label>
 			<span>Printer display name</span>
@@ -53,7 +55,7 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 		</label>
 		<label>
 			<span>Multi-printer config (JSON array)</span>
-			<textarea name="<?php echo ConfigService::KEY_MULTI_PRINTERS; ?>" rows="6" placeholder='[{"id":"k1","name":"K1 Max","moonraker_url":"http://10.0.0.210:7125","camera_url":"http://10.0.0.210:8080/?action=snapshot","default":true}]'><?php echo htmlspecialchars((string)($_['multi_printers'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
+			<textarea name="<?php echo ConfigService::KEY_MULTI_PRINTERS; ?>" rows="6" placeholder='[{"id":"printer1","name":"My printer","moonraker_url":"http://192.168.1.50:7125","camera_url":"","default":true}]'><?php echo htmlspecialchars((string)($_['multi_printers'] ?? ''), ENT_QUOTES, 'UTF-8'); ?></textarea>
 		</label>
 		<p class="settings-hint">
 			Each entry: <code>id</code>, <code>name</code>, <code>moonraker_url</code>, optional <code>moonraker_ws_url</code>, <code>camera_url</code>, <code>default</code>.
@@ -70,6 +72,10 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 		<label class="checkbox">
 			<input type="checkbox" name="<?php echo ConfigService::KEY_MOONRAKER_ENABLED; ?>" value="yes" <?php echo !empty($_['moonraker_enabled']) ? 'checked' : ''; ?>>
 			<span>Moonraker enabled</span>
+		</label>
+		<label class="checkbox">
+			<input type="checkbox" name="<?php echo ConfigService::KEY_CONSOLE_ENABLED; ?>" value="yes" <?php echo !empty($_['console_enabled']) ? 'checked' : ''; ?>>
+			<span>G-code console enabled (security-sensitive — off by default)</span>
 		</label>
 		<button type="submit" class="primary">Save</button>
 		<p id="nc-print-admin-status" class="settings-hint" aria-live="polite"></p>

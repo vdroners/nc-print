@@ -295,7 +295,7 @@ export default {
 				class="nc-print-banner nc-print-banner--warn"
 				role="alert">
 				<p class="nc-print-banner__body" style="margin-bottom: 8px;">
-					No slicer profiles loaded — check forge-slicer service and Admin settings.
+					No slicer profiles loaded — check the slicer service and Admin settings.
 				</p>
 				<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
 					Retry
@@ -313,7 +313,7 @@ export default {
 						</span>
 					</h2>
 					<p v-if="!printStore.profiles.loaded" class="nc-print-skeleton">
-						Loading profiles from forge-slicer…
+						Loading profiles from slicer service…
 					</p>
 					<ProfilePicker v-else ref="profilePicker" />
 				</div>

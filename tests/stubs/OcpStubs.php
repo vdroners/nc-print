@@ -113,6 +113,10 @@ interface Folder
 	public function getInternalPath(): string;
 }
 
+interface IRootFolder extends Folder
+{
+}
+
 namespace OCP\Files;
 
 class NotPermittedException extends \Exception

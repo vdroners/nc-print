@@ -1,0 +1,14 @@
+{
+	"NC 3D Print": "NC 3D Print",
+	"A 3D print starts, completes or fails": "A 3D print starts, completes or fails",
+	"Started printing %s": "Started printing %s",
+	"Completed print %1$s in %2$s": "Completed print %1$s in %2$s",
+	"Completed print %s": "Completed print %s",
+	"Print failed: %s": "Print failed: %s",
+	"on %s": "on %s",
+	"Print complete: %1$s (%2$s)": "Print complete: %1$s (%2$s)",
+	"Print complete: %s": "Print complete: %s",
+	"Print complete: {file}": "Print complete: {file}",
+	"Print failed: {file}": "Print failed: {file}",
+	"3D printer status": "3D printer status"
+}

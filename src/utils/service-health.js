@@ -24,10 +24,20 @@ export function isHealthy(status = {}, flags = {}) {
  */
 export function buildRecoveryCards(status = {}, ctx = {}) {
 	const cards = []
-	if (status.loaded && status.slicer_enabled && !status.slicer_ok) {
+	if (status.loaded && status.slicer_enabled && status.slicer_configured === false) {
+		cards.push({
+			kind: 'slicer_setup',
+			detail: 'Set the slicer URL in Admin → NC 3D Print, or deploy the nc-print-slicer container.',
+		})
+	} else if (status.loaded && status.slicer_enabled && !status.slicer_ok) {
 		cards.push({ kind: 'slicer_offline', detail: status.slicer_error || '' })
 	}
-	if (status.loaded && status.moonraker_enabled && !status.moonraker_ok) {
+	if (status.loaded && status.moonraker_enabled && status.moonraker_configured === false) {
+		cards.push({
+			kind: 'moonraker_setup',
+			detail: 'Set your Moonraker URL in Admin → NC 3D Print before printing.',
+		})
+	} else if (status.loaded && status.moonraker_enabled && !status.moonraker_ok) {
 		cards.push({ kind: 'moonraker_offline', detail: status.moonraker_error || '' })
 	}
 	if (ctx.has3mfError) {

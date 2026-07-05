@@ -4,19 +4,28 @@
 	<id>nc_print</id>
 	<name>NC 3D Print</name>
 	<summary>Slice, send, and monitor Klipper/Moonraker 3D prints from Nextcloud</summary>
-	<description><![CDATA[NC 3D Print — standalone Nextcloud app that ships its own headless Orca slicing
-engine (the nc-print-slicer sidecar), Moonraker printer control, and live camera monitoring.
-No external slicer service and no NC-GCS dependency required.]]></description>
-	<version>1.32.0</version>
+	<description><![CDATA[NC 3D Print — slice, send, and monitor Klipper/Moonraker 3D printers from Nextcloud.
+
+Requires a Moonraker-connected printer and the optional nc-print-slicer sidecar container for in-browser slicing (see docs/INSTALL.md). No NC-GCS dependency.]]></description>
+	<version>1.32.1</version>
 	<licence>AGPL-3.0-or-later</licence>
-	<author>NC-GCS Program</author>
+	<author mail="dan@19labs.com">19labs</author>
 	<namespace>NcPrint</namespace>
 	<category>tools</category>
 	<website>https://github.com/vdroners/nc-print</website>
 	<bugs>https://github.com/vdroners/nc-print/issues</bugs>
 	<repository type="git">https://github.com/vdroners/nc-print.git</repository>
+	<documentation>https://github.com/vdroners/nc-print/blob/main/README.md</documentation>
+	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/prepare.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/slice.png</screenshot>
+	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/print.png</screenshot>
 	<dependencies>
-		<nextcloud min-version="28" max-version="33"/>
+		<php min-version="8.1" max-version="8.4"/>
+		<database>sqlite</database>
+		<database>mysql</database>
+		<database>pgsql</database>
+		<lib>curl</lib>
+		<nextcloud min-version="28" max-version="34"/>
 	</dependencies>
 	<navigations>
 		<navigation>

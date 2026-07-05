@@ -312,7 +312,7 @@ export const usePrintStore = defineStore('print', {
 			layers: 0,
 			materialStats: {},
 			savedDavPath: '',
-			backendLabel: 'forge-slicer',
+			backendLabel: 'nc-print-slicer',
 			sentTo: '',
 			printing: false,
 			error: '',
@@ -575,7 +575,7 @@ export const usePrintStore = defineStore('print', {
 					id: 'slicer',
 					label: 'Slicer service online',
 					ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok,
-					hint: 'Start forge-slicer or check Admin settings',
+					hint: 'Start nc-print-slicer or check Admin settings',
 					action: 'slicer',
 				},
 			]
@@ -598,7 +598,7 @@ export const usePrintStore = defineStore('print', {
 				{ ok: !!state.selection.printerId, label: 'Printer profile', hint: 'Choose a printer on Prepare' },
 				{ ok: !!state.selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
 				{ ok: !!state.selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
-				{ ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok, label: 'Slicer service', hint: 'Start forge-slicer' },
+				{ ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok, label: 'Slicer service', hint: 'Start nc-print-slicer sidecar' },
 			]) {
 				if (!row.ok) {
 					return `${row.label}: ${row.hint}`
@@ -1654,7 +1654,7 @@ export const usePrintStore = defineStore('print', {
 				layers: 0,
 				materialStats: {},
 				savedDavPath: '',
-				backendLabel: 'forge-slicer',
+				backendLabel: 'nc-print-slicer',
 				sentTo: '',
 				printing: false,
 				error: '',
@@ -1759,7 +1759,7 @@ export const usePrintStore = defineStore('print', {
 				this.sliceJob.filamentUsedG = (done.filament_used_g || []).reduce((a, b) => a + b, 0)
 				this.sliceJob.layers = done.total_layers || this.sliceJob.totalLayers || 0
 				this._applyMaterialStats(done)
-				this.sliceJob.backendLabel = 'forge-slicer'
+				this.sliceJob.backendLabel = 'nc-print-slicer'
 
 				const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
 				this.sliceJob.gcodeFilename = `${stem}.gcode`
