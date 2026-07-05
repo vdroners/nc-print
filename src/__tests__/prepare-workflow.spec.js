@@ -4,11 +4,14 @@ import {
 	slicerReady,
 	sliceBlockReason,
 	previewBlocked,
+	firstPrepareBlocker,
+	prepareChecklistProgress,
 } from '@/utils/workflow-gates.js'
 
 const base = {
 	model: { file: null },
 	selection: { printerId: '', filamentId: '', processId: '' },
+	selectedPrinterId: '',
 	appStatus: { loaded: true, slicer_enabled: true, slicer_ok: true },
 }
 
@@ -17,12 +20,21 @@ describe('prepare workflow gates (G19)', () => {
 		expect(isPrepareComplete(base)).toBe(false)
 	})
 
-	it('prepareComplete is true when model, profiles, and slicer are ready', () => {
+	it('prepareComplete is true when model, profiles, target, and slicer are ready', () => {
 		expect(isPrepareComplete({
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			selectedPrinterId: 'k1',
 		})).toBe(true)
+	})
+
+	it('prepareComplete is false without target printer', () => {
+		expect(isPrepareComplete({
+			...base,
+			model: { file: {} },
+			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+		})).toBe(false)
 	})
 
 	it('prepareComplete is false when slicer is offline', () => {
@@ -30,6 +42,7 @@ describe('prepare workflow gates (G19)', () => {
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			selectedPrinterId: 'k1',
 			appStatus: { loaded: true, slicer_enabled: true, slicer_ok: false },
 		})).toBe(false)
 	})
@@ -58,6 +71,7 @@ describe('prepare workflow gates (G19)', () => {
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			selectedPrinterId: 'k1',
 		}
 		expect(sliceBlockReason({
 			...ready,
@@ -73,18 +87,27 @@ describe('prepare workflow gates (G19)', () => {
 		})).toMatch(/offline/)
 	})
 
-	// G33a / G32a — preview-skipped blind-slice guard
 	it('previewBlocked is true when preview skipped and no slice blob', () => {
 		expect(previewBlocked({
 			modelMeta: { previewSkipped: true },
 			meshState: { sliceBlob: null },
+			model: {},
 		})).toBe(true)
+	})
+
+	it('previewBlocked is false when model.sliceFile exists', () => {
+		expect(previewBlocked({
+			modelMeta: { previewSkipped: true },
+			meshState: { sliceBlob: null },
+			model: { sliceFile: new Blob() },
+		})).toBe(false)
 	})
 
 	it('previewBlocked is false once a slice blob exists (3MF extraction ok)', () => {
 		expect(previewBlocked({
 			modelMeta: { previewSkipped: true },
 			meshState: { sliceBlob: { name: 'x.stl' } },
+			model: {},
 		})).toBe(false)
 	})
 
@@ -105,8 +128,27 @@ describe('prepare workflow gates (G19)', () => {
 			...base,
 			model: { file: {}, name: 'part.step' },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			selectedPrinterId: 'k1',
 			modelMeta: { previewSkipped: true },
 			meshState: { sliceBlob: null, dirty: false },
 		})).toBe(false)
+	})
+
+	it('firstPrepareBlocker mentions target printer when missing', () => {
+		expect(firstPrepareBlocker({
+			...base,
+			model: { file: {} },
+			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+		})).toMatch(/Target printer/)
+	})
+
+	it('prepareChecklistProgress excludes advisory rows', () => {
+		const progress = prepareChecklistProgress({
+			...base,
+			model: { file: {} },
+			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
+			selectedPrinterId: 'k1',
+		})
+		expect(progress).toEqual({ ready: 8, total: 8 })
 	})
 })

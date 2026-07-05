@@ -27,6 +27,7 @@ return [
 		['name' => 'printer#upload', 'url' => '/api/printer/upload', 'verb' => 'POST'],
 
 		['name' => 'printer_discovery#discover', 'url' => '/api/printers/discover', 'verb' => 'POST'],
+		['name' => 'session_printer#registerSession', 'url' => '/api/printers/register-session', 'verb' => 'POST'],
 		['name' => 'print_event#notifyTransition', 'url' => '/api/events/print-transition', 'verb' => 'POST'],
 		['name' => 'update#trigger', 'url' => '/api/update/trigger', 'verb' => 'POST'],
 

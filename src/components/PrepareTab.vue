@@ -15,6 +15,7 @@ import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import PrepareToolRail from './PrepareToolRail.vue'
 import PrepareToolPanel from './PrepareToolPanel.vue'
+import TargetPrinterPicker from './TargetPrinterPicker.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { resolveFile } from '@/services/files-api.js'
@@ -37,6 +38,7 @@ export default {
 		PrepareToolRail,
 		PrepareToolPanel,
 		NcPrintIcon,
+		TargetPrinterPicker,
 	},
 	data() {
 		return {
@@ -275,8 +277,14 @@ export default {
 				return
 			}
 			if (action === 'printer' || action === 'filament' || action === 'process') {
+				this.$refs.modelProfilesCollapsible?.expand?.()
 				scrollTo('profilePicker')
 				this.$refs.profilePicker?.focusField?.(action)
+				return
+			}
+			if (action === 'target') {
+				this.$refs.targetPrinterCard?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
+				document.getElementById('nc-print-target-printer-prepare')?.focus()
 				return
 			}
 			if (action === 'slicer') {
@@ -290,19 +298,38 @@ export default {
 <template>
 	<PrepareStudioLayout class="nc-print-prepare">
 		<template #left>
-			<div
-				v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
-				class="nc-print-banner nc-print-banner--warn"
-				role="alert">
-				<p class="nc-print-banner__body" style="margin-bottom: 8px;">
-					No slicer profiles loaded — check the slicer service and Admin settings.
-				</p>
+		<div
+			v-if="printStore.configLoadError"
+			class="nc-print-banner nc-print-banner--warn"
+			role="alert">
+			<p class="nc-print-banner__body">
+				Config API failed: {{ printStore.configLoadError }}
+			</p>
+		</div>
+
+		<div
+			v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
+			class="nc-print-banner nc-print-banner--warn"
+			role="alert">
+			<p class="nc-print-banner__body" style="margin-bottom: 8px;">
+				{{ printStore.profiles.error || 'No slicer profiles loaded — check the slicer service and Admin settings.' }}
+			</p>
 				<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
 					Retry
-				</button>
-			</div>
+			</button>
+		</div>
 
-			<NcPrintCollapsible id="prepare-model-profiles" title="Model & profiles" icon="layers">
+		<div ref="targetPrinterCard" class="nc-print-card">
+			<h2 class="nc-print-card__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="printer" :size="18" />
+					Target printer
+				</span>
+			</h2>
+			<TargetPrinterPicker variant="prepare" select-id="nc-print-target-printer-prepare" />
+		</div>
+
+		<NcPrintCollapsible id="prepare-model-profiles" ref="modelProfilesCollapsible" title="Model & profiles" icon="layers">
 				<RecentModelsStrip @select="onRecentSelect" />
 
 				<div class="nc-print-card">

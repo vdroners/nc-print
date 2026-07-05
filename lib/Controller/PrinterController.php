@@ -80,6 +80,8 @@ class PrinterController extends Controller
 		'pid_calibrate',
 	];
 
+	private ?string $lastMoonrakerResolveError = null;
+
 	public function __construct(
 		IRequest $request,
 		private ConfigService $config,
@@ -114,6 +116,9 @@ class PrinterController extends Controller
 		], JSON_THROW_ON_ERROR);
 
 		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $this->request->getParam('printer_id'));
+		if ($resolveErr = $this->consumeResolveError()) {
+			return $resolveErr;
+		}
 		if ($result === null) {
 			return new JSONResponse($this->emptyState('Moonraker unreachable'));
 		}
@@ -147,10 +152,17 @@ class PrinterController extends Controller
 			'objects' => ['toolhead' => null, 'configfile' => null],
 		], JSON_THROW_ON_ERROR);
 		$objects = $this->moonrakerPost('printer/objects/query', $objectsPayload, 'application/json', $printerId);
+		if ($resolveErr = $this->consumeResolveError()) {
+			return $resolveErr;
+		}
+
 		$status = $objects['status'] ?? $objects['result']['status'] ?? [];
 
 		// machine/system_info is GET-only in Moonraker (POST -> 405).
 		$sys = $this->moonrakerGet('machine/system_info', $printerId);
+		if ($resolveErr = $this->consumeResolveError()) {
+			return $resolveErr;
+		}
 		$systemInfo = $sys['system_info'] ?? $sys['result']['system_info'] ?? [];
 
 		$caps = self::normalizeCapabilities($status, $systemInfo);
@@ -419,6 +431,9 @@ class PrinterController extends Controller
 
 		$built = MultipartBuilder::buildMoonrakerUpload($binary, $filename, $start);
 		$result = $this->moonrakerPost('server/files/upload', $built['body'], $built['contentType'], $this->request->getParam('printer_id'));
+		if ($resolveErr = $this->consumeResolveError()) {
+			return $resolveErr;
+		}
 		if ($result === null) {
 			return new JSONResponse(
 				['error' => 'backend_unreachable', 'message' => 'Moonraker upload failed'],
@@ -830,7 +845,14 @@ class PrinterController extends Controller
 	/** @return array<string, mixed>|null */
 	private function moonrakerPost(string $path, string $body, string $contentType, ?string $printerId = null): ?array
 	{
-		$url = rtrim($this->config->resolveMoonrakerUrl($printerId), '/') . '/' . ltrim($path, '/');
+		$this->lastMoonrakerResolveError = null;
+		try {
+			$base = rtrim($this->config->resolveMoonrakerUrlOrFail($printerId), '/');
+		} catch (\InvalidArgumentException $e) {
+			$this->lastMoonrakerResolveError = $e->getMessage();
+			return null;
+		}
+		$url = $base . '/' . ltrim($path, '/');
 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
@@ -868,7 +890,14 @@ class PrinterController extends Controller
 	 */
 	private function moonrakerGet(string $path, ?string $printerId = null): ?array
 	{
-		$url = rtrim($this->config->resolveMoonrakerUrl($printerId), '/') . '/' . ltrim($path, '/');
+		$this->lastMoonrakerResolveError = null;
+		try {
+			$base = rtrim($this->config->resolveMoonrakerUrlOrFail($printerId), '/');
+		} catch (\InvalidArgumentException $e) {
+			$this->lastMoonrakerResolveError = $e->getMessage();
+			return null;
+		}
+		$url = $base . '/' . ltrim($path, '/');
 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
@@ -892,5 +921,22 @@ class PrinterController extends Controller
 
 		$data = json_decode((string) $responseBody, true);
 		return is_array($data) ? $data : ['result' => $responseBody];
+	}
+
+	private function consumeResolveError(): ?JSONResponse
+	{
+		if ($this->lastMoonrakerResolveError === null) {
+			return null;
+		}
+		$code = $this->lastMoonrakerResolveError;
+		$this->lastMoonrakerResolveError = null;
+		if (in_array($code, ['unknown_printer', 'moonraker_url_missing'], true)) {
+			return new JSONResponse(
+				['error' => $code, 'message' => 'Unknown or invalid printer'],
+				Http::STATUS_BAD_REQUEST,
+			);
+		}
+
+		return null;
 	}
 }

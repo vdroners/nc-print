@@ -38,6 +38,7 @@ class ConfigService
 	public function __construct(
 		private IConfig $config,
 		private InternalUrlResolver $internalUrlResolver,
+		private SessionPrinterService $sessionPrinters,
 	) {
 	}
 
@@ -167,11 +168,23 @@ class ConfigService
 
 	public function isMoonrakerConfigured(): bool
 	{
-		return trim($this->config->getAppValue(
+		if (trim($this->config->getAppValue(
 			Application::APP_ID,
 			self::KEY_MOONRAKER_INTERNAL_URL,
 			'',
-		)) !== '';
+		)) !== '') {
+			return true;
+		}
+		$raw = trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_MULTI_PRINTERS,
+			'',
+		));
+		if ($raw === '') {
+			return false;
+		}
+		$decoded = json_decode($raw, true);
+		return is_array($decoded) && $decoded !== [];
 	}
 
 	public function isSlicerConfigured(): bool
@@ -202,25 +215,97 @@ class ConfigService
 				return $row;
 			}
 		}
-		return null;
+		return $this->sessionPrinters->getById($id);
+	}
+
+	/**
+	 * Resolve Moonraker base URL for a printer id. Empty id selects the default
+	 * configured printer. Non-empty unknown ids throw — no silent fallback.
+	 *
+	 * @throws \InvalidArgumentException when printer_id is unknown or Moonraker is not configured
+	 */
+	public function resolveMoonrakerUrlOrFail(?string $printerId = null): string
+	{
+		if ($printerId !== null && $printerId !== '') {
+			$row = $this->getMultiPrinterById($printerId);
+			if ($row === null) {
+				throw new \InvalidArgumentException('unknown_printer');
+			}
+			if (isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
+				return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+			}
+			throw new \InvalidArgumentException('moonraker_url_missing');
+		}
+
+		$row = $this->getMultiPrinterById(null);
+		if ($row !== null && isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
+			return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+		}
+		$fallback = $this->getMoonrakerInternalUrl();
+		if ($fallback === '') {
+			throw new \InvalidArgumentException('moonraker_not_configured');
+		}
+
+		return $fallback;
 	}
 
 	public function resolveMoonrakerUrl(?string $printerId = null): string
 	{
-		$row = $this->getMultiPrinterById($printerId);
-		if ($row !== null && isset($row['moonraker_url']) && is_string($row['moonraker_url']) && trim($row['moonraker_url']) !== '') {
-			return $this->internalUrlResolver->resolveUrl(trim($row['moonraker_url']));
+		try {
+			return $this->resolveMoonrakerUrlOrFail($printerId);
+		} catch (\InvalidArgumentException) {
+			return $this->getMoonrakerInternalUrl();
 		}
-		return $this->getMoonrakerInternalUrl();
+	}
+
+	/**
+	 * @throws \InvalidArgumentException when printer_id is unknown
+	 */
+	public function resolveCameraUrlOrFail(?string $printerId = null): string
+	{
+		if ($printerId !== null && $printerId !== '') {
+			$row = $this->getMultiPrinterById($printerId);
+			if ($row === null) {
+				throw new \InvalidArgumentException('unknown_printer');
+			}
+			if (isset($row['camera_url']) && is_string($row['camera_url']) && trim($row['camera_url']) !== '') {
+				return trim($row['camera_url']);
+			}
+		} else {
+			$row = $this->getMultiPrinterById(null);
+			if ($row !== null && isset($row['camera_url']) && is_string($row['camera_url']) && trim($row['camera_url']) !== '') {
+				return trim($row['camera_url']);
+			}
+		}
+
+		return $this->getMoonrakerCameraUrl();
 	}
 
 	public function resolveCameraUrl(?string $printerId = null): string
 	{
-		$row = $this->getMultiPrinterById($printerId);
-		if ($row !== null && isset($row['camera_url']) && is_string($row['camera_url']) && trim($row['camera_url']) !== '') {
-			return trim($row['camera_url']);
+		try {
+			return $this->resolveCameraUrlOrFail($printerId);
+		} catch (\InvalidArgumentException) {
+			return $this->getMoonrakerCameraUrl();
 		}
-		return $this->getMoonrakerCameraUrl();
+	}
+
+	public static function moonrakerHostFingerprint(?string $url): string
+	{
+		if ($url === null || trim($url) === '') {
+			return '';
+		}
+		$parsed = parse_url(trim($url));
+		if (!is_array($parsed)) {
+			return '';
+		}
+		$host = strtolower((string) ($parsed['host'] ?? ''));
+		if ($host === '') {
+			return '';
+		}
+		$port = (int) ($parsed['port'] ?? 7125);
+
+		return $host . ':' . $port;
 	}
 
 	/** @return list<string> */
@@ -248,14 +333,33 @@ class ConfigService
 	public function clientSafeMultiPrinters(): array
 	{
 		$out = [];
+		$seen = [];
 		foreach ($this->getMultiPrinters() as $row) {
-			$out[] = [
-				'id' => (string) ($row['id'] ?? ''),
-				'name' => (string) ($row['name'] ?? ''),
-				'default' => !empty($row['default']),
-			];
+			$out[] = $this->clientSafePrinterRow($row);
+			$seen[(string) ($row['id'] ?? '')] = true;
 		}
+		foreach ($this->sessionPrinters->list() as $row) {
+			$id = (string) ($row['id'] ?? '');
+			if ($id === '' || isset($seen[$id])) {
+				continue;
+			}
+			$out[] = $this->clientSafePrinterRow($row);
+		}
+
 		return $out;
+	}
+
+	/** @param array<string, mixed> $row */
+	private function clientSafePrinterRow(array $row): array
+	{
+		return [
+			'id' => (string) ($row['id'] ?? ''),
+			'name' => (string) ($row['name'] ?? ''),
+			'default' => !empty($row['default']),
+			'moonraker_host' => self::moonrakerHostFingerprint(
+				isset($row['moonraker_url']) && is_string($row['moonraker_url']) ? $row['moonraker_url'] : null,
+			),
+		];
 	}
 
 	/** @return array<string, mixed> */

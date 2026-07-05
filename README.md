@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.32.1** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.33.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -18,6 +18,8 @@ external slicer service** and no NC-GCS dependency.
   auto-orient, place-on-face, mirror, and plane-cut tools — the mesh you see is
   the mesh that slices (WYSIWYG, no "blind" slices)
 - Printer / filament / process profile pickers with quick-edit override settings
+- **Target printer picker** on Prepare — select or scan the Moonraker machine you
+  will send to (distinct from the slicer printer profile); gates Prepare → Slice
 - Mesh health check (triangles, open edges, watertight)
 
 **Slice** (self-contained — no external slicer)

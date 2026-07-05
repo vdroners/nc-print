@@ -3,6 +3,7 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { formatPrintTime, mergeProfileSettings, estimateFilamentCost, resolveFilamentPricePerKg } from '@/services/slicer-utils.js'
 import { lintGcode } from '@/services/analysis-api.js'
+import { toastError } from '@/services/toast.js'
 
 export default {
 	name: 'SliceResultPanel',
@@ -180,6 +181,7 @@ export default {
 				this.lintedJobId = id
 			} catch (e) {
 				this.lint = null
+				toastError('G-code lint check failed', e)
 			} finally {
 				this.lintBusy = false
 			}

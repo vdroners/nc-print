@@ -209,7 +209,11 @@ class MoonrakerProxyController extends Controller
 	{
 		$printerId = $this->request->getParam('printer_id');
 		$printerId = is_string($printerId) && $printerId !== '' ? $printerId : null;
-		$base = rtrim($this->config->resolveMoonrakerUrl($printerId), '/');
+		try {
+			$base = rtrim($this->config->resolveMoonrakerUrlOrFail($printerId), '/');
+		} catch (\InvalidArgumentException) {
+			return null;
+		}
 		$parts = parse_url($base);
 		if ($parts === false || !isset($parts['scheme'], $parts['host'])) {
 			return null;

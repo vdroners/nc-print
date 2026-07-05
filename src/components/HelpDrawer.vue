@@ -47,6 +47,7 @@ export default {
 		return {
 			tab: 'workflow',
 			calibrationLinks: CALIBRATION_LINKS,
+			tabOrder: ['workflow', 'calibration', 'services', 'limits'],
 		}
 	},
 	watch: {
@@ -71,6 +72,30 @@ export default {
 		close() {
 			this.$emit('update:open', false)
 		},
+		selectTab(id) {
+			this.tab = id
+		},
+		onTabKeydown(e) {
+			const idx = this.tabOrder.indexOf(this.tab)
+			if (idx < 0) {
+				return
+			}
+			let next = idx
+			if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+				next = (idx + 1) % this.tabOrder.length
+			} else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+				next = (idx - 1 + this.tabOrder.length) % this.tabOrder.length
+			} else if (e.key === 'Home') {
+				next = 0
+			} else if (e.key === 'End') {
+				next = this.tabOrder.length - 1
+			} else {
+				return
+			}
+			e.preventDefault()
+			this.tab = this.tabOrder[next]
+			this.$refs[`tab-${this.tab}`]?.[0]?.focus?.()
+		},
 	},
 }
 </script>
@@ -82,42 +107,23 @@ export default {
 		:name="'nc-print-help'"
 		@close="close">
 		<div class="nc-print-help">
-			<div class="nc-print-help-tabs" role="tablist">
+			<div class="nc-print-help-tabs" role="tablist" @keydown="onTabKeydown">
 				<button
+					v-for="tabId in tabOrder"
+					:key="tabId"
+					:ref="`tab-${tabId}`"
 					type="button"
 					role="tab"
 					class="nc-print-help-tabs__btn"
-					:class="{ 'nc-print-help-tabs__btn--active': tab === 'workflow' }"
-					@click="tab = 'workflow'">
-					Workflow
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="nc-print-help-tabs__btn"
-					:class="{ 'nc-print-help-tabs__btn--active': tab === 'calibration' }"
-					@click="tab = 'calibration'">
-					Calibration
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="nc-print-help-tabs__btn"
-					:class="{ 'nc-print-help-tabs__btn--active': tab === 'services' }"
-					@click="tab = 'services'">
-					Services
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class="nc-print-help-tabs__btn"
-					:class="{ 'nc-print-help-tabs__btn--active': tab === 'limits' }"
-					@click="tab = 'limits'">
-					Limitations
+					:class="{ 'nc-print-help-tabs__btn--active': tab === tabId }"
+					:aria-selected="tab === tabId ? 'true' : 'false'"
+					:tabindex="tab === tabId ? 0 : -1"
+					@click="selectTab(tabId)">
+					{{ tabId === 'workflow' ? 'Workflow' : tabId === 'calibration' ? 'Calibration' : tabId === 'services' ? 'Services' : 'Limitations' }}
 				</button>
 			</div>
 
-			<div v-if="tab === 'workflow'" role="tabpanel">
+			<div v-if="tab === 'workflow'" role="tabpanel" aria-labelledby="tab-workflow">
 				<h2 style="margin-top: 0;">Prepare → Slice → Print</h2>
 				<ol style="padding-left: 1.2em; line-height: 1.6; color: var(--nc-gcs-text-secondary);">
 					<li><strong>Prepare</strong> — import or pick a model, choose printer/filament/process profiles, preview on the bed.</li>

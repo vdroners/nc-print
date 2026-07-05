@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.33.0] - 2026-07-05
+
+### Added
+
+- **Target printer on Prepare** — shared `TargetPrinterPicker` with scan, connection chip, and capability label; distinct from slicer printer profile.
+- **Session printer registry** — `POST /api/printers/register-session` so discovered printers route to the correct Moonraker host server-side.
+- **Slice handoff actions** — send G-code / send-and-start from `SliceHandoffCard` after slice-only; target summary with link back to Prepare.
+
+### Fixed
+
+- Save-gcode fatal (`FilesController` now passes `IRootFolder` to `GcodeSaveController`).
+- Unknown `printer_id` returns HTTP 400 instead of silently hitting the default Moonraker URL.
+- Workflow gates: `previewBlocked` respects `model.sliceFile`; slice buttons honor `sliceBlockReason`; `prepareComplete` requires target printer.
+- Temperature control toasts only on successful commands; reconnecting vs offline labels; deep-link G-code upload keeps pending until upload succeeds.
+- Discovery ACL relaxed to `canUseApp()`; printer dedupe via `moonraker_host`; mesh transform prefs restored on same model reload.
+
 ## [1.32.1] - 2026-07-04
 
 ### App Store publication readiness

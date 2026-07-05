@@ -19,9 +19,14 @@ export default {
 			return this.printStore.lastCompletedSliceStats
 		},
 		checklistProgress() {
-			const rows = this.printStore.prepareChecklist || []
-			const ready = rows.filter(r => r.ok).length
-			return { ready, total: rows.length }
+			return this.printStore.prepareChecklistProgress
+		},
+		targetLabel() {
+			const p = this.printStore.activeTargetPrinter
+			if (!p?.name) {
+				return 'No target selected'
+			}
+			return this.printStore.targetConnectionLabel || p.name
 		},
 		timeLabel() {
 			return this.stats ? formatPrintTime(this.stats.estimatedTimeS) : '—'
@@ -40,6 +45,20 @@ export default {
 	methods: {
 		goPrint() {
 			this.printStore.setActiveTab(TABS.PRINT)
+		},
+		goPrepareTarget() {
+			this.printStore.setActiveTab(TABS.PREPARE)
+			window.dispatchEvent(new CustomEvent('nc-print-checklist-action', { detail: { action: 'target' } }))
+		},
+		async sendGcode() {
+			await this.printStore.sendSliceGcodeToPrinter({ start: false })
+		},
+		async sendAndStart() {
+			const confirmed = await this.printStore.requestPrePrintConfirm()
+			if (!confirmed) {
+				return
+			}
+			await this.printStore.sendSliceGcodeToPrinter({ start: true })
 		},
 	},
 }
@@ -62,6 +81,10 @@ export default {
 		</div>
 
 		<template v-if="done">
+			<p class="nc-print-handoff__target">
+				Target: <strong>{{ targetLabel }}</strong>
+				<button type="button" class="nc-print-link-btn" @click="goPrepareTarget">Change → Prepare</button>
+			</p>
 			<dl class="nc-print-slice-result__list">
 				<div>
 					<dt>Time</dt>
@@ -81,17 +104,33 @@ export default {
 				</div>
 			</dl>
 			<div class="nc-print-actions">
-				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="goPrint">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="sendAndStart">
+					Send and start print
+				</button>
+				<button type="button" class="nc-print-btn" @click="sendGcode">
+					Send G-code only
+				</button>
+				<button type="button" class="nc-print-btn" @click="goPrint">
 					Monitor on Print →
 				</button>
 			</div>
 		</template>
 
-		<SliceSummaryCard v-else class="nc-print-handoff__summary" />
+		<template v-else>
+			<p v-if="printStore.selectedPrinterId" class="nc-print-handoff__target">
+				Target: <strong>{{ targetLabel }}</strong>
+				<button type="button" class="nc-print-link-btn" @click="goPrepareTarget">Change → Prepare</button>
+			</p>
+			<SliceSummaryCard class="nc-print-handoff__summary" />
+		</template>
 	</div>
 </template>
 
 <style scoped>
+.nc-print-handoff__target {
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 12px;
+}
 .nc-print-handoff__summary {
 	/* SliceSummaryCard is itself a card; flatten it inside the handoff card. */
 	backdrop-filter: none;

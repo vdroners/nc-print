@@ -69,7 +69,13 @@ export default {
 				if (stepId === TABS.SLICE) {
 					toastInfo(this.printStore.firstPrepareBlocker || 'Complete Prepare first')
 				} else if (stepId === TABS.PRINT) {
-					toastInfo('Connect a printer to monitor')
+					if (!this.printStore.appStatus.moonraker_enabled) {
+						toastInfo('Moonraker disabled in Admin settings')
+					} else if (!this.printStore.printMonitorReachable && !this.printStore.printStepEnabled) {
+						toastInfo('Connect a printer to monitor')
+					} else {
+						toastInfo('Complete Slice first or connect a printer')
+					}
 				}
 				return
 			}

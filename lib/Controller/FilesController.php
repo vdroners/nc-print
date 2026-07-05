@@ -106,7 +106,7 @@ class FilesController extends Controller
 	#[NoCSRFRequired]
 	public function saveGcode(): Http\Response
 	{
-		$controller = new GcodeSaveController($this->request, $this->access, $this->files);
+		$controller = new GcodeSaveController($this->request, $this->access, $this->files, $this->rootFolder);
 		return $controller->saveGcode();
 	}
 }

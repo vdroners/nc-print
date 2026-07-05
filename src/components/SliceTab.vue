@@ -57,14 +57,17 @@ export default {
 			return this.printStore.sliceBlockReason
 		},
 		sliceActionsDisabled() {
-			return this.slicing || this.slicerDisabled || !this.printStore.profilesReady
+			return this.slicing || this.slicerDisabled || !!this.sliceBlockReason
 		},
 		sliceDisabledTitle() {
+			if (this.slicing) {
+				return 'Slicing in progress'
+			}
+			if (this.sliceBlockReason) {
+				return this.sliceBlockReason
+			}
 			if (this.slicerDisabled) {
 				return 'Slicer offline'
-			}
-			if (!this.printStore.profilesReady) {
-				return this.printStore.sliceBlockReason
 			}
 			return ''
 		},
@@ -252,10 +255,6 @@ export default {
 						Retry slice
 					</button>
 				</div>
-
-				<p v-if="sliceBlockReason && !slicing" class="nc-print-slice-warn">
-					{{ sliceBlockReason }}
-				</p>
 
 				<div class="nc-print-actions">
 					<button

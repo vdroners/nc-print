@@ -32,6 +32,15 @@ export async function discoverPrinters(opts = {}) {
 }
 
 /**
+ * Register a discovered printer for this browser session (server-side routing).
+ * @param {object} printer { id, name, moonraker_url, camera_url? }
+ */
+export async function registerSessionPrinter(printer) {
+	const { data } = await axios.post(`${apiBase()}/register-session`, printer)
+	return data.printer || null
+}
+
+/**
  * Detect a printer's real capabilities live from Moonraker/Klipper (build
  * volume, extruder count, model/OS). Returns the capabilities object or null.
  * @param {string} [printerId]

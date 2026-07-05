@@ -10,14 +10,14 @@ use OCA\NcPrint\Service\ConfigService;
 use OCA\NcPrint\Service\PrinterDiscoveryService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
-use OCP\AppFramework\Http\Attribute\AdminRequired;
+use OCP\AppFramework\Http\Attribute\NoAdminRequired;
 use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
 
 /**
- * In-app printer discovery for the printer picker (admin-only — server-side LAN scan).
+ * In-app printer discovery for the printer picker (group-gated LAN scan).
  */
 class PrinterDiscoveryController extends Controller
 {
@@ -31,17 +31,11 @@ class PrinterDiscoveryController extends Controller
 	}
 
 	#[NoCSRFRequired]
-	#[AdminRequired]
+	#[NoAdminRequired]
 	public function discover(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {
 			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
-		}
-		if (!$this->access->isAdmin()) {
-			return new JSONResponse([
-				'error' => 'forbidden',
-				'message' => 'Printer discovery requires administrator privileges.',
-			], Http::STATUS_FORBIDDEN);
 		}
 		$params = $this->request->getParams();
 		$configured = (string) $this->config->getAppValue(

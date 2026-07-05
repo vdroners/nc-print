@@ -17,12 +17,19 @@ import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
-import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi } from '@/services/printers-api.js'
+import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi, registerSessionPrinter } from '@/services/printers-api.js'
 import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
-import { previewBlocked, printMonitorReachable, sliceBlockReason as computeSliceBlockReason } from '@/utils/workflow-gates.js'
+import {
+	previewBlocked,
+	printMonitorReachable,
+	sliceBlockReason as computeSliceBlockReason,
+	isPrepareComplete,
+	firstPrepareBlocker as computeFirstPrepareBlocker,
+	prepareChecklistProgress,
+} from '@/utils/workflow-gates.js'
 import { TABS } from '@/constants/tabs.js'
 
 // Re-exported for backward compatibility; the source of truth is the leaf
@@ -42,6 +49,26 @@ const NOTIF_PROMPT_KEY = 'nc_print_notif_prompted_v1'
 /** Find a profile row by id (string-compared), tolerant of number/string ids. */
 function findById(list, id) {
 	return Array.isArray(list) ? list.find(p => String(p.id) === String(id)) : undefined
+}
+
+function deriveMoonrakerHost(url) {
+	if (!url) {
+		return ''
+	}
+	try {
+		const u = new URL(url)
+		const port = u.port || '7125'
+		return `${u.hostname.toLowerCase()}:${port}`
+	} catch {
+		return String(url).toLowerCase()
+	}
+}
+
+function deriveCameraUrl(moonrakerUrl) {
+	if (!moonrakerUrl) {
+		return ''
+	}
+	return moonrakerUrl.replace(/:\d+$/, '') + ':8080/?action=snapshot'
 }
 
 function loadPrefs() {
@@ -250,6 +277,9 @@ export const usePrintStore = defineStore('print', {
 		discoveredPrinters: [],
 		discovering: false,
 		discoverError: '',
+		lastDiscoverCount: -1,
+		lastDiscoverAt: 0,
+		configLoadError: '',
 		// Live-detected capabilities per printer id (build volume, extruders,
 		// model/OS), cached for the session. { [id]: {..} | null (=fetched, none) }
 		printerCapabilities: {},
@@ -391,10 +421,13 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 		printerStatusLabel(state) {
+			const st = (state.printerState.state || '').toLowerCase()
 			if (!state.printerState.connected) {
+				if (st === 'reconnecting') {
+					return 'Reconnecting'
+				}
 				return 'Offline'
 			}
-			const st = (state.printerState.state || '').toLowerCase()
 			if (st.includes('print')) {
 				return 'Printing'
 			}
@@ -410,19 +443,48 @@ export const usePrintStore = defineStore('print', {
 			return state.printerState.state || 'Connected'
 		},
 		printerStatusClass(state) {
-			const label = state.printerState.connected
-				? (state.printerState.state || '').toLowerCase()
-				: 'offline'
+			const st = (state.printerState.state || '').toLowerCase()
 			if (!state.printerState.connected) {
+				if (st === 'reconnecting') {
+					return 'reconnecting'
+				}
 				return 'idle'
 			}
-			if (label.includes('print')) {
+			if (st.includes('print')) {
 				return 'printing'
 			}
-			if (label.includes('error')) {
+			if (st.includes('pause')) {
+				return 'paused'
+			}
+			if (st.includes('error')) {
 				return 'error'
 			}
 			return 'ready'
+		},
+		targetConnectionLabel() {
+			const name = this.activeTargetPrinter?.name || 'No printer'
+			if (!this.selectedPrinterId) {
+				return ''
+			}
+			if (!this.printerState.connected) {
+				const st = (this.printerState.state || '').toLowerCase()
+				if (st === 'reconnecting') {
+					return `${name} · reconnecting…`
+				}
+				return `${name} · offline`
+			}
+			const st = this.printerStatusLabel
+			return `${name} · ${st.toLowerCase()}`
+		},
+		targetConnectionClass() {
+			if (!this.selectedPrinterId) {
+				return ''
+			}
+			if (!this.printerState.connected) {
+				const st = (this.printerState.state || '').toLowerCase()
+				return st === 'reconnecting' ? 'is-reconnecting' : 'is-offline'
+			}
+			return 'is-online'
 		},
 		printerControls(state) {
 			const st = (state.printerState.state || '').toLowerCase()
@@ -466,27 +528,10 @@ export const usePrintStore = defineStore('print', {
 			return bedTemp < bedTarget - 2 && (bedPower ?? 0) > 0.01
 		},
 		prepareComplete(state) {
-			const slicerOk = state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok
-			const sliceReady = !state.model.file
-				? false
-				: !state.model.name?.toLowerCase().endsWith('.3mf')
-					|| !!state.model.sliceFile
-			const meshReady = !state.model.file
-				|| (
-					sliceReady
-					&& !state.model.convertError
-					&& !state.meshState.dirty
-				)
-			return !!state.model.file
-				&& !previewBlocked(state)
-				&& meshReady
-				&& !!state.selection.printerId
-				&& !!state.selection.filamentId
-				&& !!state.selection.processId
-				&& slicerOk
+			return isPrepareComplete(state)
 		},
 		sliceComplete(state) {
-			return state.sliceJob.status === 'done'
+			return state.sliceJob.status === 'done' && !!state.sliceJob.gcodeBlob
 		},
 		// WS4/WS5: filament + time rollup from the last completed slice in this
 		// session. Null until a slice finishes.
@@ -541,8 +586,9 @@ export const usePrintStore = defineStore('print', {
 				},
 				{
 					id: 'watertight',
-					label: 'Mesh watertight',
+					label: 'Mesh watertight (optional)',
 					pending: !state.model.file,
+					advisory: true,
 					ok: !state.model.file
 						|| (state.meshHealth.analyzed && state.meshHealth.watertight),
 					hint: state.meshHealth.analyzed
@@ -552,9 +598,9 @@ export const usePrintStore = defineStore('print', {
 				},
 				{
 					id: 'printer',
-					label: 'Printer profile',
+					label: 'Slicer profile',
 					ok: !!state.selection.printerId,
-					hint: 'Choose a printer on Prepare (or check slicer profiles)',
+					hint: 'Choose a slicer printer profile on Prepare',
 					action: 'printer',
 				},
 				{
@@ -578,33 +624,29 @@ export const usePrintStore = defineStore('print', {
 					hint: 'Start nc-print-slicer or check Admin settings',
 					action: 'slicer',
 				},
+				{
+					id: 'target',
+					label: 'Target printer selected',
+					ok: !!state.selectedPrinterId,
+					hint: 'Choose the Moonraker printer to send to',
+					action: 'target',
+				},
+				{
+					id: 'target_online',
+					label: 'Target printer online',
+					advisory: true,
+					ok: !state.selectedPrinterId || !!state.printerState.connected,
+					hint: state.printerState.message || 'Printer unreachable — check network or selection',
+					action: 'target',
+				},
 			]
 			return rows
 		},
 		firstPrepareBlocker(state) {
-			for (const row of [
-				{ ok: !!state.model.file, label: 'Model loaded', hint: 'Import or pick a file from Nextcloud' },
-				{
-					ok: !state.model.file
-						|| (
-							(!state.model.name?.toLowerCase().endsWith('.3mf') || !!state.model.sliceFile)
-							&& !state.model.convertError
-							&& !state.meshState.dirty
-						),
-					label: 'Slice-ready mesh',
-					hint: state.model.convertError
-						|| (state.meshState.dirty ? 'Apply viewport transform to slice mesh' : '3MF mesh extraction failed — export STL'),
-				},
-				{ ok: !!state.selection.printerId, label: 'Printer profile', hint: 'Choose a printer on Prepare' },
-				{ ok: !!state.selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
-				{ ok: !!state.selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
-				{ ok: state.appStatus.loaded && state.appStatus.slicer_enabled && state.appStatus.slicer_ok, label: 'Slicer service', hint: 'Start nc-print-slicer sidecar' },
-			]) {
-				if (!row.ok) {
-					return `${row.label}: ${row.hint}`
-				}
-			}
-			return ''
+			return computeFirstPrepareBlocker(state)
+		},
+		prepareChecklistProgress(state) {
+			return prepareChecklistProgress(state)
 		},
 		printStepEnabled(state) {
 			return state.sliceJob.status === 'done'
@@ -635,10 +677,19 @@ export const usePrintStore = defineStore('print', {
 
 				if (stepId === TABS.PREPARE) {
 					const model = state.model.name || 'Import a model'
+					const target = (() => {
+						const p = state.configuredPrinters.find(x => String(x.id) === String(state.selectedPrinterId))
+						const name = p?.name || state.selectedPrinterId
+						if (!name) {
+							return ''
+						}
+						const st = (state.printerState.state || 'unknown').toLowerCase()
+						return ` → ${name} (${st})`
+					})()
 					if (profileNames) {
-						return `${model} · ${profileNames}`
+						return `${model} · ${profileNames}${target}`
 					}
-					return model
+					return `${model}${target}`
 				}
 				if (stepId === TABS.SLICE) {
 					if (state.sliceJob.status === 'running') {
@@ -721,12 +772,17 @@ export const usePrintStore = defineStore('print', {
 			const rest = configured.filter(p => !recentIds.has(String(p.id)))
 			// Discovered: drop anything whose URL/host already matches a
 			// configured printer (avoid offering to "add" what you already have).
-			const knownUrls = new Set(
-				configured.map(p => String(p.moonraker_url || '').toLowerCase()).filter(Boolean),
+			const knownHosts = new Set(
+				configured.map(p => String(p.moonraker_host || p.moonraker_url || '').toLowerCase()).filter(Boolean),
 			)
-			const discovered = state.discoveredPrinters.filter(
-				d => !knownUrls.has(String(d.moonraker_url || '').toLowerCase()),
-			)
+			const discovered = state.discoveredPrinters.filter((d) => {
+				const url = String(d.moonraker_url || '').toLowerCase()
+				if (knownHosts.has(url)) {
+					return false
+				}
+				const host = deriveMoonrakerHost(d.moonraker_url)
+				return !host || !knownHosts.has(host)
+			})
 			return { recent, configured: rest, discovered }
 		},
 		/** Live-detected capabilities for the active target printer (or null). */
@@ -818,6 +874,7 @@ export const usePrintStore = defineStore('print', {
 			}
 			this.meshState = defaultMeshState()
 			this.resetMeshHealth()
+			this._applyMeshPrefsForModel(file?.name || '')
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
 			this._updateModelMetaFromFile(file)
@@ -1084,6 +1141,32 @@ export const usePrintStore = defineStore('print', {
 			})
 		},
 
+		_applyMeshPrefsForModel(modelName) {
+			if (!modelName) {
+				return
+			}
+			const prefs = loadPrefs()
+			const mt = prefs.meshTransform
+			if (!mt || typeof mt !== 'object' || mt.modelName !== modelName) {
+				return
+			}
+			if (Array.isArray(mt.position)) {
+				this.meshState.position = [...mt.position]
+			}
+			if (Array.isArray(mt.rotation)) {
+				this.meshState.rotation = [...mt.rotation]
+			}
+			if (Array.isArray(mt.scale)) {
+				this.meshState.scale = [...mt.scale]
+			}
+			if (typeof mt.autoApply === 'boolean') {
+				this.meshState.autoApply = mt.autoApply
+			}
+			if (typeof mt.dirty === 'boolean') {
+				this.meshState.dirty = mt.dirty
+			}
+		},
+
 		_persistOverrides() {
 			savePrefs({ overrides: { ...this.overrides } })
 		},
@@ -1180,6 +1263,7 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		async loadConfig() {
+			this.configLoadError = ''
 			try {
 				this.config = await fetchConfig()
 				this.savedPresets = loadPresets()
@@ -1187,9 +1271,12 @@ export const usePrintStore = defineStore('print', {
 				if (!this.selectedPrinterId && def?.id) {
 					this.selectedPrinterId = def.id
 				}
+				this._validateSelectedPrinterId()
 			} catch (e) {
 				console.warn('[nc_print] config load failed:', e?.message || e)
+				this.configLoadError = e?.message || 'Config load failed'
 				this.config = {}
+				toastError('Could not load NC 3D Print configuration', e)
 			}
 		},
 
@@ -1238,11 +1325,41 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		onPrinterTargetChange() {
+			this._resetPrinterState()
 			savePrefs({ selectedPrinterId: this.selectedPrinterId })
 			this.recordPrinterUsage(this.selectedPrinterId)
 			this.stopPrinterPolling()
 			this.startPrinterPolling()
 			void this.fetchPrinterCapabilities(this.selectedPrinterId)
+		},
+
+		_resetPrinterState() {
+			this.printerState = {
+				connected: false,
+				state: 'unknown',
+				message: '',
+				progress: 0,
+				filename: '',
+				layer: null,
+				totalLayers: null,
+				extruderTemp: null,
+				extruderTarget: null,
+				bedTemp: null,
+				bedTarget: null,
+				printDuration: null,
+				remainingTime: null,
+			}
+		},
+
+		_validateSelectedPrinterId() {
+			if (!this.selectedPrinterId) {
+				return
+			}
+			const known = this.configuredPrinters.some(p => String(p.id) === String(this.selectedPrinterId))
+			if (!known) {
+				const def = this.configuredPrinters.find(p => p.default) || this.configuredPrinters[0]
+				this.selectedPrinterId = def?.id || ''
+			}
 		},
 
 		/**
@@ -1303,7 +1420,8 @@ export const usePrintStore = defineStore('print', {
 			this.discoverError = ''
 			try {
 				const found = await discoverPrintersApi(opts)
-				// Derive a stable id + display name for the picker.
+				this.lastDiscoverCount = found.length
+				this.lastDiscoverAt = Date.now()
 				this.discoveredPrinters = found.map((f) => ({
 					...f,
 					id: 'found:' + (f.host || f.moonraker_url),
@@ -1312,6 +1430,8 @@ export const usePrintStore = defineStore('print', {
 				return this.discoveredPrinters
 			} catch (e) {
 				this.discoverError = e?.response?.data?.message || e?.message || 'Scan failed'
+				this.lastDiscoverCount = 0
+				this.lastDiscoverAt = Date.now()
 				return []
 			} finally {
 				this.discovering = false
@@ -1319,38 +1439,52 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		/**
-		 * Add a discovered printer to the in-session configured list and select
-		 * it. This does NOT persist to admin config (that stays an admin action)
-		 * — it makes the printer usable now and remembers it via recent. Returns
-		 * the added printer's id.
+		 * Add a discovered printer to the session and select it.
 		 * @param {object} found a discoveredPrinters entry
 		 */
-		addDiscoveredPrinter(found) {
+		async addDiscoveredPrinter(found) {
 			if (!found?.moonraker_url) {
 				return null
 			}
 			const id = found.id || ('found:' + found.host)
+			const moonrakerUrl = found.moonraker_url
+			const cameraUrl = deriveCameraUrl(moonrakerUrl)
+			const url = String(moonrakerUrl).toLowerCase()
+
+			try {
+				await registerSessionPrinter({
+					id,
+					name: found.name || found.hostname || found.host || id,
+					moonraker_url: moonrakerUrl,
+					camera_url: cameraUrl,
+				})
+			} catch (e) {
+				toastError('Could not register printer for this session', e)
+				return null
+			}
+
 			const printer = {
 				id,
 				name: found.name || found.hostname || found.host,
-				moonraker_url: found.moonraker_url,
-				camera_url: '',
+				moonraker_url: moonrakerUrl,
+				moonraker_host: deriveMoonrakerHost(moonrakerUrl),
+				camera_url: cameraUrl,
 				default: false,
 				_discovered: true,
 			}
-			// Merge into config.multi_printers (in-memory) so configuredPrinters
-			// picks it up, unless an entry with the same URL already exists.
 			const rows = Array.isArray(this.config?.multi_printers)
 				? [...this.config.multi_printers]
 				: [...this.configuredPrinters]
-			const url = String(found.moonraker_url).toLowerCase()
-			const existing = rows.find(p => String(p.moonraker_url || '').toLowerCase() === url)
+			const existing = rows.find(p => {
+				const rowUrl = String(p.moonraker_url || '').toLowerCase()
+				const rowHost = String(p.moonraker_host || deriveMoonrakerHost(p.moonraker_url)).toLowerCase()
+				return rowUrl === url || (rowHost && rowHost === deriveMoonrakerHost(moonrakerUrl))
+			})
 			const targetId = existing ? existing.id : id
 			if (!existing) {
 				rows.push(printer)
 				this.config = { ...(this.config || {}), multi_printers: rows }
 			}
-			// Remove from the discovered list now that it's configured.
 			this.discoveredPrinters = this.discoveredPrinters.filter(
 				d => String(d.moonraker_url || '').toLowerCase() !== url,
 			)
@@ -1403,6 +1537,7 @@ export const usePrintStore = defineStore('print', {
 			if (prefs.selectedPrinterId) {
 				this.selectedPrinterId = prefs.selectedPrinterId
 			}
+			this._validateSelectedPrinterId()
 			if (typeof prefs.overridesCollapsed === 'boolean') {
 				this.overridesCollapsed = prefs.overridesCollapsed
 			}
@@ -2024,6 +2159,23 @@ export const usePrintStore = defineStore('print', {
 			toastWarning('G-code no longer available — slice again first')
 		},
 
+		async sendSliceGcodeToPrinter({ start = false } = {}) {
+			if (!this.sliceJob.gcodeBlob) {
+				toastWarning('G-code no longer available — slice again first')
+				return false
+			}
+			if (!this.selectedPrinterId) {
+				toastError('Choose a target printer on Prepare first')
+				return false
+			}
+			await this.sendGcodeToPrinter(
+				this.sliceJob.gcodeBlob,
+				this.sliceJob.gcodeFilename || 'job.gcode',
+				start,
+			)
+			return true
+		},
+
 		clearPendingPrintUpload() {
 			this.pendingPrintUpload = null
 		},
@@ -2053,6 +2205,7 @@ export const usePrintStore = defineStore('print', {
 					this.activeTab = TABS.PRINT
 				} catch (e) {
 					toastError('Could not load G-code from Nextcloud', e)
+					this.pendingPrintUpload = null
 				}
 				return
 			}

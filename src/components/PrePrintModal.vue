@@ -4,9 +4,11 @@ import { usePrintStore } from '@/store/print.js'
 import { activateFocusTrap } from '@/composables/useFocusTrap.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
+import TargetPrinterPicker from './TargetPrinterPicker.vue'
 
 export default {
 	name: 'PrePrintModal',
+	components: { TargetPrinterPicker },
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
@@ -44,8 +46,13 @@ export default {
 				},
 				{
 					id: 'profiles',
-					label: 'Printer, filament, and process selected',
+					label: 'Slicer profile, filament, and process selected',
 					ok: this.printStore.profilesReady,
+				},
+				{
+					id: 'target',
+					label: 'Target printer selected',
+					ok: !!this.printStore.selectedPrinterId,
 				},
 				{
 					id: 'slicer',
@@ -139,6 +146,7 @@ export default {
 				<p class="nc-print-preprint-modal__lead">
 					Confirm the checklist below. G-code will upload to the printer and start printing.
 				</p>
+				<TargetPrinterPicker variant="modal" :show-scan="false" select-id="nc-print-target-printer-modal" />
 				<div class="nc-print-preprint-modal__camera nc-print-camera-panel">
 					<img
 						v-if="cameraFrameUrl && !cameraError"

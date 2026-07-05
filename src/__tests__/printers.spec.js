@@ -30,7 +30,14 @@ vi.mock('@/services/mesh-convert.js', async (importOriginal) => {
 	return { ...actual, convert3mfToStlBuffer: vi.fn(), list3mfBuildItems: vi.fn(async () => []) }
 })
 
-import { discoverPrinters, fetchCapabilities } from '@/services/printers-api.js'
+vi.mock('@/services/printers-api.js', async (importOriginal) => {
+	const actual = await importOriginal()
+	return {
+		...actual,
+		registerSessionPrinter: vi.fn(async (p) => p),
+	}
+})
+import { discoverPrinters, fetchCapabilities, registerSessionPrinter } from '@/services/printers-api.js'
 import axios from '@nextcloud/axios'
 import { usePrintStore } from '@/store/print.js'
 
@@ -149,21 +156,22 @@ describe('print store discovery actions', () => {
 		expect(store.discovering).toBe(false)
 	})
 
-	it('addDiscoveredPrinter adds to config, selects it, and drops it from discovered', () => {
+	it('addDiscoveredPrinter registers session, adds to config, selects it', async () => {
 		const store = usePrintStore()
-		// Polling is out of scope here (needs a live WS client); stub it.
 		store.stopPrinterPolling = vi.fn()
 		store.startPrinterPolling = vi.fn()
+		store.fetchPrinterCapabilities = vi.fn(async () => null)
 		store.config = { multi_printers: [{ id: 'a', name: 'A', moonraker_url: 'http://10.0.0.5:7125' }] }
 		store.discoveredPrinters = [
 			{ id: 'found:10.0.0.9', name: 'new', host: '10.0.0.9', moonraker_url: 'http://10.0.0.9:7125' },
 		]
-		const id = store.addDiscoveredPrinter(store.discoveredPrinters[0])
+		registerSessionPrinter.mockResolvedValueOnce({ id: 'found:10.0.0.9' })
+		const id = await store.addDiscoveredPrinter(store.discoveredPrinters[0])
+		expect(registerSessionPrinter).toHaveBeenCalled()
 		expect(id).toBe('found:10.0.0.9')
 		expect(store.selectedPrinterId).toBe('found:10.0.0.9')
 		expect(store.configuredPrinters.map(p => p.id)).toContain('found:10.0.0.9')
 		expect(store.discoveredPrinters).toHaveLength(0)
-		// Selecting it also recorded usage.
 		expect(store.recentPrinters[0].id).toBe('found:10.0.0.9')
 	})
 })

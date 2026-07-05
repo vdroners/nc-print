@@ -27,6 +27,10 @@ export const BREAKPOINTS = Object.freeze({
 export function previewBlocked(state) {
 	const meta = state.modelMeta || {}
 	const mesh = state.meshState || {}
+	const model = state.model || {}
+	if (model.sliceFile) {
+		return false
+	}
 	return !!meta.previewSkipped && !mesh.sliceBlob
 }
 
@@ -119,5 +123,91 @@ export function isPrepareComplete(state) {
 		&& !!selection.printerId
 		&& !!selection.filamentId
 		&& !!selection.processId
+		&& !!state.selectedPrinterId
 		&& !!slicerOk
+}
+
+/**
+ * First blocker message for Prepare → Slice navigation.
+ * @param {object} state
+ * @returns {string}
+ */
+export function firstPrepareBlocker(state) {
+	const model = state.model || {}
+	const selection = state.selection || {}
+	const appStatus = state.appStatus || {}
+	const meshState = state.meshState || {}
+
+	for (const row of [
+		{ ok: !!model.file, label: 'Model loaded', hint: 'Import or pick a file from Nextcloud' },
+		{
+			ok: !previewBlocked(state),
+			label: 'Mesh preview available',
+			hint: 'No mesh preview — re-import or wait for 3MF extraction',
+		},
+		{
+			ok: !model.file
+				|| (
+					(!String(model.name || '').toLowerCase().endsWith('.3mf') || !!model.sliceFile)
+					&& !model.convertError
+					&& !meshState.dirty
+				),
+			label: 'Slice-ready mesh',
+			hint: model.convertError
+				|| (meshState.dirty ? 'Apply viewport transform to slice mesh' : '3MF mesh extraction failed — export STL'),
+		},
+		{ ok: !!selection.printerId, label: 'Slicer profile', hint: 'Choose a slicer profile on Prepare' },
+		{ ok: !!selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
+		{ ok: !!selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
+		{ ok: !!state.selectedPrinterId, label: 'Target printer', hint: 'Choose a target printer on Prepare' },
+		{
+			ok: appStatus.loaded && appStatus.slicer_enabled && appStatus.slicer_ok,
+			label: 'Slicer service',
+			hint: 'Start nc-print-slicer sidecar',
+		},
+	]) {
+		if (!row.ok) {
+			return `${row.label}: ${row.hint}`
+		}
+	}
+	return ''
+}
+
+/**
+ * Rows that gate prepareComplete for checklist progress tallies.
+ * @param {object} state
+ * @returns {number}
+ */
+export function prepareChecklistGatingTotal() {
+	return 8
+}
+
+/**
+ * Count of gating checklist rows that pass (excludes pending + advisory).
+ * @param {object} state
+ * @returns {{ ready: number, total: number }}
+ */
+export function prepareChecklistProgress(state) {
+	const model = state.model || {}
+	const selection = state.selection || {}
+	const appStatus = state.appStatus || {}
+	const meshState = state.meshState || {}
+	const slicerOk = appStatus.loaded && appStatus.slicer_enabled && appStatus.slicer_ok
+	const rows = [
+		!!model.file,
+		!previewBlocked(state),
+		!model.file
+			|| (
+				(!String(model.name || '').toLowerCase().endsWith('.3mf') || !!model.sliceFile)
+				&& !model.convertError
+				&& !meshState.dirty
+			),
+		!!selection.printerId,
+		!!selection.filamentId,
+		!!selection.processId,
+		!!state.selectedPrinterId,
+		!!slicerOk,
+	]
+	const ready = rows.filter(Boolean).length
+	return { ready, total: rows.length }
 }

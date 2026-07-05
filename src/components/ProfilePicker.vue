@@ -16,13 +16,25 @@ export default {
 	computed: {
 		...mapStores(usePrintStore),
 		filteredPrinters() {
-			return this.filterList(this.printStore.profiles.printers, this.printerFilter)
+			return this.filterListWithSelection(
+				this.printStore.profiles.printers,
+				this.printerFilter,
+				this.printStore.selection.printerId,
+			)
 		},
 		filteredFilaments() {
-			return this.filterList(this.printStore.profiles.filaments, this.filamentFilter)
+			return this.filterListWithSelection(
+				this.printStore.profiles.filaments,
+				this.filamentFilter,
+				this.printStore.selection.filamentId,
+			)
 		},
 		filteredProcesses() {
-			return this.filterList(this.printStore.profiles.processes, this.processFilter)
+			return this.filterListWithSelection(
+				this.printStore.profiles.processes,
+				this.processFilter,
+				this.printStore.selection.processId,
+			)
 		},
 	},
 	methods: {
@@ -35,6 +47,17 @@ export default {
 				const label = `${p.name || ''} ${p.id || ''} ${p.vendor || ''}`.toLowerCase()
 				return label.includes(q)
 			})
+		},
+		filterListWithSelection(list, query, selectedId) {
+			const filtered = this.filterList(list, query)
+			if (!selectedId) {
+				return filtered
+			}
+			const selected = list.find(p => String(p.id) === String(selectedId))
+			if (!selected || filtered.some(p => String(p.id) === String(selectedId))) {
+				return filtered
+			}
+			return [selected, ...filtered]
 		},
 		optionLabel(p) {
 			return `${p.name || p.id}${p.vendor ? ` — ${p.vendor}` : ''}`
@@ -57,7 +80,7 @@ export default {
 <template>
 	<div class="nc-print-profile-picker">
 		<div class="nc-print-field">
-			<label for="nc-print-printer-filter">Printer</label>
+			<label for="nc-print-printer-filter">Slicer printer profile</label>
 			<input
 				id="nc-print-printer-filter"
 				v-model="printerFilter"

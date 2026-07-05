@@ -27,6 +27,13 @@ export default {
 			saveCollapsibleState(this.id, this.open)
 			this.$emit('toggle', this.open)
 		},
+		expand() {
+			if (!this.open) {
+				this.open = true
+				saveCollapsibleState(this.id, true)
+				this.$emit('toggle', true)
+			}
+		},
 	},
 }
 </script>

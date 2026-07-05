@@ -92,14 +92,17 @@ export default {
 		},
 		async withBusy(fn) {
 			this.busy = true
+			let ok = false
 			try {
 				await fn()
 				await this.printStore.refreshPrinterState()
+				ok = true
 			} catch (e) {
 				toastError('Temperature command failed', e)
 			} finally {
 				this.busy = false
 			}
+			return ok
 		},
 		async applyTargets() {
 			const nozzle = this.nozzleInput !== '' ? Number(this.nozzleInput) : undefined
@@ -108,8 +111,10 @@ export default {
 				toastError('Enter a nozzle or bed target temperature')
 				return
 			}
-			await this.withBusy(() => setTemperature({ nozzle, bed }, this.printerId))
-			toastSuccess('Temperature targets sent')
+			const ok = await this.withBusy(() => setTemperature({ nozzle, bed }, this.printerId))
+			if (ok) {
+				toastSuccess('Temperature targets sent')
+			}
 		},
 		async preheat(preset) {
 			const row = PRESETS[preset]
@@ -118,14 +123,18 @@ export default {
 			}
 			this.nozzleInput = String(row.nozzle)
 			this.bedInput = String(row.bed)
-			await this.withBusy(() => setTemperature({ nozzle: row.nozzle, bed: row.bed }, this.printerId))
-			toastSuccess(`${preset} preheat started`)
+			const ok = await this.withBusy(() => setTemperature({ nozzle: row.nozzle, bed: row.bed }, this.printerId))
+			if (ok) {
+				toastSuccess(`${preset} preheat started`)
+			}
 		},
 		async onCooldown() {
-			await this.withBusy(() => cooldown(this.printerId))
-			this.nozzleInput = '0'
-			this.bedInput = '0'
-			toastSuccess('Cooling down')
+			const ok = await this.withBusy(() => cooldown(this.printerId))
+			if (ok) {
+				this.nozzleInput = '0'
+				this.bedInput = '0'
+				toastSuccess('Cooling down')
+			}
 		},
 	},
 }

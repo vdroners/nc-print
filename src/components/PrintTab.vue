@@ -83,7 +83,14 @@ export default {
 			return this.printStore.printerControls
 		},
 		isOffline() {
+			if (this.printStore.printerState.connected) {
+				return false
+			}
+			return (this.printStore.printerState.state || '').toLowerCase() !== 'reconnecting'
+		},
+		isReconnecting() {
 			return !this.printStore.printerState.connected
+				&& (this.printStore.printerState.state || '').toLowerCase() === 'reconnecting'
 		},
 		showIdleGuide() {
 			return this.printStore.printerState.connected
@@ -227,9 +234,11 @@ export default {
 			if (!pending?.blob) {
 				return
 			}
-			this.printStore.clearPendingPrintUpload()
 			const file = new File([pending.blob], pending.filename, { type: 'text/plain' })
-			await this.uploadGcodeFile(file, false)
+			const ok = await this.uploadGcodeFile(file, this.startAfterUpload)
+			if (ok) {
+				this.printStore.clearPendingPrintUpload()
+			}
 		},
 		goSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
@@ -274,15 +283,17 @@ export default {
 		async uploadGcodeFile(file, startAfterUpload = this.startAfterUpload) {
 			if (!file?.name?.toLowerCase().endsWith('.gcode')) {
 				toastError('Select a .gcode file')
-				return
+				return false
 			}
 			this.uploadBusy = true
 			try {
 				await uploadAndStart(file, file.name, startAfterUpload, this.printerId)
 				toastSuccess(startAfterUpload ? 'Print started' : 'G-code uploaded')
 				await this.printStore.refreshPrinterState()
+				return true
 			} catch (e) {
 				toastError('Upload failed', e)
+				return false
 			} finally {
 				this.uploadBusy = false
 			}
@@ -322,7 +333,13 @@ export default {
 		<UpdateControlPanel />
 		<AnnouncementsBanner />
 
-		<div v-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
+		<div v-if="isReconnecting" class="nc-print-banner nc-print-banner--warn" role="status">
+			<p class="nc-print-banner__body">
+				Reconnecting to Moonraker…
+			</p>
+		</div>
+
+		<div v-else-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
 			<h2 class="nc-print-banner__title">
 				<span class="nc-print-card__title-row">
 					<NcPrintIcon name="alert" :size="18" />

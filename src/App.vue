@@ -103,9 +103,13 @@ export default {
 			if (e.key === '1') {
 				this.printStore.setActiveTab(TABS.PREPARE)
 			} else if (e.key === '2') {
-				this.printStore.setActiveTab(TABS.SLICE)
+				if (this.printStore.prepareComplete) {
+					this.printStore.setActiveTab(TABS.SLICE)
+				}
 			} else if (e.key === '3') {
-				this.printStore.setActiveTab(TABS.PRINT)
+				if (this.printStore.printMonitorReachable || this.printStore.printStepEnabled) {
+					this.printStore.setActiveTab(TABS.PRINT)
+				}
 			} else if (e.key.toLowerCase() === 'r' && !mod) {
 				this.recenterShortcut()
 			}
