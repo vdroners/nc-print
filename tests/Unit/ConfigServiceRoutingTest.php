@@ -122,4 +122,45 @@ class ConfigServiceRoutingTest extends TestCase
 		$url = $this->makeService($config, $resolver, $session)->resolveMoonrakerProbeUrl();
 		$this->assertSame('http://resolved:7125', $url);
 	}
+
+	public function testGetDiscoverySubnetFromAppConfig(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = '') {
+				if ($key === ConfigService::KEY_DISCOVERY_SUBNET) {
+					return '10.0.0.';
+				}
+				return $default;
+			},
+		);
+
+		$this->assertSame('10.0.0.', $this->makeService($config)->getDiscoverySubnet());
+	}
+
+	public function testApplyDiscoveryDefaultsInjectsSubnet(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturnCallback(
+			static function (string $app, string $key, string $default = '') {
+				if ($key === ConfigService::KEY_DISCOVERY_SUBNET) {
+					return '192.168.1.';
+				}
+				return $default;
+			},
+		);
+
+		$params = $this->makeService($config)->applyDiscoveryDefaults([]);
+		$this->assertSame('192.168.1.', $params['subnet']);
+	}
+
+	public function testApplyDiscoveryDefaultsPreservesExplicitHosts(): void
+	{
+		$config = $this->createMock(IConfig::class);
+		$config->method('getAppValue')->willReturn('10.0.0.');
+
+		$params = $this->makeService($config)->applyDiscoveryDefaults(['hosts' => '10.0.0.210']);
+		$this->assertSame('10.0.0.210', $params['hosts']);
+		$this->assertArrayNotHasKey('subnet', $params);
+	}
 }

@@ -42,6 +42,35 @@ describe('chrome bar — health only when broken (G30a)', () => {
 		expect(cards.map(c => c.kind)).not.toContain('moonraker_setup')
 	})
 
+	it('suppresses moonraker setup when the target printer is live', () => {
+		const status = {
+			loaded: true,
+			slicer_enabled: true,
+			slicer_ok: true,
+			slicer_configured: true,
+			moonraker_enabled: true,
+			moonraker_configured: false,
+			moonraker_ok: false,
+		}
+		const cards = buildRecoveryCards(status, { targetPrinterConnected: true })
+		expect(cards.map(c => c.kind)).not.toContain('moonraker_setup')
+	})
+
+	it('suppresses moonraker setup when status lists session printers', () => {
+		const status = {
+			loaded: true,
+			slicer_enabled: true,
+			slicer_ok: true,
+			slicer_configured: true,
+			moonraker_enabled: true,
+			moonraker_configured: false,
+			moonraker_ok: false,
+			multi_printers: [{ id: 'found:10.0.0.9', name: 'K1' }],
+		}
+		const cards = buildRecoveryCards(status, {})
+		expect(cards.map(c => c.kind)).not.toContain('moonraker_setup')
+	})
+
 	it('isHealthy accepts live target printer when global moonraker_ok is false', () => {
 		expect(isHealthy(
 			{ slicer_ok: true, moonraker_ok: false },

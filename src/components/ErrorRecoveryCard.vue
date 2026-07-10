@@ -34,8 +34,8 @@ export default {
 					'Deploy the nc-print-slicer container (see docs/INSTALL.md) if you want in-browser slicing.',
 				],
 				moonraker_setup: [
-					'Open Admin → NC 3D Print and set your Moonraker printer URL.',
-					'Use Discover printers (admin) or enter the URL manually.',
+					'On Prepare, click Scan for printers and choose Use on your printer.',
+					'Or open Admin → NC 3D Print to save a Moonraker URL permanently.',
 				],
 				moonraker_offline: [
 					'Verify the printer is powered on and Moonraker responds on the LAN.',

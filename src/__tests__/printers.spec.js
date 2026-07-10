@@ -137,6 +137,10 @@ describe('print store discovery actions', () => {
 
 	it('discoverPrinters populates discoveredPrinters with derived id/name', async () => {
 		const store = usePrintStore()
+		store.stopPrinterPolling = vi.fn()
+		store.startPrinterPolling = vi.fn()
+		store.fetchPrinterCapabilities = vi.fn(async () => null)
+		store.selectedPrinterId = 'keep-me'
 		axios.post.mockResolvedValueOnce({
 			data: { printers: [{ host: '10.0.0.42', moonraker_url: 'http://10.0.0.42:7125', hostname: 'voron', klippy_state: 'ready' }] },
 		})
@@ -173,6 +177,83 @@ describe('print store discovery actions', () => {
 		expect(store.configuredPrinters.map(p => p.id)).toContain('found:10.0.0.9')
 		expect(store.discoveredPrinters).toHaveLength(0)
 		expect(store.recentPrinters[0].id).toBe('found:10.0.0.9')
+	})
+	it('discoverPrinters auto-selects when exactly one printer is found', async () => {
+		const store = usePrintStore()
+		store.stopPrinterPolling = vi.fn()
+		store.startPrinterPolling = vi.fn()
+		store.fetchPrinterCapabilities = vi.fn(async () => null)
+		store.config = { multi_printers: [] }
+		axios.post.mockResolvedValueOnce({
+			data: { printers: [{ host: '10.0.0.42', moonraker_url: 'http://10.0.0.42:7125', hostname: 'k1', klippy_state: 'ready' }] },
+		})
+		registerSessionPrinter.mockResolvedValueOnce({ id: 'found:10.0.0.42' })
+		await store.discoverPrinters()
+		expect(registerSessionPrinter).toHaveBeenCalled()
+		expect(store.selectedPrinterId).toBe('found:10.0.0.42')
+	})
+
+	it('connectPrinterByHost probes a single IP and selects the printer', async () => {
+		const store = usePrintStore()
+		store.stopPrinterPolling = vi.fn()
+		store.startPrinterPolling = vi.fn()
+		store.fetchPrinterCapabilities = vi.fn(async () => null)
+		store.config = { multi_printers: [] }
+		axios.post.mockResolvedValueOnce({
+			data: { printers: [{ host: '10.0.0.210', moonraker_url: 'http://10.0.0.210:7125', klippy_state: 'ready' }] },
+		})
+		registerSessionPrinter.mockResolvedValueOnce({ id: 'found:10.0.0.210' })
+		const id = await store.connectPrinterByHost('10.0.0.210')
+		expect(axios.post).toHaveBeenCalledWith(
+			'https://cloud.example/apps/nc_print/api/printers/discover',
+			{ hosts: '10.0.0.210' },
+		)
+		expect(id).toBe('found:10.0.0.210')
+		expect(store.selectedPrinterId).toBe('found:10.0.0.210')
+	})
+})
+
+describe('print store target printer validation', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('configuredPrinters is empty when multi_printers missing', () => {
+		const store = usePrintStore()
+		store.config = {}
+		expect(store.configuredPrinters).toEqual([])
+	})
+
+	it('_validateSelectedPrinterId clears ghost default id', () => {
+		const store = usePrintStore()
+		store.config = { multi_printers: [] }
+		store.selectedPrinterId = 'default'
+		localStorage.setItem('nc_print_prefs_v1', JSON.stringify({ selectedPrinterId: 'default' }))
+		store._validateSelectedPrinterId()
+		expect(store.selectedPrinterId).toBe('')
+	})
+
+	it('ensureSessionTarget re-registers from cached targetPrinter prefs', async () => {
+		const store = usePrintStore()
+		store.config = { multi_printers: [] }
+		localStorage.setItem('nc_print_prefs_v1', JSON.stringify({
+			selectedPrinterId: 'found:10.0.0.9',
+			targetPrinter: {
+				id: 'found:10.0.0.9',
+				name: 'Voron',
+				moonraker_url: 'http://10.0.0.9:7125',
+				camera_url: 'http://10.0.0.9:8080/?action=stream',
+			},
+		}))
+		registerSessionPrinter.mockResolvedValueOnce({ id: 'found:10.0.0.9' })
+		await store.ensureSessionTarget()
+		expect(registerSessionPrinter).toHaveBeenCalledWith(expect.objectContaining({
+			id: 'found:10.0.0.9',
+			moonraker_url: 'http://10.0.0.9:7125',
+		}))
+		expect(store.selectedPrinterId).toBe('found:10.0.0.9')
+		expect(store.configuredPrinters.map(p => p.id)).toContain('found:10.0.0.9')
 	})
 })
 

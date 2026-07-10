@@ -736,14 +736,7 @@ export const usePrintStore = defineStore('print', {
 		},
 		configuredPrinters(state) {
 			const rows = state.config?.multi_printers
-			if (Array.isArray(rows) && rows.length) {
-				return rows
-			}
-			return [{
-				id: 'default',
-				name: state.appStatus.printer_display_name || state.config?.printer_display_name || 'Printer',
-				default: true,
-			}]
+			return Array.isArray(rows) ? rows : []
 		},
 		activeTargetPrinter(state) {
 			const id = state.selectedPrinterId || state.configuredPrinters.find(p => p.default)?.id || state.configuredPrinters[0]?.id
@@ -1286,11 +1279,47 @@ export const usePrintStore = defineStore('print', {
 					printerId: this.selectedPrinterId || undefined,
 				})
 				this.appStatus = { ...data, loaded: true }
+				this._applyStatusPrinters(data.multi_printers)
 			} catch (e) {
 				this.appStatus.loaded = true
 				this.appStatus.slicer_ok = false
 				this.appStatus.moonraker_ok = false
 				this.appStatus.slicer_error = e?.message || 'status_failed'
+			}
+		},
+
+		/**
+		 * Merge server-reported session/admin printers into local config and
+		 * auto-select when exactly one target is available.
+		 * @param {Array<object>|undefined} rows
+		 */
+		_applyStatusPrinters(rows) {
+			if (!Array.isArray(rows) || rows.length === 0) {
+				return
+			}
+			const existing = Array.isArray(this.config?.multi_printers)
+				? [...this.config.multi_printers]
+				: []
+			const byId = new Map(existing.map(p => [String(p.id), { ...p }]))
+			for (const row of rows) {
+				const id = String(row.id || '')
+				if (!id) {
+					continue
+				}
+				const prev = byId.get(id) || {}
+				byId.set(id, { ...prev, ...row, id })
+			}
+			this.config = { ...(this.config || {}), multi_printers: [...byId.values()] }
+			if (!this.selectedPrinterId) {
+				const pick = rows.find(p => p.default) || rows[0]
+				if (pick?.id) {
+					this.selectedPrinterId = String(pick.id)
+					savePrefs({ selectedPrinterId: this.selectedPrinterId })
+					void this.ensureSessionTarget()
+					this.onPrinterTargetChange()
+				}
+			} else {
+				this._validateSelectedPrinterId()
 			}
 		},
 
@@ -1329,6 +1358,7 @@ export const usePrintStore = defineStore('print', {
 		onPrinterTargetChange() {
 			this._resetPrinterState()
 			savePrefs({ selectedPrinterId: this.selectedPrinterId })
+			this._persistTargetPrinterCache()
 			this.recordPrinterUsage(this.selectedPrinterId)
 			this.stopPrinterPolling()
 			this.startPrinterPolling()
@@ -1358,11 +1388,102 @@ export const usePrintStore = defineStore('print', {
 			if (!this.selectedPrinterId) {
 				return
 			}
-			const known = this.configuredPrinters.some(p => String(p.id) === String(this.selectedPrinterId))
-			if (!known) {
-				const def = this.configuredPrinters.find(p => p.default) || this.configuredPrinters[0]
-				this.selectedPrinterId = def?.id || ''
+			const id = String(this.selectedPrinterId)
+			const known = this.configuredPrinters.some(p => String(p.id) === id)
+			if (known) {
+				return
 			}
+			// Stale localStorage (e.g. ghost "default" or session-only found:* before re-register).
+			this.selectedPrinterId = ''
+			savePrefs({ selectedPrinterId: '' })
+		},
+
+		_mergeLocalPrinterRow(row) {
+			if (!row?.id || !row?.moonraker_url) {
+				return
+			}
+			const rows = Array.isArray(this.config?.multi_printers)
+				? [...this.config.multi_printers]
+				: []
+			const idx = rows.findIndex(p => String(p.id) === String(row.id))
+			const entry = {
+				id: String(row.id),
+				name: row.name || String(row.id),
+				moonraker_url: row.moonraker_url,
+				camera_url: row.camera_url || deriveCameraUrl(row.moonraker_url),
+				moonraker_host: deriveMoonrakerHost(row.moonraker_url),
+				default: false,
+			}
+			if (idx >= 0) {
+				rows[idx] = { ...rows[idx], ...entry }
+			} else {
+				rows.push(entry)
+			}
+			this.config = { ...(this.config || {}), multi_printers: rows }
+		},
+
+		_persistTargetPrinterCache() {
+			const id = this.selectedPrinterId
+			if (!id) {
+				savePrefs({ targetPrinter: null })
+				return
+			}
+			const row = (this.config?.multi_printers || []).find(p => String(p.id) === String(id))
+			if (!row?.moonraker_url) {
+				return
+			}
+			savePrefs({
+				targetPrinter: {
+					id: String(row.id),
+					name: row.name || String(row.id),
+					moonraker_url: row.moonraker_url,
+					camera_url: row.camera_url || deriveCameraUrl(row.moonraker_url),
+				},
+			})
+		},
+
+		/**
+		 * Re-register a session-scoped target after reload (PHP session may be empty
+		 * even though localStorage still holds the printer id).
+		 */
+		async ensureSessionTarget() {
+			const prefs = loadPrefs()
+			let cached = prefs.targetPrinter
+			const id = String(this.selectedPrinterId || cached?.id || '')
+			if (!id) {
+				return
+			}
+			if (!this.selectedPrinterId && cached?.id) {
+				this.selectedPrinterId = String(cached.id)
+			}
+			if (!cached?.moonraker_url) {
+				const recent = this.recentPrinters.find(
+					r => String(r.id) === id && r.moonraker_url,
+				)
+				if (recent) {
+					cached = {
+						id: recent.id,
+						name: recent.name || recent.id,
+						moonraker_url: recent.moonraker_url,
+						camera_url: recent.camera_url || deriveCameraUrl(recent.moonraker_url),
+					}
+				}
+			}
+			if (cached?.id === id && cached?.moonraker_url) {
+				try {
+					await registerSessionPrinter({
+						id: cached.id,
+						name: cached.name || cached.id,
+						moonraker_url: cached.moonraker_url,
+						camera_url: cached.camera_url || deriveCameraUrl(cached.moonraker_url),
+					})
+					this._mergeLocalPrinterRow(cached)
+					this._persistTargetPrinterCache()
+				} catch (e) {
+					console.warn('[nc_print] session target re-register failed:', e?.message || e)
+				}
+			}
+			this._validateSelectedPrinterId()
 		},
 
 		/**
@@ -1400,10 +1521,17 @@ export const usePrintStore = defineStore('print', {
 			if (!id) {
 				return
 			}
-			const printer = findById(this.configuredPrinters, id)
-			const name = printer?.name || String(id)
+			const row = (this.config?.multi_printers || []).find(p => String(p.id) === String(id))
+			const name = row?.name || findById(this.configuredPrinters, id)?.name || String(id)
 			const at = Date.now()
-			const next = [{ id: String(id), name, at }]
+			const entry = {
+				id: String(id),
+				name,
+				at,
+				moonraker_url: row?.moonraker_url || '',
+				camera_url: row?.camera_url || '',
+			}
+			const next = [entry]
 			for (const r of this.recentPrinters) {
 				if (String(r.id) !== String(id) && next.length < RECENT_PRINTERS_MAX) {
 					next.push(r)
@@ -1411,6 +1539,70 @@ export const usePrintStore = defineStore('print', {
 			}
 			this.recentPrinters = next
 			persistRecentPrinters(next)
+		},
+
+		/**
+		 * Build discovery POST body: honour explicit opts, else server discovery_subnet.
+		 * @param {object} [opts]
+		 * @returns {object}
+		 */
+		_discoveryScanBody(opts = {}) {
+			const body = { ...opts }
+			if (!body.hosts && !body.subnet) {
+				const subnet = this.config?.discovery_subnet || this.bootstrap?.discovery_subnet
+				if (subnet) {
+					body.subnet = subnet
+				}
+			}
+			return body
+		},
+
+		/**
+		 * Connect to a printer by IP or Moonraker URL (bypasses full-subnet scan).
+		 * @param {string} hostRaw e.g. `10.0.0.210` or `http://10.0.0.210:7125`
+		 * @returns {Promise<string|null>} selected printer id
+		 */
+		async connectPrinterByHost(hostRaw) {
+			const raw = String(hostRaw || '').trim()
+			if (!raw) {
+				return null
+			}
+			let host = raw
+			if (/^https?:\/\//i.test(raw)) {
+				try {
+					host = new URL(raw).hostname
+				} catch {
+					toastError('Invalid printer URL')
+					return null
+				}
+			} else {
+				host = raw.split(':')[0].trim()
+			}
+			if (!host) {
+				return null
+			}
+			this.discovering = true
+			this.discoverError = ''
+			try {
+				const found = await discoverPrintersApi({ hosts: host })
+				if (!found.length) {
+					this.discoverError = `No Moonraker on ${host}:7125`
+					toastError(`No Moonraker printer at ${host}`)
+					return null
+				}
+				const entry = {
+					...found[0],
+					id: 'found:' + (found[0].host || host),
+					name: found[0].hostname || found[0].host || host,
+				}
+				return await this.addDiscoveredPrinter(entry)
+			} catch (e) {
+				this.discoverError = e?.response?.data?.message || e?.message || 'Connect failed'
+				toastError('Could not connect to printer', e)
+				return null
+			} finally {
+				this.discovering = false
+			}
 		},
 
 		/**
@@ -1422,7 +1614,7 @@ export const usePrintStore = defineStore('print', {
 			this.discovering = true
 			this.discoverError = ''
 			try {
-				const found = await discoverPrintersApi(opts)
+				const found = await discoverPrintersApi(this._discoveryScanBody(opts))
 				this.lastDiscoverCount = found.length
 				this.lastDiscoverAt = Date.now()
 				this.discoveredPrinters = found.map((f) => ({
@@ -1430,6 +1622,9 @@ export const usePrintStore = defineStore('print', {
 					id: 'found:' + (f.host || f.moonraker_url),
 					name: f.hostname || f.host || f.moonraker_url,
 				}))
+				if (this.discoveredPrinters.length === 1 && !this.selectedPrinterId) {
+					await this.addDiscoveredPrinter(this.discoveredPrinters[0])
+				}
 				return this.discoveredPrinters
 			} catch (e) {
 				this.discoverError = e?.response?.data?.message || e?.message || 'Scan failed'
@@ -1492,6 +1687,7 @@ export const usePrintStore = defineStore('print', {
 				d => String(d.moonraker_url || '').toLowerCase() !== url,
 			)
 			this.selectedPrinterId = targetId
+			this._mergeLocalPrinterRow({ ...printer, id: targetId })
 			this.onPrinterTargetChange()
 			void this.loadAppStatus()
 			return targetId
@@ -1589,6 +1785,7 @@ export const usePrintStore = defineStore('print', {
 					this.selection.processId = pickDefaultProfileId(this.profiles, 'process')
 				}
 				this.restorePrefs()
+				await this.ensureSessionTarget()
 				this.applyProfileDefaults()
 				this.selection.filamentIds = resolveFilamentIds(this.selection, this.extruderCount)
 			} catch (e) {
@@ -1598,10 +1795,24 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		async refreshPrinterState() {
+			if (!this.selectedPrinterId) {
+				this._resetPrinterState()
+				return
+			}
 			try {
-				const data = await fetchState(this.selectedPrinterId || undefined)
+				const data = await fetchState(this.selectedPrinterId)
 				this._applyPrinterState(mapPrinterState(data))
 			} catch (e) {
+				const status = e?.response?.status
+				const code = e?.response?.data?.error
+				if (status === 400 && (code === 'unknown_printer' || code === 'moonraker_url_missing')) {
+					this.selectedPrinterId = ''
+					savePrefs({ selectedPrinterId: '', targetPrinter: null })
+					this._resetPrinterState()
+					this.printerState.message = 'Target printer lost — scan and select again on Prepare'
+					console.debug('[nc_print] refreshPrinterState: cleared stale printer id')
+					return
+				}
 				this.printerState.connected = false
 				this.printerState.state = 'offline'
 				this.printerState.lastError = e?.message || 'Printer poll failed'

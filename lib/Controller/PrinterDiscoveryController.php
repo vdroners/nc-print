@@ -25,6 +25,7 @@ class PrinterDiscoveryController extends Controller
 		IRequest $request,
 		private IConfig $config,
 		private AccessService $access,
+		private ConfigService $configService,
 		private PrinterDiscoveryService $discovery,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -37,7 +38,7 @@ class PrinterDiscoveryController extends Controller
 		if (!$this->access->canUseApp()) {
 			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
 		}
-		$params = $this->request->getParams();
+		$params = $this->configService->applyDiscoveryDefaults($this->request->getParams());
 		$configured = (string) $this->config->getAppValue(
 			Application::APP_ID,
 			ConfigService::KEY_MOONRAKER_INTERNAL_URL,

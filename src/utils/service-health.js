@@ -25,7 +25,13 @@ export function isHealthy(status = {}, flags = {}) {
  */
 export function buildRecoveryCards(status = {}, ctx = {}) {
 	const cards = []
-	const hasTarget = !!(ctx.selectedPrinterId || ctx.hasTargetPrinter)
+	const sessionPrinters = Array.isArray(status.multi_printers) ? status.multi_printers : []
+	const hasTarget = !!(
+		ctx.selectedPrinterId
+		|| ctx.hasTargetPrinter
+		|| ctx.targetPrinterConnected
+		|| sessionPrinters.length > 0
+	)
 	const targetLive = !!ctx.targetPrinterConnected
 	if (status.loaded && status.slicer_enabled && status.slicer_configured === false) {
 		cards.push({
@@ -38,7 +44,7 @@ export function buildRecoveryCards(status = {}, ctx = {}) {
 	if (status.loaded && status.moonraker_enabled && status.moonraker_configured === false && !hasTarget) {
 		cards.push({
 			kind: 'moonraker_setup',
-			detail: 'Set your Moonraker URL in Admin → NC 3D Print before printing.',
+			detail: 'Scan for printers on Prepare and click Use, or set a Moonraker URL in Admin.',
 		})
 	} else if (status.loaded && status.moonraker_enabled && !status.moonraker_ok && !targetLive) {
 		cards.push({ kind: 'moonraker_offline', detail: status.moonraker_error || '' })

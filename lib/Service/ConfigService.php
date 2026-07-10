@@ -17,6 +17,8 @@ class ConfigService
 	public const KEY_PRINTER_DISPLAY_NAME = 'printer_display_name';
 	public const KEY_ALLOWED_GROUPS = 'allowed_groups';
 	public const KEY_MULTI_PRINTERS = 'multi_printers';
+	/** Optional /24 prefix for LAN discovery when Admin Moonraker URL is unset (e.g. `10.0.0.`). */
+	public const KEY_DISCOVERY_SUBNET = 'discovery_subnet';
 	/** WS11 G-code console: arbitrary command send. Default OFF. */
 	public const KEY_CONSOLE_ENABLED = 'console_enabled';
 
@@ -158,6 +160,67 @@ class ConfigService
 			self::KEY_MOONRAKER_INTERNAL_URL,
 			'',
 		)) !== '';
+	}
+
+	/**
+	 * /24 prefix used for in-app LAN discovery when no explicit hosts/subnet are
+	 * supplied. Env `NC_PRINT_DISCOVERY_SUBNET` or `NC_PRINT_HOST_LAN` wins over
+	 * the appconfig value.
+	 */
+	public function getDiscoverySubnet(): string
+	{
+		$fromEnv = getenv('NC_PRINT_DISCOVERY_SUBNET');
+		if (is_string($fromEnv) && trim($fromEnv) !== '') {
+			return self::normalizeDiscoverySubnet(trim($fromEnv));
+		}
+		$hostLan = getenv('NC_PRINT_HOST_LAN');
+		if (is_string($hostLan) && filter_var(trim($hostLan), FILTER_VALIDATE_IP)) {
+			if (preg_match('/^(\d+\.\d+\.\d+)\.\d+$/', trim($hostLan), $m)) {
+				return $m[1] . '.';
+			}
+		}
+		$raw = trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_DISCOVERY_SUBNET,
+			'',
+		));
+
+		return self::normalizeDiscoverySubnet($raw);
+	}
+
+	/**
+	 * @param array<string, mixed> $params
+	 * @return array<string, mixed>
+	 */
+	public function applyDiscoveryDefaults(array $params): array
+	{
+		if (trim((string) ($params['hosts'] ?? '')) !== '') {
+			return $params;
+		}
+		if (trim((string) ($params['subnet'] ?? '')) !== '') {
+			return $params;
+		}
+		$subnet = $this->getDiscoverySubnet();
+		if ($subnet !== '') {
+			$params['subnet'] = $subnet;
+		}
+
+		return $params;
+	}
+
+	private static function normalizeDiscoverySubnet(string $raw): string
+	{
+		if ($raw === '') {
+			return '';
+		}
+		if (preg_match('/^(\d+\.\d+\.\d+)\.$/', $raw, $m)) {
+			return $m[1] . '.';
+		}
+		if (preg_match('/^(\d+\.\d+\.\d+)\.\d+$/', $raw, $m)) {
+			return $m[1] . '.';
+		}
+
+		return '';
 	}
 
 	public function isMoonrakerConfigured(): bool
@@ -400,6 +463,7 @@ class ConfigService
 			'multi_printers' => $this->clientSafeMultiPrinters(),
 			'moonraker_configured' => $this->isMoonrakerConfigured(),
 			'slicer_configured' => $this->isSlicerConfigured(),
+			'discovery_subnet' => $this->getDiscoverySubnet(),
 			'slicer_proxy_base' => '/apps/' . Application::APP_ID . '/api/slicer',
 			'moonraker_proxy_base' => '/apps/' . Application::APP_ID . '/api/moonraker',
 			'camera_url' => '/apps/' . Application::APP_ID . '/api/camera/frame.jpeg',

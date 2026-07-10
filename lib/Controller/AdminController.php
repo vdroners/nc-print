@@ -19,6 +19,7 @@ class AdminController extends Controller
 	public function __construct(
 		IRequest $request,
 		private IConfig $config,
+		private ConfigService $configService,
 		private PrinterDiscoveryService $discovery,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -37,6 +38,7 @@ class AdminController extends Controller
 			ConfigService::KEY_PRINTER_DISPLAY_NAME,
 			ConfigService::KEY_ALLOWED_GROUPS,
 			ConfigService::KEY_MULTI_PRINTERS,
+			ConfigService::KEY_DISCOVERY_SUBNET,
 		];
 		foreach ($stringKeys as $key) {
 			if (array_key_exists($key, $params)) {
@@ -78,7 +80,7 @@ class AdminController extends Controller
 	#[NoCSRFRequired]
 	public function discoverPrinters(): JSONResponse
 	{
-		$params = $this->request->getParams();
+		$params = $this->configService->applyDiscoveryDefaults($this->request->getParams());
 		$configured = (string) $this->config->getAppValue(
 			Application::APP_ID,
 			ConfigService::KEY_MOONRAKER_INTERNAL_URL,

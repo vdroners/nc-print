@@ -11,8 +11,14 @@ export default {
 			validator: v => ['prepare', 'print', 'modal'].includes(v),
 		},
 		showScan: { type: Boolean, default: true },
+		showManualConnect: { type: Boolean, default: true },
 		label: { type: String, default: '' },
 		selectId: { type: String, default: 'nc-print-target-printer' },
+	},
+	data() {
+		return {
+			manualHost: '',
+		}
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -56,6 +62,12 @@ export default {
 		},
 		async scan() {
 			await this.printStore.discoverPrinters()
+		},
+		async connectManual() {
+			const id = await this.printStore.connectPrinterByHost(this.manualHost)
+			if (id) {
+				this.manualHost = ''
+			}
 		},
 		addFound(found) {
 			void this.printStore.addDiscoveredPrinter(found)
@@ -109,7 +121,35 @@ export default {
 
 		<p v-else-if="scanDoneEmpty" class="nc-print-multi-printer__empty">
 			No Moonraker printers found on the network.
+			<span v-if="printStore.config?.discovery_subnet">
+				Scanned {{ printStore.config.discovery_subnet }}0/24 from the server.
+			</span>
+			<span v-else>
+				Try Connect by IP below, or set discovery subnet in Admin → NC 3D Print.
+			</span>
 		</p>
+
+		<div v-if="showManualConnect" class="nc-print-multi-printer__manual">
+			<label for="nc-print-manual-host">Connect by IP</label>
+			<div class="nc-print-multi-printer__manual-row">
+				<input
+					id="nc-print-manual-host"
+					v-model="manualHost"
+					type="text"
+					inputmode="decimal"
+					class="nc-print-multi-printer__manual-input"
+					placeholder="10.0.0.210"
+					:disabled="printStore.discovering"
+					@keydown.enter.prevent="connectManual">
+				<button
+					type="button"
+					class="nc-print-multi-printer__scan"
+					:disabled="printStore.discovering || !manualHost.trim()"
+					@click="connectManual">
+					Connect
+				</button>
+			</div>
+		</div>
 
 		<div v-if="hasDiscovered" class="nc-print-multi-printer__found">
 			<p class="nc-print-multi-printer__found-title">Found on network</p>
@@ -251,5 +291,23 @@ export default {
 	margin: 6px 0 0;
 	font-size: 0.7rem;
 	color: var(--color-text-maxcontrast, #8b949e);
+}
+.nc-print-multi-printer__manual {
+	margin-top: var(--nc-gcs-space-sm);
+}
+.nc-print-multi-printer__manual-row {
+	display: flex;
+	gap: 8px;
+	margin-top: 4px;
+}
+.nc-print-multi-printer__manual-input {
+	flex: 1;
+	min-width: 0;
+	border: 1px solid var(--color-border, #30363d);
+	border-radius: 6px;
+	background: var(--color-main-background, #0d1117);
+	color: inherit;
+	padding: 6px 10px;
+	font-size: 0.85rem;
 }
 </style>

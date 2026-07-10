@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.33.4] - 2026-07-05
+
+### Fixed
+
+- LAN scan no longer probes only `.local` hostnames when Admin Moonraker URL is unset — uses `discovery_subnet` appconfig / `NC_PRINT_DISCOVERY_SUBNET` / `NC_PRINT_HOST_LAN` to sweep the lab subnet (e.g. `10.0.0.0/24`).
+- **Connect by IP** on Prepare target picker — enter `10.0.0.210` (or full Moonraker URL) without a full-subnet scan.
+
+## [1.33.3] - 2026-07-05
+
+### Fixed
+
+- Health banner no longer shows "Printer not configured" when a session target exists, the printer is live, or status lists session printers.
+- Status API probes Moonraker whenever a routable target URL exists (session/admin), not only when Admin URL is saved.
+- Scan auto-selects when exactly one printer is found; session printers from status sync into the target picker on load.
+- Recovery card copy points operators to Prepare → Scan → Use instead of Admin-only setup.
+
+## [1.33.2] - 2026-07-05
+
+### Fixed
+
+- Ghost `printer_id=default` no longer synthesized client-side when Admin has no Moonraker URL — stale localStorage default id cleared instead of polling a non-existent printer.
+- Session target printers re-register on page load from cached `targetPrinter` prefs so `/api/printer/state` routes correctly after reload.
+- State poll skips when no target selected; HTTP 400 `unknown_printer` clears stale selection with an actionable message.
+
 ## [1.33.1] - 2026-07-05
 
 ### Fixed

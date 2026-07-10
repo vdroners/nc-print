@@ -73,10 +73,11 @@ class ApiController extends Controller
 		$moonrakerBase = $this->configService->resolveMoonrakerProbeUrl(
 			$probePrinterId !== '' ? $probePrinterId : null,
 		);
+		$moonrakerProbeConfigured = trim($moonrakerBase) !== '';
 		$moonrakerProbe = $this->probeUrl(
 			$moonrakerBase . '/server/info',
 			$this->configService->isMoonrakerEnabled(),
-			$this->configService->isMoonrakerConfigured(),
+			$moonrakerProbeConfigured,
 		);
 
 		return new JSONResponse([
@@ -98,7 +99,8 @@ class ApiController extends Controller
 			'moonraker_latency_ms' => $moonrakerProbe['latency_ms'],
 			'moonraker_error' => $moonrakerProbe['error'],
 			'console_enabled' => $this->configService->isConsoleEnabled(),
-			'moonraker_configured' => $this->configService->isMoonrakerConfigured(),
+			'moonraker_configured' => $this->configService->isMoonrakerConfigured()
+				|| $moonrakerProbeConfigured,
 			'slicer_configured' => $this->configService->isSlicerConfigured(),
 			// WS-foundation feature detection: which optional Moonraker
 			// components / plugins exist so the UI can hide unsupported tabs.
