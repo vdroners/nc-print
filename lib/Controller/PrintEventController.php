@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\Activity\Provider;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
+use OCA\NcPrint\Service\PrintHistoryService;
 use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -31,7 +32,10 @@ use Psr\Log\LoggerInterface;
 class PrintEventController extends Controller
 {
 	/** @var list<string> */
-	private const VALID = ['complete', 'error', 'started'];
+	private const VALID = ['complete', 'error', 'started', 'cancel'];
+
+	/** Terminal transitions that produce a durable history row. */
+	private const TERMINAL = ['complete', 'error', 'cancel'];
 
 	public function __construct(
 		IRequest $request,
@@ -39,6 +43,7 @@ class PrintEventController extends Controller
 		private IUserSession $userSession,
 		private INotificationManager $notificationManager,
 		private IActivityManager $activityManager,
+		private PrintHistoryService $history,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -68,6 +73,33 @@ class PrintEventController extends Controller
 		$printer = trim((string) ($params['printer'] ?? ''));
 		$durationHuman = self::humanDuration($params['duration_s'] ?? null);
 		$uid = $user->getUID();
+
+		// Durable history: one row per terminated print. Best-effort — the
+		// service swallows its own failures, and we never let it block the UI.
+		if (in_array($transition, self::TERMINAL, true)) {
+			$this->history->record($uid, [
+				'result' => $transition,
+				'filename' => $filename,
+				'printer_id' => (string) ($params['printer_id'] ?? $printer),
+				'printer_name' => $params['printer_name'] ?? ($printer ?: null),
+				'material' => $params['material'] ?? null,
+				'nozzle_diameter' => $params['nozzle_diameter'] ?? null,
+				'failure_reason' => $params['failure_reason'] ?? null,
+				'started_at' => $params['started_at'] ?? null,
+				'ended_at' => $params['ended_at'] ?? null,
+				'duration_s' => $params['duration_s'] ?? null,
+				'slicer_duration_s' => $params['slicer_duration_s'] ?? null,
+				'filament_g' => $params['filament_g'] ?? null,
+				'filament_mm' => $params['filament_mm'] ?? null,
+				'layer_height' => $params['layer_height'] ?? null,
+			]);
+		}
+
+		// Cancel is history-only: the user knows they cancelled, so we don't fire
+		// a "failed" bell/activity entry for it.
+		if ($transition === 'cancel') {
+			return new JSONResponse(['ok' => true, 'published' => false, 'recorded' => true]);
+		}
 
 		try {
 			$this->publishNotification($uid, $transition, $filename, $durationHuman);

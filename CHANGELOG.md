@@ -1,5 +1,52 @@
 # Changelog
 
+## [1.37.0] - 2026-07-10
+
+Durable print history + quality metrics + heuristic consumable-wear estimates.
+This adds the app's **first database table** (previously all state lived in
+app-config); history is unbounded over time and the metrics/wear roll-ups want
+real SQL aggregation.
+
+### Added — print history (new DB layer)
+
+- **Schema/migration** `Version000001Date20260710120000` creates
+  `oc_ncprint_prints` (one row per terminated print, per user), indexed by
+  uid / printer / result / ended_at. Timestamps are unix-second bigints for
+  portability (sqlite/mysql/pgsql). The table is dropped automatically on app
+  uninstall by the framework.
+- **Db layer**: `PrintRecord` entity + `PrintRecordMapper` (QBMapper) with
+  ownership-scoped find/list/count/delete and SQL-pushed aggregation helpers
+  (per-printer/material sums, result counts, duration/eta pairs, wear totals).
+- **Capture**: `PrintEventController` now records a durable row on every
+  terminal transition (complete / error / cancel) — reusing the existing
+  print-lifecycle hook. Cancel is history-only (no "failed" bell/activity). The
+  frontend threads the slice context (printer, material, nozzle, slicer
+  estimate, filament grams, layer height) through the transition POST. All
+  capture is best-effort and never blocks the UI.
+- **`PrintHistoryService`**: quality metrics (success rate, median duration,
+  ETA accuracy = actual/slicer mean+stdev with a 0.3–3.0 sanity band, filament
+  + print-hour totals, per-printer/material breakdown) and consumable-wear
+  estimates (cumulative hours, total + abrasive filament grams, a heuristic
+  nozzle-wear % against a documented 250 g brass threshold, and advisory
+  service hints). **Wear figures are labelled estimates, not measurements.**
+- **`HistoryController`** + routes: `GET /api/history`, `/api/history/metrics`,
+  `/api/history/wear`, `DELETE /api/history/{id}`, `DELETE /api/history`. All
+  rows are uid-scoped server-side (IDOR-safe).
+- **Frontend**: `history-api.js` (8 s timeouts), print-store history slice
+  (list/metrics/wear/delete/clear actions), and `PrintHistoryPanel.vue` in the
+  Print monitor — a collapsible metrics summary + wear bars + a filterable,
+  deletable history table. This is distinct from the existing `HistoryPanel`,
+  which mirrors the printer's own Moonraker job history.
+
+### Tests
+
+- phpunit `PrintHistoryServiceTest`: record validation/normalization,
+  mapper-failure swallow, metrics aggregation (success rate, ETA sanity band,
+  median, totals), wear nozzle-% clamp + service-hint thresholds.
+- vitest: `history-api.spec` (endpoints, filter mapping, timeouts),
+  `history-store.spec` (fetch/mutation actions + failure swallow), and
+  `events.spec` extended for the enriched transition payload.
+
 ## [1.36.0] - 2026-07-10
 
 Slice-tuning parity: 18 more OrcaSlicer process overrides exposed end-to-end.

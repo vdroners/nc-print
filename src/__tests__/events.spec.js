@@ -34,13 +34,28 @@ import axios from '@nextcloud/axios'
 import { usePrintStore } from '@/store/print.js'
 
 describe('events-api', () => {
-	it('posts the transition + context', async () => {
+	it('posts the transition + core context', async () => {
 		axios.post.mockResolvedValueOnce({ data: { ok: true, published: true } })
 		await notifyPrintTransition({ transition: 'complete', filename: 'benchy.gcode', printer: 'K1', durationS: 8100 })
 		expect(axios.post).toHaveBeenCalledWith(
 			'https://cloud.example/apps/nc_print/api/events/print-transition',
-			{ transition: 'complete', filename: 'benchy.gcode', printer: 'K1', duration_s: 8100 },
+			expect.objectContaining({ transition: 'complete', filename: 'benchy.gcode', printer: 'K1', duration_s: 8100 }),
 		)
+	})
+
+	it('threads the enriched history context (printer_id, material, filament, …)', async () => {
+		axios.post.mockResolvedValueOnce({ data: { ok: true } })
+		await notifyPrintTransition({
+			transition: 'error', filename: 'p.gcode', printerId: 'k1', printerName: 'K1',
+			material: 'PA-CF', nozzleDiameter: 0.4, failureReason: 'thermal',
+			slicerDurationS: 3000, filamentG: 42, layerHeight: 0.2,
+		})
+		const body = axios.post.mock.calls[0][1]
+		expect(body).toMatchObject({
+			transition: 'error', printer_id: 'k1', printer_name: 'K1', material: 'PA-CF',
+			nozzle_diameter: 0.4, failure_reason: 'thermal', slicer_duration_s: 3000,
+			filament_g: 42, layer_height: 0.2,
+		})
 	})
 })
 

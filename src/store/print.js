@@ -19,6 +19,13 @@ import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
 import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi, registerSessionPrinter } from '@/services/printers-api.js'
 import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
+import {
+	fetchHistory as fetchHistoryApi,
+	fetchMetrics as fetchMetricsApi,
+	fetchWear as fetchWearApi,
+	deleteHistoryRecord as deleteHistoryApi,
+	clearHistory as clearHistoryApi,
+} from '@/services/history-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 // mesh-convert.js (pulls JSZip) and mesh-analyze-api.js are imported dynamically
 // at their call sites below so JSZip stays out of the startup bundle — they're
@@ -412,6 +419,21 @@ export const usePrintStore = defineStore('print', {
 		printerProgressSource: 'poll',
 		// WS11: G-code console scrollback (capped ring buffer).
 		consoleLog: [],
+
+		// Print history + derived metrics/wear (v1.37). Loaded on demand by the
+		// History panel; capture happens server-side on the terminal transition.
+		history: {
+			items: [],
+			total: 0,
+			limit: 50,
+			offset: 0,
+			loading: false,
+			metrics: null,
+			metricsLoading: false,
+			wear: null,
+			wearLoading: false,
+			filters: { printerId: '', material: '', result: '' },
+		},
 	}),
 
 	getters: {
@@ -1940,38 +1962,145 @@ export const usePrintStore = defineStore('print', {
 				return
 			}
 			const durationS = this.printerState.totalDuration ?? this.printerState.printDuration
-			if (nextState === 'complete' && ['printing', 'paused'].includes(prevState)) {
+			const fromActive = ['printing', 'paused'].includes(prevState)
+			if (nextState === 'complete' && fromActive) {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintComplete(this.printerState.filename)
 				toastSuccess('Print complete')
 				// Feed the smart-ETA learner the slicer-vs-actual pair (best-effort).
 				this.recordEta(durationS)
-				// Publish to the Nextcloud bell + Activity stream (best-effort).
+				// Publish to the Nextcloud bell + Activity stream + durable history.
 				this._publishPrintTransition('complete', durationS)
-			} else if (nextState === 'error' && ['printing', 'paused'].includes(prevState)) {
+			} else if (nextState === 'error' && fromActive) {
 				this._lastNotifiedPrintState = key
 				this.notifyPrintFailed(this.printerState.message)
 				toastError('Print failed', new Error(this.printerState.message || 'Printer error'))
 				this._publishPrintTransition('error', durationS)
+			} else if ((nextState === 'cancelled' || nextState === 'canceled') && fromActive) {
+				// Cancel is a terminal state for history, but not a bell/activity
+				// event (the user knows they cancelled). The controller maps the
+				// 'cancel' transition to a history row only.
+				this._lastNotifiedPrintState = key
+				this._publishPrintTransition('cancel', durationS)
 			}
 		},
 
 		/**
 		 * Publish a print-lifecycle transition to Nextcloud (notification bell +
-		 * Activity). Best-effort — swallows failures so it never disrupts the UI.
-		 * @param {'complete'|'error'|'started'} transition
+		 * Activity) and record a durable history row. Best-effort — swallows
+		 * failures so it never disrupts the UI. The extra slice-context fields
+		 * (material, nozzle, slicer estimate, filament, layer height) let the
+		 * server persist a full history row; all are optional.
+		 * @param {'complete'|'error'|'started'|'cancel'} transition
 		 * @param {number} [durationS]
 		 */
 		_publishPrintTransition(transition, durationS) {
 			try {
+				const printer = this.activeTargetPrinter
+				const slicerS = this.sliceJob.estimatedTimeS || 0
+				const filamentG = this.sliceJob.filamentUsedG || 0
+				const layerH = parseFloat(this.overrides.layerHeight)
 				void notifyPrintTransitionApi({
 					transition,
 					filename: this.printerState.filename || this.sliceJob.gcodeFilename || '',
-					printer: this.activeTargetPrinter?.name || '',
+					printer: printer?.name || '',
 					durationS,
+					printerId: this.selection.printerId || this.selectedPrinterId || printer?.id || '',
+					printerName: printer?.name || '',
+					material: this._currentFilamentType(),
+					nozzleDiameter: this._currentNozzleDiameter(),
+					failureReason: transition === 'error' ? (this.printerState.message || '') : '',
+					slicerDurationS: slicerS > 0 ? slicerS : undefined,
+					filamentG: filamentG > 0 ? filamentG : undefined,
+					layerHeight: Number.isFinite(layerH) && layerH > 0 ? layerH : undefined,
 				})
 			} catch (e) {
-				// ignore — bell/activity is non-critical
+				// ignore — bell/activity/history is non-critical
+			}
+		},
+
+		// ── Print history (v1.37) ───────────────────────────────────────────────
+
+		/**
+		 * Load a page of history rows for the current filters. Best-effort — a
+		 * failure leaves the list empty and logs a debug breadcrumb.
+		 * @param {{reset?: boolean}} [opts] reset=true jumps back to offset 0
+		 */
+		async fetchHistory({ reset = true } = {}) {
+			this.history.loading = true
+			if (reset) {
+				this.history.offset = 0
+			}
+			try {
+				const f = this.history.filters
+				const data = await fetchHistoryApi({
+					printerId: f.printerId,
+					material: f.material,
+					result: f.result,
+					limit: this.history.limit,
+					offset: this.history.offset,
+				})
+				this.history.items = data.items || []
+				this.history.total = data.total || 0
+			} catch (e) {
+				console.debug('nc_print fetchHistory failed', e)
+				this.history.items = []
+				this.history.total = 0
+			} finally {
+				this.history.loading = false
+			}
+		},
+
+		async fetchHistoryMetrics() {
+			this.history.metricsLoading = true
+			try {
+				this.history.metrics = await fetchMetricsApi()
+			} catch (e) {
+				console.debug('nc_print fetchHistoryMetrics failed', e)
+				this.history.metrics = null
+			} finally {
+				this.history.metricsLoading = false
+			}
+		},
+
+		async fetchHistoryWear() {
+			this.history.wearLoading = true
+			try {
+				this.history.wear = await fetchWearApi()
+			} catch (e) {
+				console.debug('nc_print fetchHistoryWear failed', e)
+				this.history.wear = null
+			} finally {
+				this.history.wearLoading = false
+			}
+		},
+
+		async deleteHistoryRecord(id) {
+			try {
+				await deleteHistoryApi(id)
+				this.history.items = this.history.items.filter((r) => r.id !== id)
+				this.history.total = Math.max(0, this.history.total - 1)
+				return true
+			} catch (e) {
+				console.debug('nc_print deleteHistoryRecord failed', e)
+				toastError('Could not delete history entry', e)
+				return false
+			}
+		},
+
+		async clearHistory() {
+			try {
+				await clearHistoryApi()
+				this.history.items = []
+				this.history.total = 0
+				this.history.metrics = null
+				this.history.wear = null
+				toastSuccess('Print history cleared')
+				return true
+			} catch (e) {
+				console.debug('nc_print clearHistory failed', e)
+				toastError('Could not clear history', e)
+				return false
 			}
 		},
 

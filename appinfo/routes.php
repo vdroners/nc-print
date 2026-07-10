@@ -35,6 +35,12 @@ return [
 		['name' => 'eta#record', 'url' => '/api/eta/record', 'verb' => 'POST'],
 		['name' => 'eta#stats', 'url' => '/api/eta/stats', 'verb' => 'GET'],
 
+		['name' => 'history#list', 'url' => '/api/history', 'verb' => 'GET'],
+		['name' => 'history#metrics', 'url' => '/api/history/metrics', 'verb' => 'GET'],
+		['name' => 'history#wear', 'url' => '/api/history/wear', 'verb' => 'GET'],
+		['name' => 'history#clear', 'url' => '/api/history', 'verb' => 'DELETE'],
+		['name' => 'history#destroy', 'url' => '/api/history/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'GET', 'requirements' => ['path' => '.+']],
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'POST', 'requirements' => ['path' => '.+'], 'postfix' => 'slicer_post'],
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'PUT', 'requirements' => ['path' => '.+'], 'postfix' => 'slicer_put'],

@@ -141,4 +141,100 @@ namespace Psr\Log;
 
 interface LoggerInterface
 {
+	public function emergency($message, array $context = []): void;
+	public function alert($message, array $context = []): void;
+	public function critical($message, array $context = []): void;
+	public function error($message, array $context = []): void;
+	public function warning($message, array $context = []): void;
+	public function notice($message, array $context = []): void;
+	public function info($message, array $context = []): void;
+	public function debug($message, array $context = []): void;
+	public function log($level, $message, array $context = []): void;
+}
+
+// ── DB-layer stubs (print history, v1.37) ────────────────────────────────────
+// Minimal shims so the pure-logic unit tests can load PrintRecord / (mocked)
+// PrintRecordMapper without a real Nextcloud framework. The Entity stub
+// implements just enough (addType + magic get/set over snake_case columns) for
+// PrintHistoryService::record() normalization to be assertable.
+
+namespace OCP\AppFramework\Db;
+
+class DoesNotExistException extends \Exception
+{
+}
+
+class MultipleObjectsReturnedException extends \Exception
+{
+}
+
+abstract class Entity
+{
+	/** @var int|null */
+	public $id;
+	private array $_fieldTypes = [];
+
+	protected function addType(string $field, string $type): void
+	{
+		$this->_fieldTypes[$field] = $type;
+	}
+
+	public function __call(string $name, array $args)
+	{
+		if (str_starts_with($name, 'set') && count($args) === 1) {
+			$prop = lcfirst(substr($name, 3));
+			$this->{$prop} = $args[0];
+			return null;
+		}
+		if (str_starts_with($name, 'get')) {
+			$prop = lcfirst(substr($name, 3));
+			return $this->{$prop} ?? null;
+		}
+		throw new \BadMethodCallException($name);
+	}
+}
+
+abstract class QBMapper
+{
+	public function __construct($db, string $tableName, string $entityClass)
+	{
+	}
+
+	public function insert(Entity $entity): Entity
+	{
+		return $entity;
+	}
+
+	public function update(Entity $entity): Entity
+	{
+		return $entity;
+	}
+
+	public function delete(Entity $entity): Entity
+	{
+		return $entity;
+	}
+}
+
+namespace OCP\AppFramework\Utility;
+
+interface ITimeFactory
+{
+	public function getTime(): int;
+}
+
+namespace OCP;
+
+interface IDBConnection
+{
+}
+
+namespace OCP\DB\QueryBuilder;
+
+interface IQueryBuilder
+{
+	public const PARAM_INT = 1;
+	public const PARAM_STR = 2;
+	public const PARAM_DATE = 3;
+	public const PARAM_STR_ARRAY = 102;
 }
