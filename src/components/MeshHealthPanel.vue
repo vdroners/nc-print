@@ -53,6 +53,25 @@ export default {
 			}
 			return ''
 		},
+		printability() {
+			return this.health.printability
+		},
+		bridgeCount() {
+			return this.printability?.bridges?.count ?? null
+		},
+		orientationTip() {
+			const sug = this.printability?.orientation_suggestions
+			if (!Array.isArray(sug) || !sug.length) {
+				return ''
+			}
+			const best = sug[0]
+			const current = this.printability.overhang_fraction ?? 0
+			// Only suggest a flip if it meaningfully beats the as-loaded overhang.
+			if (best.orientation === 'as-loaded' || best.overhang_fraction + 0.05 >= current) {
+				return ''
+			}
+			return `${best.orientation} → overhang ${Math.round(best.overhang_fraction * 100)}%`
+		},
 	},
 	methods: {
 		onAnalyze() {
@@ -105,7 +124,14 @@ export default {
 				<dt>Watertight</dt>
 				<dd>{{ health.watertight ? 'Yes' : 'No' }}</dd>
 			</div>
+			<div v-if="bridgeCount != null">
+				<dt>Bridges</dt>
+				<dd>{{ bridgeCount }}</dd>
+			</div>
 		</dl>
+		<p v-if="hasAnalysis && orientationTip" class="nc-print-mesh-health__tip">
+			💡 {{ orientationTip }}
+		</p>
 		<div class="nc-print-mesh-health__actions">
 			<button
 				type="button"
@@ -135,6 +161,11 @@ export default {
 <style scoped>
 .nc-print-mesh-health__hint {
 	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 var(--nc-gcs-space-sm);
+}
+
+.nc-print-mesh-health__tip {
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0 0 var(--nc-gcs-space-sm);
 }

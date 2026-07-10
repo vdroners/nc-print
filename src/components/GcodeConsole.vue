@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { toastError } from '@/services/toast.js'
+import { gcodeReference } from '@/services/analysis-api.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
 const MAX_LEN = 256
@@ -13,6 +14,9 @@ export default {
 		return {
 			input: '',
 			busy: false,
+			refInput: '',
+			refResult: undefined, // undefined=idle, null=not found, object=entry
+			refBusy: false,
 		}
 	},
 	computed: {
@@ -63,6 +67,25 @@ export default {
 		clear() {
 			this.printStore.clearConsoleLog()
 		},
+		async lookupReference() {
+			const code = this.refInput.trim()
+			if (!code) {
+				this.refResult = undefined
+				return
+			}
+			this.refBusy = true
+			try {
+				this.refResult = await gcodeReference(code)
+			} catch (e) {
+				this.refResult = undefined
+				toastError('Reference lookup failed', e)
+			} finally {
+				this.refBusy = false
+			}
+		},
+		refParamEntries(entry) {
+			return Object.entries(entry?.params || {}).filter(([k]) => k !== '')
+		},
 	},
 }
 </script>
@@ -90,6 +113,40 @@ export default {
 				:class="`nc-print-console__line--${line.kind}`">
 				{{ line.text }}
 			</div>
+		</div>
+
+		<form class="nc-print-console__ref-form" @submit.prevent="lookupReference">
+			<input
+				v-model="refInput"
+				type="text"
+				class="nc-print-console__ref-input"
+				placeholder="Look up a command (e.g. M104)"
+				spellcheck="false"
+				autocomplete="off">
+			<button type="submit" class="nc-print-btn nc-print-btn--sm" :disabled="refBusy || !refInput.trim()">
+				{{ refBusy ? '…' : 'Look up' }}
+			</button>
+		</form>
+		<div v-if="refResult === null" class="nc-print-console__ref-none">
+			No reference entry for “{{ refInput.trim() }}”.
+		</div>
+		<div v-else-if="refResult" class="nc-print-console__ref-card">
+			<div class="nc-print-console__ref-head">
+				<code class="nc-print-console__ref-code">{{ refResult.code }}</code>
+				<span class="nc-print-console__ref-cat">{{ refResult.category }}</span>
+			</div>
+			<p class="nc-print-console__ref-desc">{{ refResult.desc }}</p>
+			<ul v-if="refParamEntries(refResult).length" class="nc-print-console__ref-params">
+				<li v-for="[key, help] in refParamEntries(refResult)" :key="key">
+					<code>{{ key }}</code> — {{ help }}
+				</li>
+			</ul>
+			<p v-if="refResult.example" class="nc-print-console__ref-example">
+				e.g. <code>{{ refResult.example }}</code>
+			</p>
+			<p v-if="(refResult.firmwares || []).length" class="nc-print-console__ref-fw">
+				{{ refResult.firmwares.join(' · ') }}
+			</p>
 		</div>
 
 		<form v-if="sendEnabled" class="nc-print-console__form" @submit.prevent="send">
@@ -159,5 +216,59 @@ export default {
 	color: var(--nc-gcs-text-muted);
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0;
+}
+
+.nc-print-console__ref-form {
+	display: flex;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+.nc-print-console__ref-input {
+	flex: 1;
+	font-family: var(--nc-gcs-font-mono, monospace);
+}
+.nc-print-console__ref-none {
+	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	margin: 0 0 8px;
+}
+.nc-print-console__ref-card {
+	border: 1px solid var(--nc-gcs-border, #30363d);
+	border-radius: var(--nc-gcs-radius-sm, 6px);
+	padding: 8px 10px;
+	margin-bottom: 8px;
+	font-size: var(--nc-gcs-text-sm, 0.82rem);
+}
+.nc-print-console__ref-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+.nc-print-console__ref-code {
+	font-weight: 700;
+	color: var(--nc-app-accent, #4f9cf9);
+}
+.nc-print-console__ref-cat {
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	color: var(--nc-gcs-text-muted, #8b949e);
+}
+.nc-print-console__ref-desc {
+	margin: 4px 0;
+}
+.nc-print-console__ref-params {
+	list-style: none;
+	margin: 4px 0;
+	padding: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	color: var(--nc-gcs-text-muted, #8b949e);
+}
+.nc-print-console__ref-example,
+.nc-print-console__ref-fw {
+	margin: 4px 0 0;
+	color: var(--nc-gcs-text-muted, #8b949e);
+	font-size: 0.76rem;
 }
 </style>

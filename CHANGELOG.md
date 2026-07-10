@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.34.0] - 2026-07-10
+
+Surface three analysis/reference features whose backends shipped in 1.32.0 but
+had no UI — they're now wired into the app.
+
+### Added
+
+- **G-code reference lookup** in the Console: a "Look up a command" box that
+  resolves any M/G-code (e.g. `M104`) to its description, parameters, example,
+  and firmware notes via `GET /api/gcode/reference`. Available to everyone (no
+  console-send permission needed).
+- **Printer model specs chip** in the Prepare profile picker: when the selected
+  slicer printer matches a known model, shows build volume · nozzle count ·
+  heated-chamber (via `GET /api/printer-presets`). Distinct from the live
+  Moonraker capability chip on the Print tab (this is the offline/slicer-side
+  reference; announced-but-unshipped models are flagged).
+- **STL printability** in the Mesh-health panel: a **Bridges** count and a
+  best-orientation **tip** ("rotate 90° about X → overhang 12%"), fetched from
+  the server analyzer (`fetchServerPrintability` → `/api/mesh/analyze`
+  `printability`) alongside the existing analysis. Best-effort; hidden when
+  unavailable.
+
+### Tests
+
+- Frontend (+4 → 249): new `printability.spec` — `fetchServerPrintability`
+  merges/returns printability, no-ops without a slice model, swallows failures,
+  and `setMeshHealth` triggers the fetch. (`analysis-api.spec` already covers the
+  reference/preset clients.)
+
 ## [1.33.4] - 2026-07-05
 
 ### Fixed

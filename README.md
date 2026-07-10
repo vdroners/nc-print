@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.33.4** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.34.0** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -67,8 +67,12 @@ external slicer service** and no NC-GCS dependency.
 - **G-code checks** — the sliced G-code is linted automatically (13 rules:
   homing, temp bounds, cold extrusion, Z-hop, retraction, firmware mismatch, …);
   errors/warnings show on the slice result before you send to the printer
-- **STL printability** — the mesh analyzer reports overhang fraction, bridge
-  candidates and a best-orientation suggestion
+- **STL printability** — the mesh-health panel reports overhang, a bridge count
+  and a best-orientation tip ("rotate 90° about X → overhang 12%")
+- **Printer model specs** — the profile picker shows build volume / nozzle count
+  / heated-chamber for known printer models
+- **G-code reference lookup** — look up any M/G-code in the console to see its
+  description, parameters and firmware notes
 - Save G-code beside the model in Nextcloud Files
 
 **Print monitor (Moonraker)**

@@ -21,6 +21,7 @@ import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapa
 import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
+import { analyzeMeshServer } from '@/services/mesh-analyze-api.js'
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
 import {
 	previewBlocked,
@@ -242,6 +243,9 @@ export const usePrintStore = defineStore('print', {
 			openEdgeCount: 0,
 			overhangPct: 0,
 			watertight: false,
+			// Server-side printability (overhang %, bridges, best orientation).
+			// Populated lazily by fetchServerPrintability; null until then.
+			printability: null,
 		},
 		threeMfBuildItems: [],
 		threeMfSelectedIds: [],
@@ -885,6 +889,7 @@ export const usePrintStore = defineStore('print', {
 				openEdgeCount: 0,
 				overhangPct: 0,
 				watertight: false,
+				printability: null,
 			}
 		},
 
@@ -900,6 +905,32 @@ export const usePrintStore = defineStore('print', {
 				openEdgeCount: result.openEdgeCount ?? result.openEdges ?? 0,
 				overhangPct: result.overhangPct ?? 0,
 				watertight: !!result.watertight,
+				printability: this.meshHealth.printability ?? null,
+			}
+			// Best-effort: enrich with server printability (bridges + best
+			// orientation) which the browser analysis doesn't compute.
+			void this.fetchServerPrintability()
+		},
+
+		/**
+		 * Fetch server-side printability (overhang fraction, bridge candidates,
+		 * best-orientation suggestion) for the current slice model and merge it
+		 * into meshHealth. Best-effort; failures leave printability null.
+		 */
+		async fetchServerPrintability() {
+			const file = this.sliceModelFile?.()
+			if (!file) {
+				return null
+			}
+			try {
+				const res = await analyzeMeshServer(file)
+				const p = res?.printability
+				if (p) {
+					this.meshHealth = { ...this.meshHealth, printability: p }
+				}
+				return p || null
+			} catch (e) {
+				return null
 			}
 		},
 

@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import { printerPreset } from '@/services/analysis-api.js'
 import MultiToolFilamentPicker from './MultiToolFilamentPicker.vue'
 
 export default {
@@ -11,7 +12,16 @@ export default {
 			printerFilter: '',
 			filamentFilter: '',
 			processFilter: '',
+			preset: null, // static model preset for the selected printer, or null
 		}
+	},
+	watch: {
+		'printStore.selection.printerId': {
+			immediate: true,
+			handler() {
+				this.loadPreset()
+			},
+		},
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -35,6 +45,24 @@ export default {
 				this.processFilter,
 				this.printStore.selection.processId,
 			)
+		},
+		presetChip() {
+			const p = this.preset
+			if (!p) {
+				return ''
+			}
+			const parts = []
+			const bv = p.build_volume_mm
+			if (Array.isArray(bv) && bv.length === 3) {
+				parts.push(`${bv[0]}×${bv[1]}×${bv[2]}`)
+			}
+			if (p.nozzle_count > 0) {
+				parts.push(`${p.nozzle_count} nozzle${p.nozzle_count > 1 ? 's' : ''}`)
+			}
+			if (p.chamber_heated) {
+				parts.push('heated chamber')
+			}
+			return parts.join(' · ')
 		},
 	},
 	methods: {
@@ -64,6 +92,22 @@ export default {
 		},
 		onChange() {
 			this.printStore.onProfileChange()
+			this.loadPreset()
+		},
+		async loadPreset() {
+			this.preset = null
+			const id = this.printStore.selection.printerId
+			const p = (this.printStore.profiles.printers || []).find(x => String(x.id) === String(id))
+			const vendor = p?.vendor
+			const model = p?.name || p?.id
+			if (!vendor || !model) {
+				return
+			}
+			try {
+				this.preset = await printerPreset(vendor, model)
+			} catch {
+				this.preset = null
+			}
 		},
 		focusField(kind) {
 			const ids = {
@@ -98,6 +142,9 @@ export default {
 					{{ optionLabel(p) }}
 				</option>
 			</select>
+			<p v-if="presetChip" class="nc-print-profile-picker__preset" :title="preset._placeholder ? 'Model not yet shipped' : 'Known model specs'">
+				📐 {{ presetChip }}{{ preset._placeholder ? ' (announced)' : '' }}
+			</p>
 		</div>
 		<div class="nc-print-field">
 			<label for="nc-print-filament-filter">Filament</label>
@@ -152,5 +199,11 @@ export default {
 
 .nc-print-field input[type='search'] {
 	margin-bottom: 4px;
+}
+
+.nc-print-profile-picker__preset {
+	margin: 4px 0 0;
+	font-size: 0.74rem;
+	color: var(--nc-gcs-text-muted, #8b949e);
 }
 </style>
