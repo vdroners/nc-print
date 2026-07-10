@@ -33,6 +33,13 @@ module.exports = merge(baseConfig, {
 		}),
 	],
 	optimization: {
-		splitChunks: false,
+		// Split only ASYNC (dynamically-imported) chunks — the lazy tab chunks,
+		// Three.js, and the store's dynamic mesh-convert/mesh-analyze imports.
+		// NOT 'all': Nextcloud injects only the named entry script, so splitting
+		// the entry's INITIAL vendor code produces a sibling chunk NC never loads
+		// (verified: the app shell mounts but tabs/store never arrive). 'async'
+		// keeps each entry self-contained while still deferring on-demand code
+		// (JSZip, Three.js) out of the startup path.
+		splitChunks: { chunks: 'async' },
 	},
 })

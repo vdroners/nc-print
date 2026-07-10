@@ -130,7 +130,7 @@ export default {
 			</div>
 		</dl>
 		<p v-if="hasAnalysis && orientationTip" class="nc-print-mesh-health__tip">
-			💡 {{ orientationTip }}
+			<span aria-hidden="true">💡</span> {{ orientationTip }}
 		</p>
 		<div class="nc-print-mesh-health__actions">
 			<button

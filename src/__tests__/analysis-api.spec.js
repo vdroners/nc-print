@@ -16,13 +16,27 @@ describe('analysis-api', () => {
 		axios.post.mockReset()
 	})
 
-	it('lintGcode posts a job_id + firmware', async () => {
+	it('lintGcode posts a job_id + firmware with a timeout', async () => {
 		axios.post.mockResolvedValueOnce({ data: { issues: [], stats: {} } })
 		await lintGcode({ jobId: 'j1', firmware: 'klipper' })
 		expect(axios.post).toHaveBeenCalledWith(
 			'https://cloud.example/apps/nc_print/api/slicer/gcode/lint',
 			{ firmware: 'klipper', job_id: 'j1' },
+			expect.objectContaining({ timeout: expect.any(Number) }),
 		)
+	})
+
+	it('all analysis-api calls pass an explicit timeout (no indefinite hang)', async () => {
+		axios.get.mockResolvedValue({ data: {} })
+		axios.post.mockResolvedValue({ data: {} })
+		await lintGcode({ jobId: 'j1' })
+		await gcodeReference('M104')
+		await searchGcodeReference({ q: 'home' })
+		await printerPreset('bambu', 'H2D')
+		for (const call of [...axios.get.mock.calls, ...axios.post.mock.calls]) {
+			const opts = call[call.length - 1]
+			expect(opts).toEqual(expect.objectContaining({ timeout: expect.any(Number) }))
+		}
 	})
 
 	it('lintGcode prefers raw text over job_id', async () => {
@@ -44,6 +58,7 @@ describe('analysis-api', () => {
 		expect(list).toEqual([{ code: 'M104' }])
 		expect(axios.get).toHaveBeenCalledWith(
 			'https://cloud.example/apps/nc_print/api/slicer/gcode/reference?category=temperature',
+			expect.objectContaining({ timeout: expect.any(Number) }),
 		)
 	})
 

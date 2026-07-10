@@ -121,6 +121,8 @@ export default {
 				type="text"
 				class="nc-print-console__ref-input"
 				placeholder="Look up a command (e.g. M104)"
+				aria-label="Look up G-code command"
+				:maxlength="64"
 				spellcheck="false"
 				autocomplete="off">
 			<button type="submit" class="nc-print-btn nc-print-btn--sm" :disabled="refBusy || !refInput.trim()">
@@ -128,7 +130,7 @@ export default {
 			</button>
 		</form>
 		<div v-if="refResult === null" class="nc-print-console__ref-none">
-			No reference entry for “{{ refInput.trim() }}”.
+			No reference entry for “{{ refInput.trim().toUpperCase() }}”.
 		</div>
 		<div v-else-if="refResult" class="nc-print-console__ref-card">
 			<div class="nc-print-console__ref-head">

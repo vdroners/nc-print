@@ -1,0 +1,2 @@
+"use strict";(self.webpackChunknc_print=self.webpackChunknc_print||[]).push([["src_services_mesh-analyze-api_js"],{5221(a,e,n){n.d(e,{analyzeMeshServer:()=>r});var s=n(9504),t=n(3814);async function r(a){const e=a instanceof Blob?await a.arrayBuffer():a,{data:n}=await s.Ay.post(`${(0,t.Jv)("/apps/nc_print/api/slicer")}/mesh/analyze`,e,{headers:{"Content-Type":"application/octet-stream"}});return n}}}]);
+//# sourceMappingURL=nc_print-src_services_mesh-analyze-api_js.js.map?v=49b17334701e80466cbd

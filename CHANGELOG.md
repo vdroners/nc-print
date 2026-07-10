@@ -1,5 +1,43 @@
 # Changelog
 
+## [1.35.0] - 2026-07-10
+
+Performance tidy + robustness polish for the v1.34 analysis/reference features.
+
+### Changed — performance
+
+- **Defer JSZip off the startup path**: the Pinia store no longer imports
+  `mesh-convert.js` (JSZip) or `mesh-analyze-api.js` at module load — the four
+  call sites now use dynamic `import()`, so JSZip loads only when a 3MF is handled
+  / printability is fetched. `webpack.config.js` re-enables `splitChunks` for
+  **async chunks only** (`chunks: 'async'`) — NOT `'all'`, which was verified in a
+  browser to break the app (Nextcloud injects only the named entry, so an
+  `'all'`-split initial vendor chunk is never loaded and the SPA shell mounts with
+  no tabs). Net: `nc_print-main.js` ~3.53 MB → ~3.43 MB; JSZip is no longer parsed
+  at load. Modest, safe — not a dramatic cut (the app must stay self-contained per
+  entry).
+
+### Fixed — robustness / a11y
+
+- **Request timeouts**: all `analysis-api.js` calls (lint / reference / search /
+  preset) now pass an explicit 8 s timeout so a hung slicer proxy can't block the
+  UI indefinitely.
+- **No silent failures**: `fetchServerPrintability`, `printerPreset`, and
+  `gcodeReference` catch blocks now leave a `console.debug` breadcrumb.
+- **G-code reference lookup** (Console): `aria-label` + `maxlength` on the input;
+  the "not found" message shows the upper-cased code (lookup is case-insensitive).
+- **Preset chip** (ProfilePicker): a subtle "Loading model specs…" state while the
+  lookup is in flight; decorative emoji (📐 / 💡) marked `aria-hidden`.
+- **Mesh-analyze endpoint** (`/api/mesh/analyze`): a byte-size guard returns a
+  clean 400 for oversize blobs (defense-in-depth atop the 50 MB proxy cap), and
+  unexpected failures are scrubbed to a generic message (raw exception text no
+  longer reaches the browser). Reference/preset 404s no longer echo user input.
+
+### Tests
+
+- Frontend: `analysis-api.spec` asserts every call passes a `timeout`; printability
+  store spec updated for the dynamic import. (250 vitest.)
+
 ## [1.34.0] - 2026-07-10
 
 Surface three analysis/reference features whose backends shipped in 1.32.0 but

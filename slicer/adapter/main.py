@@ -74,6 +74,10 @@ SLICE_TIMEOUT_S = int(os.environ.get("SLICE_TIMEOUT_S", "600"))
 MAX_CONCURRENT_SLICES = int(os.environ.get("MAX_CONCURRENT_SLICES", "2"))
 JOB_MAX_AGE_S = int(os.environ.get("JOB_MAX_AGE_S", "3600"))
 GC_INTERVAL_S = int(os.environ.get("GC_INTERVAL_S", "300"))
+# Byte cap for the mesh-analyze endpoint (defense-in-depth; the PHP proxy already
+# caps request bodies at 50 MB). A degenerate/huge blob is rejected before it is
+# fully parsed into memory.
+MAX_MESH_BYTES = int(os.environ.get("MAX_MESH_BYTES", str(60 * 1024 * 1024)))
 
 _QUICK_TIMEOUT = httpx.Timeout(connect=5.0, read=30.0, write=30.0, pool=5.0)
 
@@ -722,7 +726,7 @@ async def gcode_reference(request: Request) -> JSONResponse:
     if code:
         entry = get_reference(code)
         if not entry:
-            return JSONResponse({"error": "not_found", "message": f"unknown code {code}"}, 404)
+            return JSONResponse({"error": "not_found", "message": "code not in reference"}, 404)
         return JSONResponse(entry)
     q = request.query_params.get("q", "")
     category = request.query_params.get("category", "")
@@ -742,7 +746,7 @@ async def printer_presets(request: Request) -> JSONResponse:
         p = find_printer_preset(vendor, model)
         if not p:
             return JSONResponse({"error": "not_found",
-                                 "message": f"no preset for {vendor} {model}"}, 404)
+                                 "message": "no preset for that model"}, 404)
         return JSONResponse(p)
     if vendor:
         return JSONResponse({"presets": list_printer_presets_for_vendor(vendor)})
@@ -845,6 +849,11 @@ async def mesh_analyze(request: Request) -> JSONResponse:
     body = await request.body()
     if not body:
         return JSONResponse({"error": "no_model", "message": "empty body"}, 400)
+    if len(body) > MAX_MESH_BYTES:
+        return JSONResponse(
+            {"error": "too_large",
+             "message": f"model exceeds the {MAX_MESH_BYTES // (1024 * 1024)} MB analysis limit"},
+            400)
     content_type = request.headers.get("content-type", "").lower()
     stl = body
     if "multipart/form-data" in content_type:
@@ -854,8 +863,14 @@ async def mesh_analyze(request: Request) -> JSONResponse:
         stl = parsed["model"]
     try:
         report = await asyncio.get_event_loop().run_in_executor(None, analyze_stl, stl)
+    except ValueError as exc:
+        # analyze_stl raises ValueError for oversize/degenerate meshes — safe,
+        # actionable message.
+        return JSONResponse({"error": "bad_mesh", "message": str(exc)}, 400)
     except Exception as exc:  # noqa: BLE001
-        return JSONResponse({"error": "analyze_failed", "message": str(exc)}, 500)
+        # Unexpected failure: log server-side, scrub the message to the browser.
+        print(f"[mesh_analyze] failed: {exc}", flush=True)
+        return JSONResponse({"error": "analyze_failed", "message": "mesh analysis failed"}, 500)
     return JSONResponse(report)
 
 

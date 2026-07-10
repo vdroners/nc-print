@@ -20,8 +20,9 @@ import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/servic
 import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi, registerSessionPrinter } from '@/services/printers-api.js'
 import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
-import { convert3mfToStlBuffer, meshToStlBuffer, list3mfBuildItems } from '@/services/mesh-convert.js'
-import { analyzeMeshServer } from '@/services/mesh-analyze-api.js'
+// mesh-convert.js (pulls JSZip) and mesh-analyze-api.js are imported dynamically
+// at their call sites below so JSZip stays out of the startup bundle — they're
+// only needed on 3MF handling / server printability, not at app load.
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
 import {
 	previewBlocked,
@@ -923,6 +924,7 @@ export const usePrintStore = defineStore('print', {
 				return null
 			}
 			try {
+				const { analyzeMeshServer } = await import('@/services/mesh-analyze-api.js')
 				const res = await analyzeMeshServer(file)
 				const p = res?.printability
 				if (p) {
@@ -930,6 +932,7 @@ export const usePrintStore = defineStore('print', {
 				}
 				return p || null
 			} catch (e) {
+				console.debug('[nc_print] fetchServerPrintability failed:', e?.message || e)
 				return null
 			}
 		},
@@ -941,6 +944,7 @@ export const usePrintStore = defineStore('print', {
 				return
 			}
 			try {
+				const { list3mfBuildItems } = await import('@/services/mesh-convert.js')
 				const items = await list3mfBuildItems(await file.arrayBuffer())
 				this.threeMfBuildItems = items
 				this.threeMfSelectedIds = items.filter(i => i.printable).map(i => String(i.id))
@@ -970,6 +974,7 @@ export const usePrintStore = defineStore('print', {
 				const options = this.threeMfSelectedIds.length
 					? { selectedIds: this.threeMfSelectedIds }
 					: {}
+				const { convert3mfToStlBuffer } = await import('@/services/mesh-convert.js')
 				const stlBuf = await convert3mfToStlBuffer(await file.arrayBuffer(), options)
 				const stem = file.name.replace(/\.3mf$/i, '')
 				this.model.sliceFile = new File([stlBuf], `${stem}.stl`, { type: 'application/octet-stream' })
@@ -1023,6 +1028,7 @@ export const usePrintStore = defineStore('print', {
 			if (!exported?.positions) {
 				throw new Error('No mesh to export')
 			}
+			const { meshToStlBuffer } = await import('@/services/mesh-convert.js')
 			const stlBuf = meshToStlBuffer(exported)
 			const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
 			const filename = `${stem}-prepared.stl`

@@ -13,6 +13,7 @@ export default {
 			filamentFilter: '',
 			processFilter: '',
 			preset: null, // static model preset for the selected printer, or null
+			presetLoading: false,
 		}
 	},
 	watch: {
@@ -103,10 +104,15 @@ export default {
 			if (!vendor || !model) {
 				return
 			}
+			this.presetLoading = true
 			try {
 				this.preset = await printerPreset(vendor, model)
-			} catch {
+			} catch (e) {
+				// Best-effort reference chip; leave a breadcrumb, no user toast.
+				console.debug('[nc_print] printer preset lookup failed:', e?.message || e)
 				this.preset = null
+			} finally {
+				this.presetLoading = false
 			}
 		},
 		focusField(kind) {
@@ -142,8 +148,11 @@ export default {
 					{{ optionLabel(p) }}
 				</option>
 			</select>
-			<p v-if="presetChip" class="nc-print-profile-picker__preset" :title="preset._placeholder ? 'Model not yet shipped' : 'Known model specs'">
-				📐 {{ presetChip }}{{ preset._placeholder ? ' (announced)' : '' }}
+			<p v-if="presetLoading" class="nc-print-profile-picker__preset nc-print-profile-picker__preset--loading">
+				Loading model specs…
+			</p>
+			<p v-else-if="presetChip" class="nc-print-profile-picker__preset" :title="preset._placeholder ? 'Model not yet shipped' : 'Known model specs'">
+				<span aria-hidden="true">📐</span> {{ presetChip }}{{ preset._placeholder ? ' (announced)' : '' }}
 			</p>
 		</div>
 		<div class="nc-print-field">
@@ -205,5 +214,10 @@ export default {
 	margin: 4px 0 0;
 	font-size: 0.74rem;
 	color: var(--nc-gcs-text-muted, #8b949e);
+}
+
+.nc-print-profile-picker__preset--loading {
+	opacity: 0.6;
+	font-style: italic;
 }
 </style>
