@@ -748,6 +748,38 @@ def test_overrides_wipe_prime_tower_keys():
     assert filament == {} and unknown == []
 
 
+def test_overrides_quality_and_ironing_support_keys():
+    from overrides import split_overrides
+    process, filament, unknown = split_overrides({
+        # quality tier
+        "overhang_speed_1": 0, "overhang_speed_4": 10,
+        "top_shell_layers": 5, "bottom_shell_layers": 4,
+        "bridge_speed": 40, "bridge_flow": 0.9, "bridge_no_support": True,
+        "elephant_foot": 0.2, "infill_wall_overlap": 25,
+        # ironing + support detail tier
+        "ironing_flow": 12, "ironing_spacing": 0.12, "ironing_speed": 25,
+        "support_interface_bottom_layers": 2, "support_base_pattern": "rectilinear",
+        "tree_support_branch_angle": 40, "draft_shield": "enabled",
+    })
+    assert process["overhang_1_4_speed"] == "0"
+    assert process["overhang_4_4_speed"] == "10"
+    assert process["top_shell_layers"] == "5"
+    assert process["bottom_shell_layers"] == "4"
+    assert process["bridge_speed"] == "40"
+    assert process["bridge_flow"] == "0.9"            # ratio, not percent
+    assert process["bridge_no_support"] == "1"
+    assert process["elefant_foot_compensation"] == "0.2"
+    assert process["infill_wall_overlap"] == "25%"    # percent
+    assert process["ironing_flow"] == "12%"           # percent
+    assert process["ironing_spacing"] == "0.12"
+    assert process["ironing_speed"] == "25"
+    assert process["support_interface_bottom_layers"] == "2"
+    assert process["support_base_pattern"] == "rectilinear"
+    assert process["tree_support_branch_angle"] == "40"
+    assert process["draft_shield"] == "enabled"
+    assert filament == {} and unknown == []
+
+
 def test_overrides_omit_empty_new_keys():
     from overrides import split_overrides
     process, _f, _u = split_overrides({

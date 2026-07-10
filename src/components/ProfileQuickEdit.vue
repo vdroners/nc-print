@@ -56,6 +56,20 @@ const SURFACE_PATTERNS = [
 	{ value: 'rectilinear', label: 'Rectilinear' },
 ]
 
+const SUPPORT_BASE_PATTERNS = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'default', label: 'Default' },
+	{ value: 'rectilinear', label: 'Rectilinear' },
+	{ value: 'hollow', label: 'Hollow' },
+]
+
+const DRAFT_SHIELD = [
+	{ value: '', label: 'Profile default' },
+	{ value: 'disabled', label: 'Off' },
+	{ value: 'enabled', label: 'On (all)' },
+	{ value: 'limited', label: 'Limited (to brim height)' },
+]
+
 export default {
 	name: 'ProfileQuickEdit',
 	emits: ['change'],
@@ -78,6 +92,12 @@ export default {
 		},
 		surfacePatterns() {
 			return SURFACE_PATTERNS
+		},
+		supportBasePatterns() {
+			return SUPPORT_BASE_PATTERNS
+		},
+		draftShieldOptions() {
+			return DRAFT_SHIELD
 		},
 		// A prime/wipe tower only makes sense for a multi-material plate.
 		isMultiMaterial() {
@@ -257,6 +277,97 @@ export default {
 				</div>
 			</div>
 		</template>
+
+		<h3 class="nc-print-quick-edit__title">Quality</h3>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label>Top shell layers</label>
+				<input v-model="printStore.overrides.topShellLayers" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Bottom shell layers</label>
+				<input v-model="printStore.overrides.bottomShellLayers" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Elephant foot (mm)</label>
+				<input v-model="printStore.overrides.elephantFoot" type="number" step="0.05" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Infill/wall overlap (%)</label>
+				<input v-model="printStore.overrides.infillWallOverlap" type="number" step="1" min="0" max="100" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Bridge speed (mm/s)</label>
+				<input v-model="printStore.overrides.bridgeSpeed" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Bridge flow (ratio)</label>
+				<input v-model="printStore.overrides.bridgeFlow" type="number" step="0.05" min="0" max="2" @change="emitChange">
+			</div>
+			<div class="nc-print-field nc-print-field--checkbox">
+				<label>
+					<input v-model="printStore.overrides.bridgeNoSupport" type="checkbox" @change="emitChange">
+					Bridges without support
+				</label>
+			</div>
+		</div>
+
+		<h3 class="nc-print-quick-edit__title">Overhang speed slowdown (mm/s)</h3>
+		<p class="nc-print-quick-edit__hint">Slower speed as overhang steepness increases (0 = don't slow that band).</p>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label>0–25%</label>
+				<input v-model="printStore.overrides.overhangSpeed1" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>25–50%</label>
+				<input v-model="printStore.overrides.overhangSpeed2" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>50–75%</label>
+				<input v-model="printStore.overrides.overhangSpeed3" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>75–100%</label>
+				<input v-model="printStore.overrides.overhangSpeed4" type="number" step="1" min="0" @change="emitChange">
+			</div>
+		</div>
+
+		<h3 class="nc-print-quick-edit__title">Ironing &amp; support detail</h3>
+		<div class="nc-print-overrides-grid">
+			<div class="nc-print-field">
+				<label>Ironing flow (%)</label>
+				<input v-model="printStore.overrides.ironingFlow" type="number" step="1" min="0" max="100" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Ironing spacing (mm)</label>
+				<input v-model="printStore.overrides.ironingSpacing" type="number" step="0.01" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Ironing speed (mm/s)</label>
+				<input v-model="printStore.overrides.ironingSpeed" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label>Support interface bottom layers</label>
+				<input v-model="printStore.overrides.supportInterfaceBottomLayers" type="number" step="1" min="0" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-support-base">Support base pattern</label>
+				<select id="nc-print-support-base" v-model="printStore.overrides.supportBasePattern" @change="emitChange">
+					<option v-for="opt in supportBasePatterns" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+			<div class="nc-print-field">
+				<label>Tree support branch angle (°)</label>
+				<input v-model="printStore.overrides.treeSupportBranchAngle" type="number" step="1" min="0" max="60" @change="emitChange">
+			</div>
+			<div class="nc-print-field">
+				<label for="nc-print-draft-shield">Draft shield</label>
+				<select id="nc-print-draft-shield" v-model="printStore.overrides.draftShield" @change="emitChange">
+					<option v-for="opt in draftShieldOptions" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
+				</select>
+			</div>
+		</div>
 	</div>
 </template>
 

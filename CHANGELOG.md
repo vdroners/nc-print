@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.36.0] - 2026-07-10
+
+Slice-tuning parity: 18 more OrcaSlicer process overrides exposed end-to-end.
+
+### Added — slice overrides
+
+Ported and verified 18 additional OrcaSlicer-fork process keys so the Profile
+Quick-Edit can tune surface quality and support detail without hand-editing
+presets. Each key was confirmed to exist with a real default in the shipped
+engine presets before wiring; all are process-scoped.
+
+- **Quality tier**: four overhang-band slowdown speeds
+  (`overhang_1_4_speed`…`overhang_4_4_speed`), top/bottom shell layer counts,
+  bridge speed / bridge flow ratio / "no support needed for bridges", elephant-
+  foot compensation (engine spelling `elefant_foot_compensation`), and
+  infill/wall overlap (percent).
+- **Ironing & support detail tier**: ironing flow (percent) / spacing / speed,
+  support interface bottom layers, support base pattern (default / rectilinear /
+  hollow), tree-support branch angle, and draft shield (disabled / enabled /
+  limited / all-brim).
+
+Wired the full path: `overrides.py` `_MAP`, the store override state,
+`buildSliceOverrides()` + `OVERRIDE_FIELD_DEFS`, and three new grouped sections
+in `ProfileQuickEdit.vue` (Quality; Overhang speed slowdown; Ironing & support
+detail). Unknown/empty values are omitted, matching existing behavior.
+
+### Tests
+
+- Adapter: `test_overrides_quality_and_ironing_support_keys` asserts all 18 map
+  to the correct engine keys/formats (percent vs ratio vs int, bool→"1", enum
+  passthrough) with empty filament/unknown; `test_overrides_omit_empty_new_keys`
+  covers omission of blank values.
+- Frontend: `slicer-utils.spec` gains coverage for the 18 form fields and their
+  empty-omission.
+
 ## [1.35.0] - 2026-07-10
 
 Performance tidy + robustness polish for the v1.34 analysis/reference features.

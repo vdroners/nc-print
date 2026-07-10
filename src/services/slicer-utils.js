@@ -140,6 +140,30 @@ export function buildSliceOverrides(form = {}) {
 	num('wipe_tower_rotation', form.wipeTowerRotation)
 	num('wipe_tower_extra_spacing', form.wipeTowerExtraSpacing)
 
+	// Quality tier. overhang_speed_N + shell layer counts + bridge + elephant
+	// foot + infill-wall overlap (overlap sent as a plain number; server writes
+	// "NN%"). bridge_flow is a ratio (~0.95), not a percent.
+	num('overhang_speed_1', form.overhangSpeed1)
+	num('overhang_speed_2', form.overhangSpeed2)
+	num('overhang_speed_3', form.overhangSpeed3)
+	num('overhang_speed_4', form.overhangSpeed4)
+	num('top_shell_layers', form.topShellLayers)
+	num('bottom_shell_layers', form.bottomShellLayers)
+	num('bridge_speed', form.bridgeSpeed)
+	num('bridge_flow', form.bridgeFlow)
+	bool('bridge_no_support', form.bridgeNoSupport)
+	num('elephant_foot', form.elephantFoot)
+	num('infill_wall_overlap', form.infillWallOverlap)
+
+	// Ironing + support detail tier.
+	num('ironing_flow', form.ironingFlow)
+	num('ironing_spacing', form.ironingSpacing)
+	num('ironing_speed', form.ironingSpeed)
+	num('support_interface_bottom_layers', form.supportInterfaceBottomLayers)
+	str('support_base_pattern', form.supportBasePattern)
+	num('tree_support_branch_angle', form.treeSupportBranchAngle)
+	str('draft_shield', form.draftShield)
+
 	return overrides
 }
 
@@ -227,6 +251,24 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'primeVolume', label: 'Prime volume (mm³)' },
 	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)' },
 	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)' },
+	{ key: 'overhangSpeed1', label: 'Overhang speed 0–25% (mm/s)' },
+	{ key: 'overhangSpeed2', label: 'Overhang speed 25–50% (mm/s)' },
+	{ key: 'overhangSpeed3', label: 'Overhang speed 50–75% (mm/s)' },
+	{ key: 'overhangSpeed4', label: 'Overhang speed 75–100% (mm/s)' },
+	{ key: 'topShellLayers', label: 'Top shell layers' },
+	{ key: 'bottomShellLayers', label: 'Bottom shell layers' },
+	{ key: 'bridgeSpeed', label: 'Bridge speed (mm/s)' },
+	{ key: 'bridgeFlow', label: 'Bridge flow (ratio)' },
+	{ key: 'bridgeNoSupport', label: 'Bridges without support', format: v => (v ? 'On' : 'Off') },
+	{ key: 'elephantFoot', label: 'Elephant foot compensation (mm)' },
+	{ key: 'infillWallOverlap', label: 'Infill/wall overlap (%)' },
+	{ key: 'ironingFlow', label: 'Ironing flow (%)' },
+	{ key: 'ironingSpacing', label: 'Ironing spacing (mm)' },
+	{ key: 'ironingSpeed', label: 'Ironing speed (mm/s)' },
+	{ key: 'supportInterfaceBottomLayers', label: 'Support interface bottom layers' },
+	{ key: 'supportBasePattern', label: 'Support base pattern' },
+	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)' },
+	{ key: 'draftShield', label: 'Draft shield' },
 ]
 
 /**

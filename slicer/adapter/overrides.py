@@ -59,6 +59,26 @@ _MAP = {
     "support_interface_spacing": ("support_interface_spacing", "process", "num"),
     # ── first layer (process-scoped) ──
     "first_layer_height": ("initial_layer_print_height", "process", "num"),
+    # ── quality tier (process-scoped) ──
+    "overhang_speed_1":   ("overhang_1_4_speed",         "process", "num"),
+    "overhang_speed_2":   ("overhang_2_4_speed",         "process", "num"),
+    "overhang_speed_3":   ("overhang_3_4_speed",         "process", "num"),
+    "overhang_speed_4":   ("overhang_4_4_speed",         "process", "num"),
+    "top_shell_layers":   ("top_shell_layers",           "process", "num"),
+    "bottom_shell_layers": ("bottom_shell_layers",       "process", "num"),
+    "bridge_speed":       ("bridge_speed",               "process", "num"),
+    "bridge_flow":        ("bridge_flow",                "process", "num"),
+    "bridge_no_support":  ("bridge_no_support",          "process", "bool"),
+    "elephant_foot":      ("elefant_foot_compensation",  "process", "num"),
+    "infill_wall_overlap": ("infill_wall_overlap",       "process", "pct"),
+    # ── ironing + support detail tier (process-scoped) ──
+    "ironing_flow":       ("ironing_flow",               "process", "pct"),
+    "ironing_spacing":    ("ironing_spacing",            "process", "num"),
+    "ironing_speed":      ("ironing_speed",              "process", "num"),
+    "support_interface_bottom_layers": ("support_interface_bottom_layers", "process", "num"),
+    "support_base_pattern": ("support_base_pattern",     "process", "str"),
+    "tree_support_branch_angle": ("tree_support_branch_angle", "process", "num"),
+    "draft_shield":       ("draft_shield",               "process", "str"),
     # ── wipe / prime tower (process-scoped; multi-material purge) ──
     "enable_prime_tower":     ("enable_prime_tower",       "process", "bool"),
     "prime_tower_width":      ("prime_tower_width",        "process", "num"),

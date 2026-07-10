@@ -94,6 +94,42 @@ describe('slicer-utils', () => {
 		expect(o.wipe_tower_extra_spacing).toBe(150)
 	})
 
+	it('buildSliceOverrides maps quality + ironing/support detail fields', () => {
+		const o = buildSliceOverrides({
+			overhangSpeed1: '0', overhangSpeed4: '10',
+			topShellLayers: '5', bottomShellLayers: '4',
+			bridgeSpeed: '40', bridgeFlow: '0.9', bridgeNoSupport: true,
+			elephantFoot: '0.2', infillWallOverlap: '25',
+			ironingFlow: '12', ironingSpacing: '0.12', ironingSpeed: '25',
+			supportInterfaceBottomLayers: '2', supportBasePattern: 'rectilinear',
+			treeSupportBranchAngle: '40', draftShield: 'enabled',
+		})
+		expect(o.overhang_speed_1).toBe(0)
+		expect(o.overhang_speed_4).toBe(10)
+		expect(o.top_shell_layers).toBe(5)
+		expect(o.bottom_shell_layers).toBe(4)
+		expect(o.bridge_speed).toBe(40)
+		expect(o.bridge_flow).toBe(0.9)
+		expect(o.bridge_no_support).toBe(true)
+		expect(o.elephant_foot).toBe(0.2)
+		expect(o.infill_wall_overlap).toBe(25)
+		expect(o.ironing_flow).toBe(12)
+		expect(o.ironing_spacing).toBe(0.12)
+		expect(o.ironing_speed).toBe(25)
+		expect(o.support_interface_bottom_layers).toBe(2)
+		expect(o.support_base_pattern).toBe('rectilinear')
+		expect(o.tree_support_branch_angle).toBe(40)
+		expect(o.draft_shield).toBe('enabled')
+	})
+
+	it('buildSliceOverrides omits empty quality fields', () => {
+		const o = buildSliceOverrides({ overhangSpeed1: '', topShellLayers: '', bridgeFlow: '', supportBasePattern: '' })
+		expect('overhang_speed_1' in o).toBe(false)
+		expect('top_shell_layers' in o).toBe(false)
+		expect('bridge_flow' in o).toBe(false)
+		expect('support_base_pattern' in o).toBe(false)
+	})
+
 	it('buildSliceOverrides omits the prime tower when disabled/empty', () => {
 		const o = buildSliceOverrides({ enablePrimeTower: false, primeTowerWidth: '' })
 		expect(o.enable_prime_tower).toBe(false) // bool always emitted when set
