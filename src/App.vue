@@ -6,6 +6,7 @@ import PrintAppShell from './components/PrintAppShell.vue'
 import AppChromeBar from './components/AppChromeBar.vue'
 import HelpDrawer from './components/HelpDrawer.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import DropZoneOverlay from './components/DropZoneOverlay.vue'
 import { saveCollapsibleState } from '@/utils/collapsible.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
@@ -24,6 +25,7 @@ export default {
 		SliceTab,
 		PrintTab,
 		CommandPalette,
+		DropZoneOverlay,
 	},
 	data() {
 		return {
@@ -213,6 +215,8 @@ export default {
 			:open.sync="paletteOpen"
 			:open-import="paletteImport"
 			:focus-panel="paletteFocusPanel" />
+
+		<DropZoneOverlay />
 
 		<template #footer>
 			NC 3D Print v{{ version }} · Moonraker + Forge Slicer

@@ -2625,6 +2625,17 @@ export const usePrintStore = defineStore('print', {
 			this.pendingPrintUpload = null
 		},
 
+		/**
+		 * Queue a dropped/loaded g-code blob for the Print tab's upload flow and
+		 * switch to that tab. The PrintTab watcher consumes pendingPrintUpload.
+		 * @param {Blob} blob
+		 * @param {string} filename
+		 */
+		queuePrintUpload(blob, filename) {
+			this.pendingPrintUpload = { blob, filename: filename || 'job.gcode' }
+			this.setActiveTab(TABS.PRINT)
+		},
+
 		async bootstrapDeepLink() {
 			const b = this.bootstrap
 			if (!b) {

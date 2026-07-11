@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.40.0] - 2026-07-10
+
+Full-screen drag-drop upload (3DPrintForge parity). Completes the workflow-UX
+pass. (Plan: docs/plans/ux-workflow-forge-parity.md — feature 3 of 3.)
+
+### Added
+
+- **Drag-drop overlay** (`DropZoneOverlay.vue`): drag a file anywhere over the
+  window and a full-screen "Drop to load" target appears. Drop a model
+  (.stl/.3mf/.obj) → it loads into the Prepare tab; drop g-code (.gcode/.gcode.gz)
+  → it's queued for the Print tab's upload flow. Unsupported types get a clear
+  toast. Only OS file drags trigger it (checks `dataTransfer.types` for "Files"),
+  so dragging UI elements never shows the overlay; a dragenter/dragleave depth
+  counter avoids flicker over child elements.
+- `utils/drop-accept.js` — pure `isAcceptedModel` / `isGcode` / `classifyDrop`
+  classification (case-insensitive, `.gcode.gz` aware), unit-tested.
+- Store `queuePrintUpload(blob, filename)` action to hand a dropped g-code blob
+  to the existing Print-tab upload consumer.
+
+### Tests
+
+- vitest `drop-accept.spec` (model/gcode/unsupported classification, empty +
+  no-extension rejection, no false substring matches). Full suite green (299).
+
 ## [1.39.0] - 2026-07-10
 
 Command palette (Ctrl/Cmd+K) — the 3DPrintForge "jump to anything" power-user
