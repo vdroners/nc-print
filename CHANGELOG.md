@@ -1,5 +1,26 @@
 # Changelog
 
+## [1.49.0] - 2026-07-11
+
+Import filament settings from an OrcaSlicer / Bambu preset (Group 3).
+
+### Added
+
+- **Import filament .json** button in Override settings (Prepare). Load an
+  OrcaSlicer/Bambu filament preset and its recognised values (nozzle temp, bed
+  temp, fan max speed, retraction length/speed) populate the override form;
+  unmapped keys are ignored and reported in the toast. Parsed **entirely in the
+  browser** — no upload, no new adapter endpoint, no proxy-allowlist change, so
+  no added server attack surface. Input is size-capped (256 KB), JSON-validated,
+  must be an object, and only whitelisted keys are applied (Orca array-valued
+  fields take index 0).
+
+### Tests
+
+- vitest `filament-import.spec`: array + scalar values, first-bed-temp-wins,
+  ignored-keys reporting, no-recognised-keys warning, invalid-JSON / non-object /
+  oversize rejection, non-numeric ignored. Full suite green (350).
+
 ## [1.48.0] - 2026-07-11
 
 Build-plate selector + read-only nozzle diameter (Group 3, Prepare settings).

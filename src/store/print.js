@@ -2967,6 +2967,32 @@ export const usePrintStore = defineStore('print', {
 			this._persistOverrides()
 		},
 
+		/**
+		 * Import an OrcaSlicer/Bambu filament preset (.json text) into the override
+		 * form. Browser-side parse only; applies known keys, ignores the rest.
+		 * @param {string} text raw file contents
+		 * @returns {Promise<boolean>}
+		 */
+		async importFilamentSettings(text) {
+			try {
+				const { parseOrcaFilamentJson } = await import('@/services/filament-import.js')
+				const { form, applied, ignored, warnings } = parseOrcaFilamentJson(text)
+				if (!applied.length) {
+					toastWarning(warnings[0] || 'No recognised filament settings in that file')
+					return false
+				}
+				this.overrides = { ...this.overrides, ...form }
+				this.overridesCollapsed = false
+				this._persistOverrides()
+				const ignoredNote = ignored.length ? ` (${ignored.length} unmapped keys ignored)` : ''
+				toastSuccess(`Imported ${applied.length} filament setting${applied.length > 1 ? 's' : ''}${ignoredNote}`)
+				return true
+			} catch (e) {
+				toastError('Could not import filament settings', e)
+				return false
+			}
+		},
+
 		// ── Pause / filament-change at height ──────────────────────────
 		addPause({ height, type = 'filament_change' } = {}) {
 			const h = Number(height)

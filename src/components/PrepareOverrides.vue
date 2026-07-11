@@ -24,6 +24,21 @@ export default {
 		onOverrideChange() {
 			this.printStore.persistOverrides()
 		},
+		onFilamentImport(e) {
+			const file = e.target.files?.[0]
+			e.target.value = '' // allow re-importing the same file
+			if (!file) {
+				return
+			}
+			const reader = new FileReader()
+			reader.onload = () => {
+				void this.printStore.importFilamentSettings(String(reader.result || ''))
+			}
+			reader.onerror = () => {
+				this.printStore.importFilamentSettings('') // triggers the error toast path
+			}
+			reader.readAsText(file)
+		},
 		savePreset() {
 			if (this.printStore.saveOverridePreset(this.presetName)) {
 				this.presetName = ''
@@ -103,6 +118,22 @@ export default {
 						<option v-for="name in presetNames" :key="name" :value="name">{{ name }}</option>
 					</select>
 				</div>
+			</div>
+
+			<div class="nc-print-field nc-print-overrides-import">
+				<label>Import filament settings</label>
+				<label class="nc-print-btn nc-print-btn--sm">
+					Import .json…
+					<input
+						ref="filamentImport"
+						type="file"
+						accept=".json,application/json"
+						hidden
+						@change="onFilamentImport">
+				</label>
+				<span class="nc-print-overrides-import__hint">
+					OrcaSlicer / Bambu filament preset — temps, fan, retraction.
+				</span>
 			</div>
 		</div>
 	</div>
