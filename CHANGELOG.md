@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.43.0] - 2026-07-11
+
+Multi-object editor — foundation (Phase 3a of the Prepare rework). No visible
+change yet; this lands the data model the viewport selection UI (3b) and
+cut-into-two-parts (3c) build on.
+
+### Added — scene model (internal)
+
+- Store gains a `objects[]` scene array + `selectedObjectId`, each object
+  carrying its own `{ id, name, sourceKind, position, rotation, scale, bbox,
+  triangleCount, visible }`. `meshState` stays the reactive single-object
+  transform and continues to drive all existing reads; for now the selected
+  object mirrors it (single object = one entry), so nothing changes on screen.
+- Scene actions: `addObject` / `removeObject` / `duplicateObject` / `selectObject`
+  / `clearSelection` / `renameObject` / `setObjectTransform` / `clearScene`, plus
+  getters `selectedObject` and `isMultiObject`. Loading a model seeds one
+  selected object; clearing empties the scene.
+
+### Tests
+
+- vitest `scene-objects.spec` (seed-on-load, add/select/remove/duplicate,
+  transform mirroring, multi-object flag, clear). Full suite green (323).
+
 ## [1.42.0] - 2026-07-11
 
 Prepare-tab editor: undo/redo + ~10 more transform tools (Creality/Orca-style).

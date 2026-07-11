@@ -213,6 +213,14 @@ function defaultMeshState() {
 // Kept outside Pinia state (it holds a bounded array of past transforms, not
 // reactive UI state); the store mirrors canUndo/canRedo into reactive flags.
 const meshUndo = createUndoStack(50)
+
+// Monotonic id source for scene objects (Phase 3). Module-level so ids stay
+// unique across model reloads within a session.
+let objectIdSeq = 0
+function nextObjectId() {
+	objectIdSeq += 1
+	return `obj_${objectIdSeq}`
+}
 // Set while undo/redo re-applies a snapshot, so the resulting setMeshTransform
 // doesn't push it back onto the stack.
 let applyingUndo = false
@@ -285,6 +293,15 @@ export const usePrintStore = defineStore('print', {
 		// Reactive mirror of the module-level undo stack (for toolbar enable state).
 		meshCanUndo: false,
 		meshCanRedo: false,
+		// Multi-object scene (Phase 3). Each object carries its own transform +
+		// metadata; `meshState` above continues to project the SELECTED object so
+		// existing single-object reads keep working during the migration. In 3a a
+		// single loaded model = one object mirroring meshState; 3b makes the
+		// viewport author this array for real multi-object editing.
+		//   { id, name, sourceKind, position:[x,y,z], rotation:[x,y,z],
+		//     scale:[x,y,z], bbox|null, triangleCount, visible }
+		objects: [],
+		selectedObjectId: null,
 		profiles: {
 			printers: [],
 			filaments: [],
@@ -459,6 +476,10 @@ export const usePrintStore = defineStore('print', {
 
 	getters: {
 		hasModel: (s) => !!s.model.file,
+		// The currently-selected scene object (Phase 3), or null.
+		selectedObject: (s) => s.objects.find((o) => o.id === s.selectedObjectId) || null,
+		// Convenience: is the scene multi-object (drives multi-slice + UI affordances).
+		isMultiObject: (s) => s.objects.length > 1,
 		slicerReady: (s) => s.appStatus.loaded && s.appStatus.slicer_enabled && s.appStatus.slicer_ok,
 		// Part B: admin console toggle + Moonraker feature detection.
 		consoleEnabled: (s) => !!s.appStatus.console_enabled,
@@ -944,6 +965,8 @@ export const usePrintStore = defineStore('print', {
 				scale: this.meshState.scale,
 			})
 			this._refreshUndoFlags()
+			// Seed the scene with a single object mirroring the baseline transform.
+			this._resetSceneToSingle()
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
 			this._updateModelMetaFromFile(file)
@@ -1089,6 +1112,15 @@ export const usePrintStore = defineStore('print', {
 				this.meshState.scale = [...transform.scale]
 			}
 			this._persistMeshTransform()
+			// 3a: keep the selected scene object mirrored to meshState (single
+			// object today; the viewport authors per-object transforms in 3b).
+			if (this.selectedObjectId) {
+				this.setObjectTransform(this.selectedObjectId, {
+					position: this.meshState.position,
+					rotation: this.meshState.rotation,
+					scale: this.meshState.scale,
+				})
+			}
 			// Record into undo history (dedup'd), unless we're mid-undo/redo.
 			if (!applyingUndo) {
 				meshUndo.push({
@@ -1155,6 +1187,121 @@ export const usePrintStore = defineStore('print', {
 		resetMeshUndo() {
 			meshUndo.reset()
 			this._refreshUndoFlags()
+		},
+
+		// ── Scene objects (Phase 3) ──────────────────────────────────────────────
+
+		/** Default transform for a fresh object. */
+		_defaultObject(meta = {}) {
+			return {
+				id: meta.id || nextObjectId(),
+				name: meta.name || this.model.name || 'Object',
+				sourceKind: meta.sourceKind || 'file',
+				position: [...(meta.position || [0, 0, 0])],
+				rotation: [...(meta.rotation || [0, 0, 0])],
+				scale: [...(meta.scale || [1, 1, 1])],
+				bbox: meta.bbox || null,
+				triangleCount: meta.triangleCount || 0,
+				visible: meta.visible !== false,
+			}
+		},
+
+		/**
+		 * Reset the scene to a single object mirroring the current meshState — the
+		 * baseline used on model load in 3a. In 3b the viewport authors the array.
+		 */
+		_resetSceneToSingle() {
+			const obj = this._defaultObject({
+				name: this.model.name || 'Object',
+				position: this.meshState.position,
+				rotation: this.meshState.rotation,
+				scale: this.meshState.scale,
+				bbox: this.modelMeta.bbox,
+				triangleCount: this.modelMeta.triangleCount,
+			})
+			this.objects = [obj]
+			this.selectedObjectId = obj.id
+		},
+
+		clearScene() {
+			this.objects = []
+			this.selectedObjectId = null
+		},
+
+		selectObject(id) {
+			if (id === null || this.objects.some((o) => o.id === id)) {
+				this.selectedObjectId = id
+			}
+		},
+
+		clearSelection() {
+			this.selectedObjectId = null
+		},
+
+		/**
+		 * Add an object to the scene and select it. Returns the created object.
+		 * @param {object} meta
+		 */
+		addObject(meta = {}) {
+			const obj = this._defaultObject(meta)
+			this.objects.push(obj)
+			this.selectedObjectId = obj.id
+			return obj
+		},
+
+		removeObject(id) {
+			const idx = this.objects.findIndex((o) => o.id === id)
+			if (idx < 0) {
+				return
+			}
+			this.objects.splice(idx, 1)
+			if (this.selectedObjectId === id) {
+				this.selectedObjectId = this.objects[Math.max(0, idx - 1)]?.id ?? null
+			}
+		},
+
+		/** Clone an object's transform+metadata (geometry cloning is the viewport's job). */
+		duplicateObject(id) {
+			const src = this.objects.find((o) => o.id === id)
+			if (!src) {
+				return null
+			}
+			const copy = this._defaultObject({
+				...src,
+				id: nextObjectId(),
+				name: `${src.name} copy`,
+				sourceKind: 'duplicate',
+			})
+			this.objects.push(copy)
+			this.selectedObjectId = copy.id
+			return copy
+		},
+
+		renameObject(id, name) {
+			const obj = this.objects.find((o) => o.id === id)
+			if (obj) {
+				obj.name = String(name || '').slice(0, 120)
+			}
+		},
+
+		/** Update one object's transform (used by the viewport in 3b). */
+		setObjectTransform(id, transform) {
+			const obj = this.objects.find((o) => o.id === id)
+			if (!obj || !transform) {
+				return
+			}
+			if (Array.isArray(transform.position)) {
+				obj.position = [...transform.position]
+			}
+			if (Array.isArray(transform.rotation)) {
+				obj.rotation = [...transform.rotation]
+			}
+			if (Array.isArray(transform.scale)) {
+				obj.scale = [...transform.scale]
+			}
+			if (transform.bbox) {
+				obj.bbox = transform.bbox
+			}
 		},
 
 		async exportMeshFromViewport(viewport) {
@@ -1263,6 +1410,7 @@ export const usePrintStore = defineStore('print', {
 			this.meshState = defaultMeshState()
 			this.resetMeshHealth()
 			this.resetMeshUndo()
+			this.clearScene()
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
 			this._persistMeshTransform()
