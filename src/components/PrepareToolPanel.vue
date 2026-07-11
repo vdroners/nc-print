@@ -29,7 +29,7 @@ export default {
 			toSize: { axis: 'x', value: 0 },
 			unit: 'mm', // 'mm' | 'in' for the "to size" field
 			lockAspect: true,
-			cut: { axis: 'z', pos: 50, keep: 'bottom', cap: true },
+			cut: { axis: 'z', pos: 50, keep: 'both', cap: true },
 			wireframe: false,
 			section: { enabled: false, axis: 'z', offset: 0, flip: false },
 		}
@@ -293,8 +293,9 @@ export default {
 				</label>
 				<label>Keep
 					<select v-model="cut.keep" :disabled="disabled">
-						<option value="bottom">Bottom</option>
-						<option value="top">Top</option>
+						<option value="both">Both parts</option>
+						<option value="bottom">Bottom only</option>
+						<option value="top">Top only</option>
 					</select>
 				</label>
 			</div>

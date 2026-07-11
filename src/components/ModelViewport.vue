@@ -17,7 +17,7 @@ import {
 	rotationMatrixFromTo,
 	applyRotationMatrix,
 } from '@/services/mesh-analyze.js'
-import { cutMeshByPlane } from '@/services/mesh-cut.js'
+import { cutMeshByPlane, cutMeshBothHalves } from '@/services/mesh-cut.js'
 
 export default {
 	name: 'ModelViewport',
@@ -560,20 +560,47 @@ export default {
 			toastSuccess('Selected face placed on bed')
 			return true
 		},
-		async cutMesh({ axis = 'z', position01 = 0.5, keep = 'bottom', cap = true } = {}) {
+		async cutMesh({ axis = 'z', position01 = 0.5, keep = 'both', cap = true } = {}) {
 			const mesh = await this.getMeshSnapshot()
 			if (!mesh) {
 				return false
 			}
-			const result = cutMeshByPlane(mesh.positions, mesh.indices, { axis, position01, keep, cap })
-			if (!result || !result.positions.length) {
-				toastInfo('Cut removed the whole model — adjust the plane')
+			// Single-half mode (legacy) still supported; default is keep BOTH.
+			if (keep === 'top' || keep === 'bottom') {
+				const result = cutMeshByPlane(mesh.positions, mesh.indices, { axis, position01, keep, cap })
+				if (!result || !result.positions.length) {
+					toastInfo('Cut removed the whole model — adjust the plane')
+					return false
+				}
+				await this.applyMeshSnapshot({ positions: result.positions, indices: result.indices })
+				this.printStore.setMeshHealth(analyzeMesh(result.positions, result.indices))
+				toastSuccess(`Cut applied — kept ${keep} half`)
+				return true
+			}
+
+			// Keep BOTH halves as independent, movable objects (Phase 3c).
+			const { top, bottom } = cutMeshBothHalves(mesh.positions, mesh.indices, { axis, position01, cap })
+			const halves = [bottom, top].filter((h) => h && h.positions.length)
+			if (halves.length < 2) {
+				toastInfo('Cut did not split the model into two parts — adjust the plane')
 				return false
 			}
-			await this.applyMeshSnapshot({ positions: result.positions, indices: result.indices })
-			const analysis = analyzeMesh(result.positions, result.indices)
-			this.printStore.setMeshHealth(analysis)
-			toastSuccess(`Cut applied — kept ${keep} half`)
+			// Replace the source object with the two halves.
+			const sourceId = this.viewport?.getSelectedId?.()
+			for (const h of halves) {
+				this.viewport?.addObjectFromMesh?.({ positions: h.positions, indices: h.indices })
+			}
+			if (sourceId) {
+				this.viewport?.removeObject?.(sourceId)
+			}
+			this._syncSceneFromViewport()
+			// Health reflects the (newly selected) half.
+			const sel = await this.getMeshSnapshot()
+			if (sel) {
+				this.printStore.setMeshHealth(analyzeMesh(sel.positions, sel.indices))
+			}
+			this._scheduleTransformSync()
+			toastSuccess('Cut into two parts — drag either to reposition')
 			return true
 		},
 		onDrop(e) {

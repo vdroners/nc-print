@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.45.0] - 2026-07-11
+
+Plane cut into two independent parts (Phase 3c) — the long-standing gap where a
+cut discarded one half and left the kept half unmovable.
+
+### Changed — cut
+
+- The plane-cut **keeps BOTH halves by default**, each as its own selectable,
+  movable object. After a cut you can drag, rotate, scale, or delete either part
+  independently and slice them together. The Keep control now offers **Both
+  parts** (default) / Bottom only / Top only (the single-half behavior is
+  preserved for when you really do want to discard a side).
+- Implemented via `cutMeshBothHalves` (both sides clipped + capped in one pass)
+  and a new viewport `addObjectFromMesh`; `ModelViewport.cutMesh` removes the
+  source object and adds the two halves, then re-selects one. Empty-side cuts
+  (plane grazing/outside the model) fall back with a clear message.
+
+### Tests
+
+- vitest `prepare-tools.spec` gains `cutMeshBothHalves` coverage (both halves on
+  correct sides, together cover the original extent, valid indexed meshes,
+  empty-side → null). Full suite green (332).
+
 ## [1.44.0] - 2026-07-11
 
 Multi-object editor — selection + object list (Phase 3b). You can now load more

@@ -532,6 +532,19 @@ export async function createViewport(canvas, wrap) {
 		removeObject(id) {
 			removeObjectById(id)
 		},
+		/**
+		 * Add a new object from raw {positions, indices} (Phase 3c cut halves).
+		 * Returns the new object id, or null on empty input.
+		 */
+		addObjectFromMesh(mesh) {
+			if (!mesh?.positions?.length || !mesh?.indices?.length) {
+				return null
+			}
+			const geom = new THREE.BufferGeometry()
+			geom.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3))
+			geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
+			return addMeshFromGeometry(geom).id
+		},
 		/** Clone the selected mesh's geometry into a new, staggered, selected object. */
 		duplicateSelected() {
 			const entry = selectedEntry()

@@ -12,19 +12,12 @@
 const AXIS_INDEX = { x: 0, y: 1, z: 2 }
 
 /**
- * @param {Float32Array|number[]} positions flat xyz
- * @param {Uint32Array|number[]} indices
- * @param {{ axis?: 'x'|'y'|'z', position01?: number, offset?: number, keep?: 'top'|'bottom', cap?: boolean }} [options]
- * @returns {{ positions: Float32Array, indices: Uint32Array, offset: number }|null}
+ * Resolve the axis, plane offset, and shared vertex helpers for a cut.
+ * @returns {{ ci:number, offset:number, vertAt:Function, lerp:Function }}
  */
-export function cutMeshByPlane(positions, indices, options = {}) {
+function cutContext(positions, options) {
 	const axis = AXIS_INDEX[options.axis] !== undefined ? options.axis : 'z'
 	const ci = AXIS_INDEX[axis]
-	const keep = options.keep === 'top' ? 'top' : 'bottom'
-	const sign = keep === 'top' ? 1 : -1
-	const cap = options.cap !== false
-
-	// Resolve the plane offset along the axis.
 	let min = Infinity
 	let max = -Infinity
 	for (let i = ci; i < positions.length; i += 3) {
@@ -42,21 +35,28 @@ export function cutMeshByPlane(positions, indices, options = {}) {
 		const t = Math.min(Math.max(Number.isFinite(options.position01) ? options.position01 : 0.5, 0), 1)
 		offset = min + t * (max - min)
 	}
-
-	const dist = (v) => sign * (v[ci] - offset)
 	const vertAt = (idx) => [positions[3 * idx], positions[3 * idx + 1], positions[3 * idx + 2]]
 	const lerp = (a, b, t) => [
 		a[0] + (b[0] - a[0]) * t,
 		a[1] + (b[1] - a[1]) * t,
 		a[2] + (b[2] - a[2]) * t,
 	]
+	return { ci, offset, vertAt, lerp }
+}
 
+/**
+ * Collect the triangles on ONE side of the plane (with straddling tris clipped)
+ * into a flat position array, optionally capping the cross-section.
+ * @returns {{ positions: Float32Array, indices: Uint32Array }|null}
+ */
+function collectSide(positions, indices, ctx, sign, cap) {
+	const { ci, offset, vertAt, lerp } = ctx
+	const dist = (v) => sign * (v[ci] - offset)
 	const out = []
 	const capPts = []
 	const pushTri = (v0, v1, v2) => {
 		out.push(v0[0], v0[1], v0[2], v1[0], v1[1], v1[2], v2[0], v2[1], v2[2])
 	}
-
 	const triCount = indices.length / 3
 	for (let f = 0; f < triCount; f++) {
 		const tri = [
@@ -89,21 +89,53 @@ export function cutMeshByPlane(positions, indices, options = {}) {
 			capPts.push(crossings[0], crossings[1])
 		}
 	}
-
 	if (!out.length) {
 		return null
 	}
-
 	if (cap && capPts.length >= 3) {
 		buildCap(capPts, ci, sign, pushTri)
 	}
-
 	const posArr = new Float32Array(out)
 	const idxArr = new Uint32Array(posArr.length / 3)
 	for (let i = 0; i < idxArr.length; i++) {
 		idxArr[i] = i
 	}
-	return { positions: posArr, indices: idxArr, offset }
+	return { positions: posArr, indices: idxArr }
+}
+
+/**
+ * @param {Float32Array|number[]} positions flat xyz
+ * @param {Uint32Array|number[]} indices
+ * @param {{ axis?: 'x'|'y'|'z', position01?: number, offset?: number, keep?: 'top'|'bottom', cap?: boolean }} [options]
+ * @returns {{ positions: Float32Array, indices: Uint32Array, offset: number }|null}
+ */
+export function cutMeshByPlane(positions, indices, options = {}) {
+	const ctx = cutContext(positions, options)
+	const sign = options.keep === 'top' ? 1 : -1
+	const cap = options.cap !== false
+	const side = collectSide(positions, indices, ctx, sign, cap)
+	if (!side) {
+		return null
+	}
+	return { ...side, offset: ctx.offset }
+}
+
+/**
+ * Cut a mesh and keep BOTH halves as independent geometries (Phase 3c). Same
+ * plane resolution + clipping as cutMeshByPlane, run for each side. Either half
+ * may be null (e.g. the plane grazes an edge and one side is empty).
+ * @returns {{ top: object|null, bottom: object|null, offset: number }}
+ */
+export function cutMeshBothHalves(positions, indices, options = {}) {
+	const ctx = cutContext(positions, options)
+	const cap = options.cap !== false
+	const top = collectSide(positions, indices, ctx, 1, cap)
+	const bottom = collectSide(positions, indices, ctx, -1, cap)
+	return {
+		top: top ? { ...top, offset: ctx.offset } : null,
+		bottom: bottom ? { ...bottom, offset: ctx.offset } : null,
+		offset: ctx.offset,
+	}
 }
 
 /**

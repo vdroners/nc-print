@@ -9,7 +9,7 @@ import {
 	rotationMatrixFromTo,
 	applyRotationMatrix,
 } from '../services/mesh-analyze.js'
-import { cutMeshByPlane } from '../services/mesh-cut.js'
+import { cutMeshByPlane, cutMeshBothHalves } from '../services/mesh-cut.js'
 
 const COMPONENTS = resolve(dirname(fileURLToPath(import.meta.url)), '../components')
 const readComponent = (name) => readFileSync(resolve(COMPONENTS, name), 'utf8')
@@ -112,6 +112,45 @@ describe('cutMeshByPlane (G-tool-3)', () => {
 		const { positions, indices } = unitCube()
 		const res = cutMeshByPlane(positions, indices, { axis: 'z', offset: 100, keep: 'top', cap: true })
 		expect(res).toBeNull()
+	})
+})
+
+describe('cutMeshBothHalves (G-tool-3b, Phase 3c)', () => {
+	it('returns BOTH halves, each on its own side of the plane', () => {
+		const { positions, indices } = unitCube()
+		const { top, bottom } = cutMeshBothHalves(positions, indices, { axis: 'z', position01: 0.5, cap: true })
+		expect(top).not.toBeNull()
+		expect(bottom).not.toBeNull()
+		const tb = computeBbox(top.positions)
+		const bb = computeBbox(bottom.positions)
+		expect(bb.maxZ).toBeLessThanOrEqual(0.001) // bottom below plane
+		expect(tb.minZ).toBeGreaterThanOrEqual(-0.001) // top above plane
+	})
+
+	it('together the halves cover the original Z extent', () => {
+		const { positions, indices } = unitCube()
+		const { top, bottom } = cutMeshBothHalves(positions, indices, { axis: 'z', position01: 0.5, cap: true })
+		const tb = computeBbox(top.positions)
+		const bb = computeBbox(bottom.positions)
+		expect(bb.minZ).toBeCloseTo(-1, 3)
+		expect(tb.maxZ).toBeCloseTo(1, 3)
+	})
+
+	it('each half is a valid indexed mesh', () => {
+		const { positions, indices } = unitCube()
+		const { top, bottom } = cutMeshBothHalves(positions, indices, { axis: 'z', position01: 0.5, cap: true })
+		for (const h of [top, bottom]) {
+			expect(h.positions.length).toBeGreaterThan(0)
+			expect(h.indices.length).toBe(h.positions.length / 3)
+		}
+	})
+
+	it('offset far outside the model leaves one side empty (null)', () => {
+		const { positions, indices } = unitCube()
+		const { top, bottom } = cutMeshBothHalves(positions, indices, { axis: 'z', offset: 100, cap: true })
+		// Everything is below z=100 → top empty, bottom present.
+		expect(top).toBeNull()
+		expect(bottom).not.toBeNull()
 	})
 })
 
