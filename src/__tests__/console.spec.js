@@ -100,7 +100,10 @@ describe('WS11: G-code console', () => {
 
 	it('console panel is gated on consoleEnabled in PrintTab', () => {
 		const src = read('../components/PrintTab.vue')
-		expect(src).toMatch(/<GcodeConsole\s+v-if="printStore\.consoleEnabled"\s*\/>/)
+		// The console panel is now a registry entry rendered via <PrintPanel>;
+		// its `when` predicate gates visibility on the store's consoleEnabled flag.
+		expect(src).toMatch(/comp:\s*'GcodeConsole'/)
+		expect(src).toMatch(/when:\s*\(s\)\s*=>\s*s\.consoleEnabled/)
 	})
 
 	it('GcodeConsole canSend requires enabled + printable ASCII', () => {

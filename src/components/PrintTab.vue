@@ -2,13 +2,16 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
-import { pausePrint, resumePrint, cancelPrint, uploadAndStart } from '@/services/moonraker-api.js'
+import { uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
+import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
 import WorkspaceRail from './WorkspaceRail.vue'
+import PrintStatusBar from './PrintStatusBar.vue'
+import PrintPanel from './PrintPanel.vue'
 import MultiPrinterPicker from './MultiPrinterPicker.vue'
 import TemperatureControl from './TemperatureControl.vue'
 import InPrintTuningPanel from './InPrintTuningPanel.vue'
@@ -34,10 +37,49 @@ import UpdateStatusBanner from './UpdateStatusBanner.vue'
 import UpdateControlPanel from './UpdateControlPanel.vue'
 import AnnouncementsBanner from './AnnouncementsBanner.vue'
 
+// Collapsible + pinnable Print panels, grouped into forge-style zones. Only
+// panels with a cheap, store-derived visibility predicate are wrapped here (the
+// `when` fn), so the wrapper header hides in lockstep with the panel's own
+// self-gate and never shows empty. Data-dependent panels (Sensors, Filament,
+// Timelapse, Queue, Webcams) already self-hide when empty and are rendered
+// plainly below the zones — they don't wrap because their gate needs
+// panel-internal fetched data the parent can't cheaply mirror.
+//   when(store) -> boolean : mirrors the inner panel's outer v-if
+const PANEL_ZONES = [
+	{
+		key: 'operate',
+		label: 'Operate',
+		panels: [
+			{ id: 'tuning', title: 'In-print tuning', icon: 'bolt', comp: 'InPrintTuningPanel', open: true,
+				when: (s) => s.printerControls.isActive },
+			{ id: 'temperature', title: 'Temperature', icon: 'thermometer', comp: 'TemperatureControl', open: true,
+				when: () => true },
+			{ id: 'motion', title: 'Manual motion', icon: 'move', comp: 'ManualMotionPanel', open: false,
+				when: (s) => s.printerState.connected && !s.printerControls.isActive },
+			{ id: 'console', title: 'G-code console', icon: 'terminal', comp: 'GcodeConsole', open: false,
+				when: (s) => s.consoleEnabled },
+			{ id: 'power', title: 'Power devices', icon: 'bolt', comp: 'PowerDevicePanel', open: false,
+				when: (s) => s.hasFeature('power') },
+		],
+	},
+	{
+		key: 'analyze',
+		label: 'Analyze',
+		panels: [
+			{ id: 'tempgraph', title: 'Temperature graph', icon: 'thermometer', comp: 'TemperatureGraph', open: false,
+				when: (s) => s.printerState.connected },
+			{ id: 'bedmesh', title: 'Bed mesh', icon: 'grid', comp: 'BedMeshPanel', open: false,
+				when: (s) => s.printerState.connected },
+		],
+	},
+]
+
 export default {
 	name: 'PrintTab',
 	components: {
 		WorkspaceRail,
+		PrintStatusBar,
+		PrintPanel,
 		MultiPrinterPicker,
 		TemperatureControl,
 		InPrintTuningPanel,
@@ -66,11 +108,11 @@ export default {
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
-			busy: false,
 			uploadBusy: false,
 			startAfterUpload: true,
 			cancelConfirmOpen: false,
 			cameraFullscreen: false,
+			pinned: loadPinned(),
 		}
 	},
 	computed: {
@@ -205,6 +247,35 @@ export default {
 			}
 			return 'Loading camera…'
 		},
+		/** All wrappable panels whose store-derived `when` predicate passes. */
+		visiblePanels() {
+			const out = []
+			for (const zone of PANEL_ZONES) {
+				for (const p of zone.panels) {
+					if (typeof p.when === 'function' && !p.when(this.printStore)) {
+						continue
+					}
+					out.push({ ...p, zone: zone.key })
+				}
+			}
+			return out
+		},
+		/** Pinned panels in pin order (only those currently visible). */
+		pinnedPanels() {
+			const byId = new Map(this.visiblePanels.map((p) => [p.id, p]))
+			return this.pinned.map((id) => byId.get(id)).filter(Boolean)
+		},
+		/** Zones with their unpinned, visible panels (drops empty zones). */
+		zonesForRender() {
+			const pinnedSet = new Set(this.pinned)
+			return PANEL_ZONES
+				.map((zone) => ({
+					key: zone.key,
+					label: zone.label,
+					panels: this.visiblePanels.filter((p) => p.zone === zone.key && !pinnedSet.has(p.id)),
+				}))
+				.filter((zone) => zone.panels.length > 0)
+		},
 	},
 	mounted() {
 		void this.consumePendingPrintUpload()
@@ -242,28 +313,20 @@ export default {
 				this.printStore.clearPendingPrintUpload()
 			}
 		},
+		onTogglePin(id) {
+			this.pinned = togglePinned(id)
+		},
 		goSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
 		},
 		goPrepare() {
 			this.printStore.setActiveTab(TABS.PREPARE)
 		},
-		async withBusy(fn) {
-			this.busy = true
-			try {
-				await fn()
-				await this.printStore.refreshPrinterState()
-			} catch (e) {
-				toastError('Print control failed', e)
-			} finally {
-				this.busy = false
-			}
-		},
 		onPause() {
-			return this.withBusy(() => pausePrint(this.printerId))
+			return this.printStore.printPause()
 		},
 		onResume() {
-			return this.withBusy(() => resumePrint(this.printerId))
+			return this.printStore.printResume()
 		},
 		openCancelConfirm() {
 			this.cancelConfirmOpen = true
@@ -273,7 +336,7 @@ export default {
 		},
 		onCancelConfirmed() {
 			this.cancelConfirmOpen = false
-			return this.withBusy(() => cancelPrint(this.printerId))
+			return this.printStore.printCancel()
 		},
 		onGcodeInput(e) {
 			const file = e.target.files?.[0]
@@ -329,6 +392,8 @@ export default {
 
 <template>
 	<WorkspaceRail class="nc-print-print-tab">
+		<PrintStatusBar />
+
 		<MultiPrinterPicker />
 
 		<UpdateStatusBanner />
@@ -452,7 +517,7 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn"
-					:disabled="busy || !controls.canPause"
+					:disabled="printStore.printControlBusy || !controls.canPause"
 					@click="onPause">
 					<NcPrintIcon name="pause" :size="14" />
 					Pause
@@ -460,7 +525,7 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn nc-print-btn--primary"
-					:disabled="busy || !controls.canResume"
+					:disabled="printStore.printControlBusy || !controls.canResume"
 					@click="onResume">
 					<NcPrintIcon name="play" :size="14" />
 					Resume
@@ -468,7 +533,7 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn nc-print-btn--danger"
-					:disabled="busy || !controls.canCancel"
+					:disabled="printStore.printControlBusy || !controls.canCancel"
 					@click="openCancelConfirm">
 					<NcPrintIcon name="stop" :size="14" />
 					Cancel
@@ -476,29 +541,46 @@ export default {
 			</div>
 		</div>
 
-		<InPrintTuningPanel />
+		<!-- Pinned panels float to the top, in pin order. -->
+		<div v-if="pinnedPanels.length" class="nc-print-zone">
+			<h3 class="nc-print-zone__label">
+				<NcPrintIcon name="pin" :size="13" /> Pinned
+			</h3>
+			<PrintPanel
+				v-for="p in pinnedPanels"
+				:key="'pin-' + p.id"
+				:id="p.id"
+				:title="p.title"
+				:icon="p.icon"
+				:default-open="p.open"
+				:pinned="true"
+				@toggle-pin="onTogglePin">
+				<component :is="p.comp" />
+			</PrintPanel>
+		</div>
 
-		<TemperatureControl />
+		<!-- Zoned, collapsible panels (forge-style Operate / Analyze). -->
+		<div v-for="zone in zonesForRender" :key="zone.key" class="nc-print-zone">
+			<h3 class="nc-print-zone__label">{{ zone.label }}</h3>
+			<PrintPanel
+				v-for="p in zone.panels"
+				:key="p.id"
+				:id="p.id"
+				:title="p.title"
+				:icon="p.icon"
+				:default-open="p.open"
+				:pinned="false"
+				@toggle-pin="onTogglePin">
+				<component :is="p.comp" />
+			</PrintPanel>
+		</div>
 
-		<TemperatureGraph />
-
-		<BedMeshPanel />
-
+		<!-- Data-dependent panels that already self-hide when empty. -->
 		<FilamentPanel />
-
 		<SensorPanel />
-
 		<TimelapsePanel />
-
 		<QueuePanel />
-
-		<div v-if="printStore.hasFeature('power')" class="nc-print-card"><PowerDevicePanel /></div>
-
 		<div v-if="printStore.hasFeature('webcam')" class="nc-print-card"><WebcamListPanel /></div>
-
-		<GcodeConsole v-if="printStore.consoleEnabled" />
-
-		<ManualMotionPanel />
 
 		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">
@@ -612,6 +694,24 @@ export default {
 </template>
 
 <style scoped>
+.nc-print-zone {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nc-gcs-space-md, 12px);
+}
+
+.nc-print-zone__label {
+	align-items: center;
+	color: var(--nc-gcs-text-muted);
+	display: flex;
+	font-size: 11px;
+	font-weight: 700;
+	gap: 6px;
+	letter-spacing: 0.08em;
+	margin: var(--nc-gcs-space-sm, 8px) 0 0;
+	text-transform: uppercase;
+}
+
 .nc-print-print-meta {
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0 0 8px;

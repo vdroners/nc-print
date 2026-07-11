@@ -10,7 +10,13 @@ import {
 	parseExtruderCount,
 	resolveFilamentIds,
 } from '@/services/slicer-utils.js'
-import { fetchState, uploadAndStart as moonrakerUpload } from '@/services/moonraker-api.js'
+import {
+	fetchState,
+	uploadAndStart as moonrakerUpload,
+	pausePrint as pausePrintApi,
+	resumePrint as resumePrintApi,
+	cancelPrint as cancelPrintApi,
+} from '@/services/moonraker-api.js'
 import { MoonrakerWsClient } from '@/services/moonraker-ws.js'
 import { fetchConfig } from '@/services/config-api.js'
 import { fetchAppStatus } from '@/services/status-api.js'
@@ -419,6 +425,9 @@ export const usePrintStore = defineStore('print', {
 		printerProgressSource: 'poll',
 		// WS11: G-code console scrollback (capped ring buffer).
 		consoleLog: [],
+		// Shared busy flag for pause/resume/cancel so the Print-control card and
+		// the sticky status bar (and command palette) never fire concurrently.
+		printControlBusy: false,
 
 		// Print history + derived metrics/wear (v1.37). Loaded on demand by the
 		// History panel; capture happens server-side on the terminal transition.
@@ -2017,6 +2026,41 @@ export const usePrintStore = defineStore('print', {
 			} catch (e) {
 				// ignore — bell/activity/history is non-critical
 			}
+		},
+
+		// ── Print control (shared by PrintTab card, sticky status bar, palette) ──
+
+		/**
+		 * Run a print-control op against the active printer with a shared busy
+		 * flag + state refresh. Best-effort — errors toast, never throw.
+		 * @param {(printerId: string|undefined) => Promise<any>} fn
+		 * @param {string} failMsg
+		 */
+		async _runPrintControl(fn, failMsg) {
+			if (this.printControlBusy) {
+				return false
+			}
+			this.printControlBusy = true
+			try {
+				await fn(this.selectedPrinterId || undefined)
+				await this.refreshPrinterState()
+				return true
+			} catch (e) {
+				toastError(failMsg, e)
+				return false
+			} finally {
+				this.printControlBusy = false
+			}
+		},
+
+		printPause() {
+			return this._runPrintControl(pausePrintApi, 'Pause failed')
+		},
+		printResume() {
+			return this._runPrintControl(resumePrintApi, 'Resume failed')
+		},
+		printCancel() {
+			return this._runPrintControl(cancelPrintApi, 'Cancel failed')
 		},
 
 		// ── Print history (v1.37) ───────────────────────────────────────────────

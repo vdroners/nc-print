@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.38.0] - 2026-07-10
+
+Print-tab workflow overhaul toward the 3DPrintForge feel: the ~20-panel wall is
+now collapsible, pinnable, zoned, and topped by an always-visible status bar.
+(Plan: docs/plans/ux-workflow-forge-parity.md — feature 1 of 3.)
+
+### Added — Print tab
+
+- **Sticky print-status bar** (`PrintStatusBar.vue`): while a print is
+  active/paused it stays pinned to the top of the Print tab with the filename,
+  live progress bar + %, ETA, and Pause/Resume + Cancel — no more scrolling up to
+  see or control the running job. Hidden when idle.
+- **Collapsible + pinnable panels** (`PrintPanel.vue`): the monitoring panels are
+  grouped into forge-style zones (**Operate**, **Analyze**) with per-user
+  remembered open/closed state (localStorage, same mechanism as the Prepare
+  tab). A 📌 button pins a panel to a **Pinned** zone at the very top; pin order
+  and membership persist (`utils/panel-prefs.js`, capped at 8).
+- Panels with a cheap store-derived visibility rule are wrapped (in-print tuning,
+  temperature, manual motion, console, power, temperature graph, bed mesh);
+  data-dependent panels that already self-hide when empty (filament, sensors,
+  timelapse, queue, webcams) render plainly below the zones.
+
+### Changed
+
+- Pause/Resume/Cancel are now shared store actions (`printPause` / `printResume`
+  / `printCancel`) with one `printControlBusy` flag and re-entrancy guard, so the
+  Print-control card and the new status bar (and the upcoming command palette)
+  drive a single source of truth. Removed the duplicated inline control logic
+  from `PrintTab.vue`.
+
+### Tests
+
+- vitest `panel-prefs.spec` (pin load/save/toggle/cap/corrupt-JSON) and
+  `print-control.spec` (correct api + printer id, busy toggle, re-entrancy guard,
+  failure toast). Full suite green (275).
+
 ## [1.37.0] - 2026-07-10
 
 Durable print history + quality metrics + heuristic consumable-wear estimates.
