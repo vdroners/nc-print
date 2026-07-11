@@ -54,9 +54,20 @@ fi
 if [ ! -e "${ORCA_DATADIR}/resources" ]; then
   ln -s "${ORCA_RESOURCES}" "${ORCA_DATADIR}/resources" 2>/dev/null || true
 fi
-# Layer operator-authored presets (mounted volume) under user/ when present.
+# Layer operator-authored presets (persistent mounted volume) into the engine's
+# user/default preset store so they're loaded + served in the dropdowns. The
+# data_dir is tmpfs re-seeded each boot, so this copy must run every start.
+# Presets are written to /data/user-profiles/{filament,process,machine}/*.json
+# by import_creality_profiles.py (rebased onto engine bases).
 if [ -d /data/user-profiles ]; then
-  mkdir -p "${ORCA_DATADIR}/user" 2>/dev/null || true
+  for _kind in filament process machine; do
+    if [ -d "/data/user-profiles/${_kind}" ]; then
+      mkdir -p "${ORCA_DATADIR}/user/default/${_kind}" 2>/dev/null || true
+      cp -f "/data/user-profiles/${_kind}/"*.json \
+            "${ORCA_DATADIR}/user/default/${_kind}/" 2>/dev/null || true
+    fi
+  done
+  log "layered operator presets from /data/user-profiles into user/default"
 fi
 
 # --- 3. Engine REST server ------------------------------------------------

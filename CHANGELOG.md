@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.51.0] - 2026-07-11
+
+Import the operator's Creality K1 Max filament/process library into the engine,
+and make operator presets on the persistent volume actually load.
+
+### Added
+
+- **`import_creality_profiles.py`** (adapter): rebases Creality Print delta-only
+  presets onto engine bases and writes them to the persistent operator volume.
+  Creality presets only store the *delta* from a Creality base that this engine
+  doesn't ship, so each is flattened + re-pointed at an engine base that exists
+  (`Generic <material>` for filament; `0.20mm Standard @Creality K1Max (0.4
+  nozzle)` for process), marked `compatible_printers = ["Creality K1 Max (0.4
+  nozzle)"]`, and stamped `type`/`instantiation`/`from`. Idempotent, with a
+  per-file imported/skipped report. From the user's library: **9 filament + 5
+  process imported**; 3 skipped (2 target a different printer — K1C — and 1 is an
+  empty delta).
+
+### Fixed
+
+- **Operator presets on the mounted volume were never loaded.** The engine's
+  data_dir is tmpfs re-seeded from the baked image every boot, and the entrypoint
+  only `mkdir`'d `user/` — it never copied the persistent `/data/user-profiles`
+  volume in. It now lays `/data/user-profiles/{filament,process,machine}/*.json`
+  into the engine's `user/default/…` on every boot, so operator/imported presets
+  survive restarts and appear in the profile dropdowns.
+
+### Notes
+
+- The K1 Max **machine** profile already ships in the engine (bed 300×300×300;
+  live scan 308×308×315 after v1.50.1) — no machine import needed.
+- Models/ and Gcode/ from the packaged folder are reference only, not imported.
+  Inventory + rationale: docs/plans/creality-import-inventory.md.
+
 ## [1.50.1] - 2026-07-11
 
 Fix wrong build volume on the Prepare tab (reported: K1 Max shown as 220×220).
