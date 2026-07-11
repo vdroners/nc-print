@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.39.0] - 2026-07-10
+
+Command palette (Ctrl/Cmd+K) — the 3DPrintForge "jump to anything" power-user
+feature. (Plan: docs/plans/ux-workflow-forge-parity.md — feature 2 of 3.)
+
+### Added
+
+- **Command palette** (`CommandPalette.vue`): press **Ctrl/Cmd+K** anywhere for a
+  centered, fuzzy-searchable overlay. Fully keyboard-driven — type to filter,
+  ↑/↓ to move, Enter to run, Esc / click-out to close. Commands are grouped:
+  - **Navigation**: Go to Prepare / Slice / Print (respecting workflow gating).
+  - **Actions**: Import model, Slice, Slice & send, Pause / Resume / Cancel —
+    each enabled only when valid (disabled entries stay visible with a reason).
+  - **Panels**: jump to + expand any Print panel (in-print tuning, temperature,
+    manual motion, console, power, temperature graph, bed mesh).
+  - **Printers**: switch the monitored printer (one entry per configured
+    printer; the current one is disabled).
+- `utils/fuzzy.js` — a small, pure fuzzy matcher (exact > prefix > substring >
+  subsequence ranking, case-insensitive) and `fuzzyFilter`.
+- `utils/commands.js` — `buildCommands(store, cb)` builds the command list from
+  live store state; pure and unit-testable.
+- Panels expand-on-request via a lightweight `nc-print-focus-panel` window event
+  so "Open <panel>" works whether the Print tab is already mounted or not.
+
+### Tests
+
+- vitest `fuzzy.spec` (ranking, case-insensitivity, no-match) and `commands.spec`
+  (nav/action/panel/printer commands, enable/disable gating, run() dispatch).
+  Full suite green (294).
+
 ## [1.38.0] - 2026-07-10
 
 Print-tab workflow overhaul toward the 3DPrintForge feel: the ~20-panel wall is

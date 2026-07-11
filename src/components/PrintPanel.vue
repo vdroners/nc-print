@@ -37,7 +37,22 @@ export default {
 			bodyId: `nc-print-panel-${uid++}`,
 		}
 	},
+	mounted() {
+		window.addEventListener('nc-print-focus-panel', this.onFocusRequest)
+	},
+	beforeDestroy() {
+		window.removeEventListener('nc-print-focus-panel', this.onFocusRequest)
+	},
 	methods: {
+		onFocusRequest(e) {
+			if (e?.detail?.id !== this.id) {
+				return
+			}
+			this.expand()
+			this.$nextTick(() => {
+				this.$el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+			})
+		},
 		toggle() {
 			this.open = !this.open
 			saveCollapsibleState(`print-${this.id}`, this.open)

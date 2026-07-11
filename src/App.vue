@@ -5,6 +5,8 @@ import { TABS } from '@/constants/tabs.js'
 import PrintAppShell from './components/PrintAppShell.vue'
 import AppChromeBar from './components/AppChromeBar.vue'
 import HelpDrawer from './components/HelpDrawer.vue'
+import CommandPalette from './components/CommandPalette.vue'
+import { saveCollapsibleState } from '@/utils/collapsible.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
 
@@ -21,10 +23,12 @@ export default {
 		PrepareTab,
 		SliceTab,
 		PrintTab,
+		CommandPalette,
 	},
 	data() {
 		return {
 			helpOpen: false,
+			paletteOpen: false,
 			TABS,
 			version: typeof __NC_PRINT_FRONTEND_VERSION__ !== 'undefined'
 				? __NC_PRINT_FRONTEND_VERSION__
@@ -86,10 +90,16 @@ export default {
 			this.helpOpen = true
 		},
 		onGlobalKeydown(e) {
+			const mod = e.ctrlKey || e.metaKey
+			// Command palette — allowed even while typing (it's a modifier combo).
+			if (mod && e.key.toLowerCase() === 'k') {
+				e.preventDefault()
+				this.paletteOpen = !this.paletteOpen
+				return
+			}
 			if (e.target?.closest('input, textarea, select, [contenteditable="true"]')) {
 				return
 			}
-			const mod = e.ctrlKey || e.metaKey
 			if (mod && e.key.toLowerCase() === 'o') {
 				e.preventDefault()
 				void this.importModelShortcut()
@@ -124,6 +134,18 @@ export default {
 				this.printStore.setModel(file, 'files')
 				this.printStore.setActiveTab(TABS.PREPARE)
 			}
+		},
+		// Command palette callbacks.
+		paletteImport() {
+			void this.importModelShortcut()
+		},
+		paletteFocusPanel(id) {
+			// Persist the panel open (so a fresh PrintTab mount shows it expanded)
+			// and broadcast so an already-mounted PrintPanel expands + scrolls.
+			saveCollapsibleState(`print-${id}`, true)
+			this.$nextTick(() => {
+				window.dispatchEvent(new CustomEvent('nc-print-focus-panel', { detail: { id } }))
+			})
 		},
 		async sliceShortcut() {
 			if (this.printStore.activeTab === TABS.SLICE && this.printStore.hasModel && !this.printStore.sliceBlockReason) {
@@ -186,6 +208,11 @@ export default {
 		</div>
 
 		<HelpDrawer :open.sync="helpOpen" :workflow-tab="printStore.activeTab" />
+
+		<CommandPalette
+			:open.sync="paletteOpen"
+			:open-import="paletteImport"
+			:focus-panel="paletteFocusPanel" />
 
 		<template #footer>
 			NC 3D Print v{{ version }} · Moonraker + Forge Slicer
