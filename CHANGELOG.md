@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.50.1] - 2026-07-11
+
+Fix wrong build volume on the Prepare tab (reported: K1 Max shown as 220×220).
+
+### Fixed
+
+- The Prepare bed + "model may exceed build volume" check used the wrong bed
+  size. The `buildVolume` getter looked for a `buildVolume` array on
+  `settings_json` — a key/shape that never exists — so it always fell back to
+  220×220×220, even for a Creality K1 Max whose real bed is 300×300×300 (scanned
+  ≈306×306×305). It now resolves in order: the **connected printer's live scanned
+  bed** (Moonraker `toolhead` axis extent, already in `printerCapabilities`) →
+  the selected **profile's bed** parsed from `settings.printable_area` +
+  `printable_height` → the 220 default. A legacy explicit `buildVolume` array is
+  still honoured. New pure `utils/bed-shape.js` (`parsePrintableArea`) does the
+  polygon parse. Fixes the false "exceeds build volume" warning and makes
+  Scale-to-fit / Center-on-bed use the real bed.
+
+### Tests
+
+- vitest `bed-shape.spec` (square/non-square/float/origin-offset/garbage) and
+  `build-volume.spec` (scanned > profile > default resolution order). Full suite
+  green (367).
+
 ## [1.50.0] - 2026-07-11
 
 Multiple build plates (Group 3, final) — arrange and slice several plates in one

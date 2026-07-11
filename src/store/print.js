@@ -34,6 +34,7 @@ import {
 } from '@/services/history-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
 import { createUndoStack } from '@/utils/undo-stack.js'
+import { parsePrintableArea } from '@/utils/bed-shape.js'
 // mesh-convert.js (pulls JSZip) and mesh-analyze-api.js are imported dynamically
 // at their call sites below so JSZip stays out of the startup bundle — they're
 // only needed on 3MF handling / server printability, not at app load.
@@ -500,17 +501,34 @@ export const usePrintStore = defineStore('print', {
 		hasFeature: (s) => (name) => !!(s.appStatus.moonraker_features || {})[name],
 		profilesReady: (s) => s.selection.printerId && s.selection.filamentId && s.selection.processId,
 		buildVolume(state) {
-			const p = state.profiles.printers.find(x => String(x.id) === String(state.selection.printerId))
-			if (!p?.settings_json) {
-				return [220, 220, 220]
+			// Resolution order (user-confirmed): the connected printer's LIVE
+			// scanned bed wins (authoritative for what's actually on the desk),
+			// then the selected profile's real bed (parsed from printable_area),
+			// then a safe default. The old getter looked for a `buildVolume` array
+			// on `settings_json` — a key that never exists — so it always fell back
+			// to 220×220 even for a K1 Max (real bed 300×300, scanned ~306×306×305).
+			const scanned = this.activePrinterCapabilities?.build_volume
+			if (scanned && scanned.x > 0 && scanned.y > 0 && scanned.z > 0) {
+				return [scanned.x, scanned.y, scanned.z]
 			}
-			try {
-				const s = typeof p.settings_json === 'string' ? JSON.parse(p.settings_json) : p.settings_json
-				if (Array.isArray(s.buildVolume) && s.buildVolume.length === 3) {
-					return s.buildVolume
+			const p = state.profiles.printers.find(x => String(x.id) === String(state.selection.printerId))
+			// Profiles expose their resolved preset under `settings` (older shape:
+			// `settings_json`). The bed lives in `printable_area` + printable_height.
+			const s = p?.settings || p?.settings_json
+			if (s) {
+				try {
+					const obj = typeof s === 'string' ? JSON.parse(s) : s
+					// Back-compat: honour an explicit buildVolume array if ever present.
+					if (Array.isArray(obj.buildVolume) && obj.buildVolume.length === 3) {
+						return obj.buildVolume
+					}
+					const parsed = parsePrintableArea(obj.printable_area, obj.printable_height)
+					if (parsed) {
+						return parsed
+					}
+				} catch {
+					// ignore
 				}
-			} catch {
-				// ignore
 			}
 			return [220, 220, 220]
 		},
