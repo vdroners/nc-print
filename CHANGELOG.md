@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.52.0] - 2026-07-11
+
+Full-bleed "immersive" Prepare layout — the 3D viewport fills the background with
+the panels floating over it (Creality/OrcaSlicer feel).
+
+### Changed — Prepare tab
+
+- The 3D viewport now spans the whole studio area as the background; the
+  profiles/mesh panels (left) and checklist/summary (right) float over it as
+  independently-scrollable, blurred overlay cards. The import toolbar floats
+  top-center; the tool rail + tool panel offset inboard so they clear the side
+  cards. Implemented as a reversible `mode="immersive"` prop on
+  `PrepareStudioLayout` (default `studio` keeps the old 3-column grid).
+- Below 1200px the immersive layout collapses back to the stacked-column flow
+  (floating overlays are unusable on narrow screens). Overlay cards use
+  `overscroll-behavior: contain` so wheel-scrolling inside a card doesn't chain
+  into the page. The viewport canvas follows via its existing ResizeObserver —
+  no viewport.js change.
+
+### Tests
+
+- vitest `immersive-layout.spec` (mode prop, viewport fill, floating scroll-
+  contained cards, <1200 fallback, rail/panel offset). Full suite green (372).
+
 ## [1.51.0] - 2026-07-11
 
 Import the operator's Creality K1 Max filament/process library into the engine,

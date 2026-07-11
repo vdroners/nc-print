@@ -342,7 +342,7 @@ export default {
 </script>
 
 <template>
-	<PrepareStudioLayout class="nc-print-prepare">
+	<PrepareStudioLayout class="nc-print-prepare nc-print-prepare--immersive" mode="immersive">
 		<template #left>
 		<div
 			v-if="printStore.configLoadError"
@@ -520,6 +520,45 @@ export default {
 .nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {
 	height: clamp(360px, 52vh, 640px);
 	min-height: clamp(360px, 52vh, 640px);
+}
+
+/* ── Immersive: the center column IS the viewport; fill it and float the
+   toolbar/rail/panel over it. Only applies on wide screens (the studio layout
+   reverts to columns < 1200px, where these overrides must NOT apply). ──────── */
+@media (min-width: 1201px) {
+	.nc-print-prepare--immersive .nc-print-import-cluster {
+		position: absolute;
+		top: 8px;
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 6;
+		margin: 0;
+		max-width: min(680px, 60%);
+		padding: 4px 8px;
+		border-radius: var(--nc-gcs-radius-md, 12px);
+		background: color-mix(in srgb, var(--nc-gcs-bg-surface, var(--color-main-background)) 82%, transparent);
+		backdrop-filter: blur(8px);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+	}
+
+	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio {
+		height: 100%;
+		min-height: 0;
+	}
+
+	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {
+		height: 100%;
+		min-height: 0;
+	}
+
+	/* Keep the floating tool rail / panel inboard of the 300px side overlays. */
+	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-tool-rail) {
+		left: 316px;
+	}
+
+	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-tool-panel) {
+		right: 316px;
+	}
 }
 
 .nc-print-prepare-footer {
