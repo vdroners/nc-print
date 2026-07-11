@@ -4,6 +4,17 @@ import { usePrintStore } from '@/store/print.js'
 import { printerPreset } from '@/services/analysis-api.js'
 import MultiToolFilamentPicker from './MultiToolFilamentPicker.vue'
 
+// Build-plate enum values the shipped OrcaSlicer-fork presets recognise. Kept in
+// sync with the adapter whitelist (overrides.py _BED_TYPES).
+const BED_TYPES = [
+	'Cool Plate',
+	'Engineering Plate',
+	'High Temp Plate',
+	'Textured PEI Plate',
+	'Textured Cool Plate',
+	'Smooth PEI Plate',
+]
+
 export default {
 	name: 'ProfilePicker',
 	components: { MultiToolFilamentPicker },
@@ -14,6 +25,7 @@ export default {
 			processFilter: '',
 			preset: null, // static model preset for the selected printer, or null
 			presetLoading: false,
+			BED_TYPES,
 		}
 	},
 	watch: {
@@ -49,19 +61,24 @@ export default {
 		},
 		presetChip() {
 			const p = this.preset
-			if (!p) {
-				return ''
-			}
 			const parts = []
-			const bv = p.build_volume_mm
-			if (Array.isArray(bv) && bv.length === 3) {
-				parts.push(`${bv[0]}×${bv[1]}×${bv[2]}`)
+			if (p) {
+				const bv = p.build_volume_mm
+				if (Array.isArray(bv) && bv.length === 3) {
+					parts.push(`${bv[0]}×${bv[1]}×${bv[2]}`)
+				}
+				if (p.nozzle_count > 0) {
+					parts.push(`${p.nozzle_count} nozzle${p.nozzle_count > 1 ? 's' : ''}`)
+				}
+				if (p.chamber_heated) {
+					parts.push('heated chamber')
+				}
 			}
-			if (p.nozzle_count > 0) {
-				parts.push(`${p.nozzle_count} nozzle${p.nozzle_count > 1 ? 's' : ''}`)
-			}
-			if (p.chamber_heated) {
-				parts.push('heated chamber')
+			// Nozzle diameter is read-only here — it must co-vary with line widths,
+			// so it's set by the printer profile, not overridden per-job.
+			const nd = this.printStore._currentNozzleDiameter?.()
+			if (Number.isFinite(nd) && nd > 0) {
+				parts.push(`${nd} mm nozzle`)
 			}
 			return parts.join(' · ')
 		},
@@ -94,6 +111,9 @@ export default {
 		onChange() {
 			this.printStore.onProfileChange()
 			this.loadPreset()
+		},
+		onBedTypeChange() {
+			this.printStore.persistOverrides()
 		},
 		async loadPreset() {
 			this.preset = null
@@ -151,8 +171,8 @@ export default {
 			<p v-if="presetLoading" class="nc-print-profile-picker__preset nc-print-profile-picker__preset--loading">
 				Loading model specs…
 			</p>
-			<p v-else-if="presetChip" class="nc-print-profile-picker__preset" :title="preset._placeholder ? 'Model not yet shipped' : 'Known model specs'">
-				<span aria-hidden="true">📐</span> {{ presetChip }}{{ preset._placeholder ? ' (announced)' : '' }}
+			<p v-else-if="presetChip" class="nc-print-profile-picker__preset" :title="preset && preset._placeholder ? 'Model not yet shipped' : 'Known model specs'">
+				<span aria-hidden="true">📐</span> {{ presetChip }}{{ preset && preset._placeholder ? ' (announced)' : '' }}
 			</p>
 		</div>
 		<div class="nc-print-field">
@@ -194,6 +214,16 @@ export default {
 				<option v-for="p in filteredProcesses" :key="p.id" :value="p.id">
 					{{ optionLabel(p) }}
 				</option>
+			</select>
+		</div>
+		<div class="nc-print-field">
+			<label for="nc-print-bed-type">Build plate</label>
+			<select
+				id="nc-print-bed-type"
+				v-model="printStore.overrides.bedType"
+				@change="onBedTypeChange">
+				<option value="">Profile default</option>
+				<option v-for="b in BED_TYPES" :key="b" :value="b">{{ b }}</option>
 			</select>
 		</div>
 	</div>

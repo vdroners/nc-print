@@ -79,6 +79,11 @@ _MAP = {
     "support_base_pattern": ("support_base_pattern",     "process", "str"),
     "tree_support_branch_angle": ("tree_support_branch_angle", "process", "num"),
     "draft_shield":       ("draft_shield",               "process", "str"),
+    # ── build plate (process-scoped) ──
+    # curr_bed_type selects which filament per-plate temp applies + adhesion
+    # behaviour. Whitelisted to the enum strings the shipped presets recognise
+    # (see _BED_TYPES); unknown values are dropped so the engine keeps its default.
+    "bed_type":           ("curr_bed_type",              "process", "str"),
     # ── wipe / prime tower (process-scoped; multi-material purge) ──
     "enable_prime_tower":     ("enable_prime_tower",       "process", "bool"),
     "prime_tower_width":      ("prime_tower_width",        "process", "num"),
@@ -108,6 +113,18 @@ _SUPPORT_TYPE = {
 _SUPPORT_STYLE = {
     "snug": "snug",
     "grid": "grid",
+}
+
+# curr_bed_type enum values recognised by the shipped OrcaSlicer-fork presets.
+# A bed_type override outside this set is dropped (engine keeps its default plate)
+# rather than written blindly — an unknown value would silently fall back anyway.
+_BED_TYPES = {
+    "Cool Plate",
+    "Engineering Plate",
+    "High Temp Plate",
+    "Textured PEI Plate",
+    "Textured Cool Plate",
+    "Smooth PEI Plate",
 }
 
 
@@ -173,6 +190,11 @@ def split_overrides(overrides: dict) -> tuple[dict, dict, list[str]]:
             # snug/grid are styles on top of the normal type.
             if low in _SUPPORT_STYLE:
                 process_patch["support_style"] = _SUPPORT_STYLE[low]
+        elif key == "bed_type":
+            # Only pass through recognised enum values; drop anything else.
+            val = str(raw).strip()
+            if val not in _BED_TYPES:
+                val = None
         else:
             val = _fmt(kind, raw)
         if val is None:

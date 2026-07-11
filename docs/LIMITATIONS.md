@@ -19,6 +19,13 @@
 - **Not full Orca:** seam/support region painting, modifier meshes, and a
   multi-plate arrange/nesting *editor* are out of scope (auto-arrange is
   supported); advanced tuning still belongs in desktop Orca.
+- **Nozzle diameter is not a per-job override.** It's shown read-only (from the
+  printer profile) because it must co-vary with line widths, max volumetric
+  speed, and pressure advance — changing only the diameter would produce
+  physically wrong g-code. To print with a different nozzle, select a printer
+  profile configured for that nozzle. **Build plate** (`curr_bed_type`) IS
+  overridable per-job (Cool / Engineering / High Temp / Textured PEI / Textured
+  Cool / Smooth PEI Plate); unrecognised values fall back to the profile default.
 - **Moonraker:** live telemetry uses the WebSocket (via a short-lived ws-ticket)
   with automatic fallback to `/api/printer/state` polling. Part B panels
   feature-detect from `/server/info` and hide when the plugin is absent.

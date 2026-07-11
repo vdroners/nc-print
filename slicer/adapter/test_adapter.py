@@ -797,6 +797,26 @@ def test_overrides_omit_empty_new_keys():
     assert process["layer_height"] == "0.2"
 
 
+def test_bed_type_maps_to_curr_bed_type():
+    from overrides import split_overrides
+    process, filament, unknown = split_overrides({"bed_type": "Textured PEI Plate"})
+    assert process["curr_bed_type"] == "Textured PEI Plate"
+    assert filament == {} and unknown == []
+
+
+def test_bed_type_rejects_unknown_value():
+    from overrides import split_overrides
+    # An unrecognised plate name is dropped (engine keeps its default).
+    process, _f, _u = split_overrides({"bed_type": "Glass"})
+    assert "curr_bed_type" not in process
+
+
+def test_bed_type_omitted_when_empty():
+    from overrides import split_overrides
+    process, _f, _u = split_overrides({"bed_type": ""})
+    assert "curr_bed_type" not in process
+
+
 def test_breakdown_separates_adhesion_bucket():
     import tempfile as tf
     from gcode_stats import compute_breakdown

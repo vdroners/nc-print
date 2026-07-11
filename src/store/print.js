@@ -395,6 +395,7 @@ export const usePrintStore = defineStore('print', {
 			supportBasePattern: '',
 			treeSupportBranchAngle: '',
 			draftShield: '',
+			bedType: '',
 		},
 		overridesCollapsed: true,
 		// Pause / filament-change points injected into gcode at a Z height.

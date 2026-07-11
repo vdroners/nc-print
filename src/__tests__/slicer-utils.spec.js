@@ -169,6 +169,17 @@ describe('slicer-utils', () => {
 		expect(form.infillDensity).toBe(15)
 	})
 
+	it('buildSliceOverrides maps bedType → bed_type', () => {
+		expect(buildSliceOverrides({ bedType: 'Textured PEI Plate' }).bed_type).toBe('Textured PEI Plate')
+		expect('bed_type' in buildSliceOverrides({ bedType: '' })).toBe(false)
+	})
+
+	it('mergedToOverrideForm seeds bedType from curr_bed_type/default_bed_type', () => {
+		expect(mergedToOverrideForm({ curr_bed_type: 'Cool Plate' }).bedType).toBe('Cool Plate')
+		expect(mergedToOverrideForm({ default_bed_type: 'Smooth PEI Plate' }).bedType).toBe('Smooth PEI Plate')
+		expect(mergedToOverrideForm({}).bedType).toBe('')
+	})
+
 	it('formatPrintTime', () => {
 		expect(formatPrintTime(3665)).toBe('1h 1m')
 		expect(formatPrintTime(120)).toBe('2 min')

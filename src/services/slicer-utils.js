@@ -163,6 +163,7 @@ export function buildSliceOverrides(form = {}) {
 	str('support_base_pattern', form.supportBasePattern)
 	num('tree_support_branch_angle', form.treeSupportBranchAngle)
 	str('draft_shield', form.draftShield)
+	str('bed_type', form.bedType)
 
 	return overrides
 }
@@ -269,6 +270,7 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'supportBasePattern', label: 'Support base pattern' },
 	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)' },
 	{ key: 'draftShield', label: 'Draft shield' },
+	{ key: 'bedType', label: 'Build plate' },
 ]
 
 /**
@@ -334,6 +336,7 @@ export function mergedToOverrideForm(merged = {}) {
 		brimWidth: merged.brimWidth ?? merged.brim_width ?? '',
 		raftLayers: merged.raftLayers ?? merged.raft_layers ?? '',
 		skirtLoops: merged.skirtLoops ?? merged.skirt_loops ?? '',
+		bedType: merged.bedType ?? merged.curr_bed_type ?? merged.default_bed_type ?? '',
 	}
 }
 

@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.48.0] - 2026-07-11
+
+Build-plate selector + read-only nozzle diameter (Group 3, Prepare settings).
+
+### Added — build plate
+
+- A **Build plate** dropdown in the profile picker sets the plate type per job
+  (Cool / Engineering / High Temp / Textured PEI / Textured Cool / Smooth PEI
+  Plate, or Profile default). It flows through the override pipeline as
+  `curr_bed_type` (process-scoped), which selects the matching filament per-plate
+  temperature + adhesion behavior. The adapter whitelists the enum values and
+  drops anything unrecognised (engine keeps its default), so a bad value can
+  never corrupt the preset.
+
+### Changed — nozzle diameter (read-only, by design)
+
+- Nozzle diameter is shown read-only in the printer spec chip (e.g. "0.4 mm
+  nozzle") rather than offered as a free per-job override. Changing only the
+  diameter without the co-varying line widths / volumetric limits / pressure
+  advance would produce physically wrong g-code, so nozzle changes go through the
+  printer profile. Documented in `docs/LIMITATIONS.md`.
+
+### Tests
+
+- adapter: `bed_type` → `curr_bed_type`, unknown value rejected, empty omitted.
+- vitest: `buildSliceOverrides` maps `bedType`; `mergedToOverrideForm` seeds it
+  from `curr_bed_type` / `default_bed_type`. Full suite green (341).
+
 ## [1.47.0] - 2026-07-11
 
 Multi-object 3MFs load as independent objects (Phase 3e) — completes the
