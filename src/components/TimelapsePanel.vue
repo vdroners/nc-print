@@ -5,10 +5,12 @@ import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet } from '@/services/moonraker-api.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 import { parseTimelapseList, timelapseSupported, formatBytes } from '@/utils/timelapse.js'
+import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 export default {
 	name: 'TimelapsePanel',
 	components: { NcPrintIcon },
+	mixins: [panelVisibility],
 	data() {
 		return {
 			videos: [],
@@ -28,6 +30,9 @@ export default {
 		// WS16: only show when moonraker-timelapse is detected on the host.
 		supported() {
 			return timelapseSupported(this.printStore.printerFeatures)
+		},
+		panelVisible() {
+			return this.connected && this.supported
 		},
 	},
 	watch: {
@@ -73,14 +78,8 @@ export default {
 </script>
 
 <template>
-	<div v-if="connected && supported" class="nc-print-card nc-print-timelapse">
-		<div class="nc-print-card__header">
-			<h2 class="nc-print-card__title">
-				<span class="nc-print-card__title-row">
-					<NcPrintIcon name="video" :size="18" />
-					Timelapse
-				</span>
-			</h2>
+	<div v-if="panelVisible" class="nc-print-timelapse">
+		<div class="nc-print-timelapse__toolbar">
 			<button
 				type="button"
 				class="nc-print-btn nc-print-btn--sm"
@@ -129,6 +128,12 @@ export default {
 </template>
 
 <style scoped>
+.nc-print-timelapse__toolbar {
+	display: flex;
+	justify-content: flex-end;
+	margin-bottom: 8px;
+}
+
 .nc-print-timelapse__player {
 	background: #000;
 	border-radius: var(--nc-gcs-radius, 8px);

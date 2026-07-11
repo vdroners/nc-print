@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet } from '@/services/moonraker-api.js'
+import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 /**
  * Lists the webcams Moonraker knows about (name, service, resolution). Shown
@@ -9,10 +10,12 @@ import { moonrakerGet } from '@/services/moonraker-api.js'
  * exists — so a multi-camera setup can see what's available. Live streaming
  * still flows through the admin-configured camera proxy (the app never streams a
  * raw LAN URL a user supplies, by security design); this panel is informational
- * + selects which camera the operator is looking at.
+ * + selects which camera the operator is looking at. Rendered inside a PrintPanel
+ * zone wrapper, so it emits `visible` and renders body-only (no card/title).
  */
 export default {
 	name: 'WebcamListPanel',
+	mixins: [panelVisibility],
 	data() {
 		return {
 			webcams: [],
@@ -33,6 +36,9 @@ export default {
 		},
 		show() {
 			return this.supported && this.webcams.length > 1
+		},
+		panelVisible() {
+			return this.show
 		},
 	},
 	watch: {
@@ -66,8 +72,7 @@ export default {
 </script>
 
 <template>
-	<div v-if="show" class="nc-print-webcams">
-		<h3 class="nc-print-webcams__title">Cameras</h3>
+	<div v-if="panelVisible" class="nc-print-webcams">
 		<p v-if="loadError" class="nc-print-webcams__error">{{ loadError }}</p>
 		<div class="nc-print-webcams__list">
 			<label

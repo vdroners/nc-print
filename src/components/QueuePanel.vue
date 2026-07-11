@@ -3,12 +3,12 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet, moonrakerProxyPost, excludeObject } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
-import NcPrintIcon from './NcPrintIcon.vue'
 import { parseJobQueue, reorderQueueIds, parseExcludeObjects } from '@/utils/queue.js'
+import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 export default {
 	name: 'QueuePanel',
-	components: { NcPrintIcon },
+	mixins: [panelVisibility],
 	data() {
 		return {
 			queue: { state: 'ready', jobs: [] },
@@ -33,6 +33,9 @@ export default {
 		},
 		hasExcludeObjects() {
 			return this.exclude.objects.length > 0
+		},
+		panelVisible() {
+			return this.connected && (this.queueSupported || this.hasExcludeObjects)
 		},
 	},
 	watch: {
@@ -99,14 +102,7 @@ export default {
 </script>
 
 <template>
-	<div v-if="connected && (queueSupported || hasExcludeObjects)" class="nc-print-card nc-print-queue">
-		<h2 class="nc-print-card__title">
-			<span class="nc-print-card__title-row">
-				<NcPrintIcon name="list" :size="18" />
-				Queue &amp; objects
-			</span>
-		</h2>
-
+	<div v-if="panelVisible" class="nc-print-queue">
 		<p v-if="loadError" class="nc-print-queue__msg">{{ loadError }}</p>
 
 		<template v-if="queueSupported">

@@ -9,12 +9,12 @@ import {
 	filamentExtrude,
 } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
-import NcPrintIcon from './NcPrintIcon.vue'
 import { parseRunoutSensors, parseActiveSpoolId, parseSpools, filamentCost } from '@/utils/filament.js'
+import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 export default {
 	name: 'FilamentPanel',
-	components: { NcPrintIcon },
+	mixins: [panelVisibility],
 	data() {
 		return {
 			sensors: [],
@@ -58,6 +58,9 @@ export default {
 		},
 		hasAnything() {
 			return this.sensors.length > 0 || this.spoolmanSupported
+		},
+		panelVisible() {
+			return this.connected && (this.hasAnything || !!this.sliceCost)
 		},
 	},
 	watch: {
@@ -139,14 +142,7 @@ export default {
 </script>
 
 <template>
-	<div v-if="connected && (hasAnything || sliceCost)" class="nc-print-card nc-print-filament">
-		<h2 class="nc-print-card__title">
-			<span class="nc-print-card__title-row">
-				<NcPrintIcon name="spool" :size="18" />
-				Filament
-			</span>
-		</h2>
-
+	<div v-if="panelVisible" class="nc-print-filament">
 		<p v-if="loadError" class="nc-print-filament__msg">{{ loadError }}</p>
 
 		<div v-if="sensors.length" class="nc-print-filament__sensors">

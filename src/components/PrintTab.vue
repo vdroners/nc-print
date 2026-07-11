@@ -37,14 +37,15 @@ import UpdateStatusBanner from './UpdateStatusBanner.vue'
 import UpdateControlPanel from './UpdateControlPanel.vue'
 import AnnouncementsBanner from './AnnouncementsBanner.vue'
 
-// Collapsible + pinnable Print panels, grouped into forge-style zones. Only
-// panels with a cheap, store-derived visibility predicate are wrapped here (the
-// `when` fn), so the wrapper header hides in lockstep with the panel's own
-// self-gate and never shows empty. Data-dependent panels (Sensors, Filament,
-// Timelapse, Queue, Webcams) already self-hide when empty and are rendered
-// plainly below the zones — they don't wrap because their gate needs
-// panel-internal fetched data the parent can't cheaply mirror.
-//   when(store) -> boolean : mirrors the inner panel's outer v-if
+// Collapsible + pinnable Print panels, grouped into forge-style zones. Every
+// panel is wrapped so the whole tab is uniform. Visibility comes from one of:
+//   when(store) -> boolean : cheap, store-derived gate (mirrors the panel's v-if)
+//   reports: true          : the panel self-gates on fetched, panel-internal
+//                            data (sensors, webcams, spools, queue objects), so
+//                            it emits `visible` (via the panelVisibility mixin)
+//                            and we track it in `panelVisible[id]`. Defaults
+//                            hidden until the panel reports — never an empty
+//                            header.
 const PANEL_ZONES = [
 	{
 		key: 'operate',
@@ -60,6 +61,7 @@ const PANEL_ZONES = [
 				when: (s) => s.consoleEnabled },
 			{ id: 'power', title: 'Power devices', icon: 'bolt', comp: 'PowerDevicePanel', open: false,
 				when: (s) => s.hasFeature('power') },
+			{ id: 'filament', title: 'Filament', icon: 'spool', comp: 'FilamentPanel', open: false, reports: true },
 		],
 	},
 	{
@@ -70,9 +72,22 @@ const PANEL_ZONES = [
 				when: (s) => s.printerState.connected },
 			{ id: 'bedmesh', title: 'Bed mesh', icon: 'grid', comp: 'BedMeshPanel', open: false,
 				when: (s) => s.printerState.connected },
+			{ id: 'sensors', title: 'Sensors', icon: 'target', comp: 'SensorPanel', open: false, reports: true },
+		],
+	},
+	{
+		key: 'media',
+		label: 'Media & queue',
+		panels: [
+			{ id: 'timelapse', title: 'Timelapse', icon: 'video', comp: 'TimelapsePanel', open: false, reports: true },
+			{ id: 'queue', title: 'Queue & objects', icon: 'list', comp: 'QueuePanel', open: false, reports: true },
+			{ id: 'webcams', title: 'Cameras', icon: 'camera', comp: 'WebcamListPanel', open: false, reports: true },
 		],
 	},
 ]
+
+/** All panel ids that self-report visibility (reports: true). */
+const REPORTING_IDS = PANEL_ZONES.flatMap((z) => z.panels.filter((p) => p.reports).map((p) => p.id))
 
 export default {
 	name: 'PrintTab',
@@ -113,6 +128,9 @@ export default {
 			cancelConfirmOpen: false,
 			cameraFullscreen: false,
 			pinned: loadPinned(),
+			// Live visibility reported by self-gating panels (reports: true).
+			// Start hidden; each panel emits `visible` on mount + gate change.
+			panelVisible: REPORTING_IDS.reduce((acc, id) => { acc[id] = false; return acc }, {}),
 		}
 	},
 	computed: {
@@ -247,25 +265,37 @@ export default {
 			}
 			return 'Loading camera…'
 		},
-		/** All wrappable panels whose store-derived `when` predicate passes. */
+		/**
+		 * Every panel, resolved to a `visible` flag:
+		 *  - store-gated panels: drop entirely when `when(store)` is false.
+		 *  - reporting panels: ALWAYS included (they must stay mounted to fetch +
+		 *    report), with `visible` from the live `panelVisible[id]` map. The
+		 *    PrintPanel wrapper hides itself (CSS) until the panel reports content.
+		 */
 		visiblePanels() {
 			const out = []
 			for (const zone of PANEL_ZONES) {
 				for (const p of zone.panels) {
-					if (typeof p.when === 'function' && !p.when(this.printStore)) {
-						continue
+					if (p.reports) {
+						out.push({ ...p, zone: zone.key, visible: !!this.panelVisible[p.id] })
+					} else if (typeof p.when !== 'function' || p.when(this.printStore)) {
+						out.push({ ...p, zone: zone.key, visible: true })
 					}
-					out.push({ ...p, zone: zone.key })
 				}
 			}
 			return out
 		},
-		/** Pinned panels in pin order (only those currently visible). */
+		/** Pinned panels in pin order. */
 		pinnedPanels() {
 			const byId = new Map(this.visiblePanels.map((p) => [p.id, p]))
 			return this.pinned.map((id) => byId.get(id)).filter(Boolean)
 		},
-		/** Zones with their unpinned, visible panels (drops empty zones). */
+		/**
+		 * Zones with their unpinned panels. Zones are NOT dropped when nothing is
+		 * visible: reporting panels must stay mounted (hidden via CSS) so they can
+		 * fetch + report. The zone *label* is shown only when a panel in it is
+		 * actually visible (see `zoneHasVisible` / the template's v-show).
+		 */
 		zonesForRender() {
 			const pinnedSet = new Set(this.pinned)
 			return PANEL_ZONES
@@ -315,6 +345,10 @@ export default {
 		},
 		onTogglePin(id) {
 			this.pinned = togglePinned(id)
+		},
+		onPanelVisible(id, visible) {
+			// Vue 2: assign the whole object so the computed re-evaluates.
+			this.panelVisible = { ...this.panelVisible, [id]: !!visible }
 		},
 		goSlice() {
 			this.printStore.setActiveTab(TABS.SLICE)
@@ -542,7 +576,7 @@ export default {
 		</div>
 
 		<!-- Pinned panels float to the top, in pin order. -->
-		<div v-if="pinnedPanels.length" class="nc-print-zone">
+		<div v-show="pinnedPanels.some((p) => p.visible)" class="nc-print-zone">
 			<h3 class="nc-print-zone__label">
 				<NcPrintIcon name="pin" :size="13" /> Pinned
 			</h3>
@@ -554,13 +588,23 @@ export default {
 				:icon="p.icon"
 				:default-open="p.open"
 				:pinned="true"
+				:when="p.visible"
 				@toggle-pin="onTogglePin">
-				<component :is="p.comp" />
+				<component :is="p.comp" @visible="onPanelVisible(p.id, $event)" />
 			</PrintPanel>
 		</div>
 
-		<!-- Zoned, collapsible panels (forge-style Operate / Analyze). -->
-		<div v-for="zone in zonesForRender" :key="zone.key" class="nc-print-zone">
+		<!--
+			Zoned, collapsible panels (forge-style Operate / Analyze / Media). The
+			zone container uses v-show (not v-if) so reporting panels stay mounted
+			to fetch + report even while the zone appears empty; the zone collapses
+			entirely once nothing in it is visible.
+		-->
+		<div
+			v-for="zone in zonesForRender"
+			v-show="zone.panels.some((p) => p.visible)"
+			:key="zone.key"
+			class="nc-print-zone">
 			<h3 class="nc-print-zone__label">{{ zone.label }}</h3>
 			<PrintPanel
 				v-for="p in zone.panels"
@@ -570,17 +614,11 @@ export default {
 				:icon="p.icon"
 				:default-open="p.open"
 				:pinned="false"
+				:when="p.visible"
 				@toggle-pin="onTogglePin">
-				<component :is="p.comp" />
+				<component :is="p.comp" @visible="onPanelVisible(p.id, $event)" />
 			</PrintPanel>
 		</div>
-
-		<!-- Data-dependent panels that already self-hide when empty. -->
-		<FilamentPanel />
-		<SensorPanel />
-		<TimelapsePanel />
-		<QueuePanel />
-		<div v-if="printStore.hasFeature('webcam')" class="nc-print-card"><WebcamListPanel /></div>
 
 		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">

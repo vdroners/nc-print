@@ -2,15 +2,18 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet } from '@/services/moonraker-api.js'
+import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 /**
  * Read-only sensor detail: extra temperature sensors (chamber, MCU, etc.) and
  * filament switch/motion sensors, parsed from printer.objects (already
  * allowlisted). Only rows that actually exist are shown; the whole panel hides
- * when the printer reports no such sensors.
+ * when the printer reports no such sensors. Rendered inside a PrintPanel zone
+ * wrapper, so it emits `visible` and renders body-only (no card/title).
  */
 export default {
 	name: 'SensorPanel',
+	mixins: [panelVisibility],
 	data() {
 		return {
 			temps: [],      // { name, temp }
@@ -26,7 +29,7 @@ export default {
 		connected() {
 			return this.printStore.printerState.connected
 		},
-		hasAny() {
+		panelVisible() {
 			return this.temps.length > 0 || this.filament.length > 0
 		},
 	},
@@ -95,8 +98,7 @@ export default {
 </script>
 
 <template>
-	<div v-if="hasAny" class="nc-print-sensors nc-print-card">
-		<h3 class="nc-print-sensors__title">Sensors</h3>
+	<div v-if="panelVisible" class="nc-print-sensors">
 		<div class="nc-print-sensors__grid">
 			<div v-for="t in temps" :key="'t-' + t.name" class="nc-print-sensors__cell">
 				<span class="nc-print-sensors__label">{{ t.name }}</span>

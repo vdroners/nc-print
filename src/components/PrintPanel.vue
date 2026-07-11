@@ -71,8 +71,16 @@ export default {
 </script>
 
 <template>
-	<div v-if="when" class="nc-print-panel">
-		<div class="nc-print-panel__strip">
+	<!--
+		The root always renders and the default slot is mounted exactly once, so a
+		self-reporting panel (reports: true) keeps fetching to report `visible`
+		without unmount/remount thrash. When `when` is false the whole panel is
+		hidden via CSS (`--hidden`) — header chrome is also skipped — but the slot
+		stays alive underneath. When `when` is false the body is force-shown inside
+		the hidden container so the panel keeps rendering (and thus reporting).
+	-->
+	<div class="nc-print-panel" :class="{ 'nc-print-panel--hidden': !when }">
+		<div v-if="when" class="nc-print-panel__strip">
 			<button
 				type="button"
 				class="nc-print-panel__btn"
@@ -100,7 +108,7 @@ export default {
 				<NcPrintIcon name="pin" :size="14" />
 			</button>
 		</div>
-		<div v-show="open" :id="bodyId" class="nc-print-panel__body">
+		<div v-show="!when || open" :id="bodyId" class="nc-print-panel__body">
 			<slot />
 		</div>
 	</div>
@@ -111,6 +119,12 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: 4px;
+}
+
+/* Kept in the DOM (slot stays mounted so reporting panels keep fetching) but
+   visually removed until the panel reports it has content. */
+.nc-print-panel--hidden {
+	display: none;
 }
 
 .nc-print-panel__strip {

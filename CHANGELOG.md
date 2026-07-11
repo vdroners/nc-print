@@ -1,5 +1,33 @@
 # Changelog
 
+## [1.41.0] - 2026-07-10
+
+Fold the remaining data-dependent Print panels into the collapsible/pinnable
+zones — the Print tab is now uniform (follow-up to 1.38.0's restructure).
+
+### Changed — Print tab
+
+- **Filament, Sensors, Timelapse, Queue & objects, and Cameras** are now
+  collapsible + pinnable panels inside the zones (Operate / Analyze / **Media &
+  queue**), like every other panel — previously they rendered plainly below the
+  zones because their visibility depends on fetched, panel-internal data the
+  parent couldn't cheaply mirror.
+- New `panelVisibility` mixin: each of these panels defines a `panelVisible`
+  computed (its own "do I have content?" gate) and emits `visible` on mount + on
+  every change. `PrintTab` tracks it and hides the wrapper header until the panel
+  reports content — so there's never an empty collapsed header.
+- `PrintPanel` keeps its slot **mounted** while hidden (CSS `display:none` via a
+  `--hidden` modifier) so a self-reporting panel can keep fetching to report;
+  zone containers use `v-show` (not `v-if`) for the same reason. The zone label +
+  container collapse entirely once nothing in them is visible.
+- Removed each panel's now-redundant outer card + title (the `PrintPanel` wrapper
+  provides them); Timelapse's Refresh button moved into a small body toolbar.
+
+### Tests
+
+- vitest `panel-visibility.spec` (mixin default + immediate emit + boolean
+  coercion). Full suite green (302).
+
 ## [1.40.0] - 2026-07-10
 
 Full-screen drag-drop upload (3DPrintForge parity). Completes the workflow-UX
