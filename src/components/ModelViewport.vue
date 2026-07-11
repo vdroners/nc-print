@@ -90,6 +90,12 @@ export default {
 			this.viewport = await createViewport(canvas, wrap)
 			this.viewport.setBedVolume(this.buildVolume)
 			this.viewport.setGizmoChangeHandler?.(() => this._scheduleTransformSync())
+			// Multi-object selection: viewport → store, and pick-on-click.
+			this.viewport.setSelectionChangeHandler?.((id) => {
+				this.printStore.selectObject(id)
+			})
+			this._onSelectClick = (e) => this._maybePickObject(e)
+			canvas.addEventListener('pointerdown', this._onSelectClick)
 			this.viewportReady = true
 			this.viewportError = ''
 			this._restoreSavedTransform()
@@ -102,6 +108,9 @@ export default {
 	beforeDestroy() {
 		if (this._transformSyncTimer) {
 			clearTimeout(this._transformSyncTimer)
+		}
+		if (this._onSelectClick && this.$refs.canvas) {
+			this.$refs.canvas.removeEventListener('pointerdown', this._onSelectClick)
 		}
 		this.viewport?.dispose()
 	},
@@ -175,6 +184,7 @@ export default {
 				}
 				this.printStore.setModelMeta(meta)
 				if (this.hasMesh) {
+					this._syncSceneFromViewport()
 					void this.analyzeCurrentMesh()
 					await this._applyAfterLoad()
 				}
@@ -188,6 +198,62 @@ export default {
 			} finally {
 				this.loading = false
 			}
+		},
+		// Click-to-select an object. Skipped in face-pick mode (PrepareTab owns
+		// that click) and when the click hits empty space in single-object mode
+		// (nothing to deselect). In multi-object mode, empty space deselects.
+		_maybePickObject(e) {
+			if (this.printStore.facePickMode) {
+				return
+			}
+			const id = this.viewport?.pickObjectAt?.(e.clientX, e.clientY) ?? null
+			if (id) {
+				this.viewport?.selectObject?.(id) // fires selection handler → store
+			} else if (this.printStore.objects.length > 1) {
+				this.viewport?.deselect?.()
+			}
+		},
+		selectObjectInViewport(id) {
+			this.viewport?.selectObject?.(id)
+		},
+		// Rebuild the store scene from the viewport's authoritative object list so
+		// ids stay in lockstep (the viewport owns object identity while editing).
+		// Existing names are preserved by id; new objects get a default name.
+		_syncSceneFromViewport() {
+			const vpObjects = this.viewport?.listObjects?.() || []
+			const prevById = new Map(this.printStore.objects.map((o) => [o.id, o]))
+			const baseName = (this.printStore.model.name || 'Object').replace(/\.[^.]+$/, '')
+			this.printStore.objects = vpObjects.map((vp, i) => {
+				const prev = prevById.get(vp.id)
+				return {
+					id: vp.id,
+					name: prev?.name || (vpObjects.length > 1 ? `${baseName} ${i + 1}` : (this.printStore.model.name || 'Object')),
+					sourceKind: prev?.sourceKind || 'file',
+					position: prev?.position || [0, 0, 0],
+					rotation: prev?.rotation || [0, 0, 0],
+					scale: prev?.scale || [1, 1, 1],
+					bbox: vp.bbox || prev?.bbox || null,
+					triangleCount: prev?.triangleCount || 0,
+					visible: prev?.visible !== false,
+				}
+			})
+			// Mirror the viewport's current selection.
+			this.printStore.selectedObjectId = this.viewport?.getSelectedId?.() ?? null
+		},
+		duplicateSelected() {
+			const id = this.viewport?.duplicateSelected?.()
+			if (id) {
+				this._syncSceneFromViewport()
+				this._scheduleTransformSync()
+			}
+			return id
+		},
+		removeObject(id) {
+			this.viewport?.removeObject?.(id)
+			this._syncSceneFromViewport()
+		},
+		listObjects() {
+			return this.viewport?.listObjects?.() || []
 		},
 		recenter() {
 			this.viewport?.recenter()

@@ -9,6 +9,7 @@ import PrepareOverrides from './PrepareOverrides.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
 import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
+import SceneObjectList from './SceneObjectList.vue'
 import RecentModelsStrip from './RecentModelsStrip.vue'
 import NcPrintCollapsible from './NcPrintCollapsible.vue'
 import PrepareStudioLayout from './PrepareStudioLayout.vue'
@@ -31,6 +32,7 @@ export default {
 		ViewportToolbar,
 		MeshHealthPanel,
 		ThreeMfObjectPicker,
+		SceneObjectList,
 		RecentModelsStrip,
 		NcPrintCollapsible,
 		PrepareStudioLayout,
@@ -87,6 +89,22 @@ export default {
 	methods: {
 		onToolbarImport(file) {
 			this.printStore.setModel(file, 'import')
+		},
+		onSelectObject(id) {
+			// Drive the viewport; its selection handler mirrors back into the store.
+			this.$refs.viewport?.selectObjectInViewport?.(id)
+		},
+		onDuplicateObject(id) {
+			// Select the source, clone geometry in the viewport; the viewport
+			// syncs the new object (with its id) back into the store.
+			this.$refs.viewport?.selectObjectInViewport?.(id)
+			this.$refs.viewport?.duplicateSelected?.()
+			this.refreshBounds()
+		},
+		onDeleteObject(id) {
+			// Viewport removes the mesh + syncs the store scene.
+			this.$refs.viewport?.removeObject?.(id)
+			this.refreshBounds()
 		},
 		onUndo() {
 			this.printStore.undoTransform(this.$refs.viewport?.viewport)
@@ -225,6 +243,7 @@ export default {
 		},
 		setFacePick(on) {
 			this.facePickActive = !!on
+			this.printStore.facePickMode = !!on
 			const el = this.$refs.viewportWrap
 			if (!el) {
 				return
@@ -373,6 +392,11 @@ export default {
 				</div>
 
 				<ThreeMfObjectPicker @selection-change="on3mfSelectionChange" />
+
+				<SceneObjectList
+					@select="onSelectObject"
+					@duplicate="onDuplicateObject"
+					@delete="onDeleteObject" />
 			</NcPrintCollapsible>
 
 			<NcPrintCollapsible id="prepare-mesh-health" title="Mesh & health" icon="cube">

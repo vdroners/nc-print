@@ -58,10 +58,20 @@ export async function createViewport(canvas, wrap) {
 
 	let bedHelper = null
 	let bedVisible = true
+	// Multi-object scene (Phase 3b). `objects` holds every mesh; `modelMesh` is a
+	// live ALIAS to the currently-selected mesh, so all existing single-object
+	// code paths (gizmo, clip, section, transform, export-selected) operate on the
+	// selection unchanged. `selectObjectById` is the ONE place that repoints the
+	// alias + gizmo — routing every attach/detach through it (per the design) is
+	// what keeps the gizmo lifecycle safe.
+	const objects = [] // [{ id, mesh }]
+	let selectedId = null
+	let objSeq = 0
 	let modelMesh = null
 	let bedVolume = [220, 220, 220]
 	let modelMeta = null
 	let animId = null
+	let onSelectionChange = null
 
 	// Interactive gizmo (TransformControls) state.
 	let gizmo = null
@@ -128,6 +138,86 @@ export async function createViewport(canvas, wrap) {
 		gizmo = null
 		gizmoHelper = null
 		gizmoMode = null
+	}
+
+	function selectedEntry() {
+		return objects.find((o) => o.id === selectedId) || null
+	}
+
+	// Subtle emissive tint marks the selected object; others revert to flat.
+	function applyHighlight() {
+		for (const { id, mesh } of objects) {
+			const mat = mesh.material
+			if (!mat?.emissive) {
+				continue
+			}
+			if (id === selectedId) {
+				mat.emissive.setHex(0x1e6b3a)
+			} else {
+				mat.emissive.setHex(0x000000)
+			}
+		}
+	}
+
+	/**
+	 * THE single place that repoints the `modelMesh` alias + gizmo. Pass null to
+	 * deselect (detaches the gizmo). Always detach before the alias moves so the
+	 * gizmo never points at a stale/disposed mesh.
+	 */
+	function selectObjectById(id, notify = true) {
+		const entry = objects.find((o) => o.id === id) || null
+		selectedId = entry ? entry.id : null
+		detachGizmo()
+		modelMesh = entry ? entry.mesh : null
+		modelMeta = entry ? entry.meta || modelMeta : null
+		if (modelMesh && gizmoMode) {
+			ensureGizmo()
+			gizmo.attach(modelMesh)
+			gizmo.setMode(gizmoMode)
+		}
+		applyHighlight()
+		if (notify && typeof onSelectionChange === 'function') {
+			onSelectionChange(selectedId)
+		}
+	}
+
+	/** Raycast the objects and return the hit object id (nearest), or null. */
+	function pickObjectAt(clientX, clientY) {
+		if (!objects.length) {
+			return null
+		}
+		const rect = canvas.getBoundingClientRect()
+		const ndc = new THREE.Vector2(
+			((clientX - rect.left) / rect.width) * 2 - 1,
+			-((clientY - rect.top) / rect.height) * 2 + 1,
+		)
+		raycaster.setFromCamera(ndc, camera)
+		const hits = raycaster.intersectObjects(objects.map((o) => o.mesh), false)
+		if (!hits.length) {
+			return null
+		}
+		const hitMesh = hits[0].object
+		return objects.find((o) => o.mesh === hitMesh)?.id ?? null
+	}
+
+	function removeObjectById(id) {
+		const idx = objects.findIndex((o) => o.id === id)
+		if (idx < 0) {
+			return
+		}
+		const [entry] = objects.splice(idx, 1)
+		if (selectedId === id) {
+			// Detach gizmo BEFORE disposing the mesh it may be attached to.
+			detachGizmo()
+			selectedId = null
+			modelMesh = null
+		}
+		scene.remove(entry.mesh)
+		entry.mesh.geometry.dispose()
+		entry.mesh.material.dispose()
+		// Reselect a neighbour (or null).
+		const next = objects[Math.max(0, idx - 1)]
+		selectObjectById(next ? next.id : null)
 	}
 
 	function planeNormalForAxis(axis, flip) {
@@ -273,7 +363,7 @@ export async function createViewport(canvas, wrap) {
 		frameCamera()
 	}
 
-	function addMeshFromGeometry(geom) {
+	function addMeshFromGeometry(geom, opts = {}) {
 		geom.computeVertexNormals()
 		const mat = new THREE.MeshLambertMaterial({
 			color: 0x22c55e,
@@ -281,27 +371,40 @@ export async function createViewport(canvas, wrap) {
 			opacity: 0.85,
 			clippingPlanes: [],
 		})
-		modelMesh = new THREE.Mesh(geom, mat)
-		centerMesh(modelMesh)
-		scene.add(modelMesh)
-		applyMaterialState(mat)
-		if (gizmoMode) {
-			ensureGizmo()
-			gizmo.attach(modelMesh)
-			gizmo.setMode(gizmoMode)
+		const mesh = new THREE.Mesh(geom, mat)
+		const isFirst = objects.length === 0
+		// First object → bed-centred; later objects → staggered so a new part
+		// doesn't spawn inside an existing one.
+		centerMesh(mesh)
+		if (!isFirst) {
+			mesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(mesh)
+			const size = box.getSize(new THREE.Vector3())
+			mesh.position.x += size.x * 1.15 * objects.length
 		}
-		return modelMeta
+		scene.add(mesh)
+		applyMaterialState(mat)
+		objSeq += 1
+		const id = opts.id || `vp_${objSeq}`
+		const entry = { id, mesh, meta: modelMeta }
+		objects.push(entry)
+		// Select the newly-added object (repoints alias + gizmo).
+		selectObjectById(id, opts.notify !== false)
+		return { id, meta: modelMeta }
 	}
 
+	// Remove ALL objects (used on model load / clear).
 	function clearModelMesh() {
 		detachGizmo()
-		if (modelMesh) {
-			scene.remove(modelMesh)
-			modelMesh.geometry.dispose()
-			modelMesh.material.dispose()
-			modelMesh = null
-			modelMeta = null
+		selectedId = null
+		modelMesh = null
+		modelMeta = null
+		for (const { mesh } of objects) {
+			scene.remove(mesh)
+			mesh.geometry.dispose()
+			mesh.material.dispose()
 		}
+		objects.length = 0
 	}
 
 	async function loadModel(file, options = {}) {
@@ -314,7 +417,7 @@ export async function createViewport(canvas, wrap) {
 			const { STLLoader } = await import(/* webpackChunkName: "nc-print-three" */ 'three/examples/jsm/loaders/STLLoader.js')
 			const loader = new STLLoader()
 			const geom = loader.parse(buf)
-			return addMeshFromGeometry(geom)
+			return addMeshFromGeometry(geom).meta
 		}
 
 		if (lower.endsWith('.obj')) {
@@ -335,7 +438,7 @@ export async function createViewport(canvas, wrap) {
 			if (!geom) {
 				throw new Error('Could not merge OBJ meshes')
 			}
-			return addMeshFromGeometry(geom)
+			return addMeshFromGeometry(geom).meta
 		}
 
 		if (lower.endsWith('.3mf')) {
@@ -365,7 +468,7 @@ export async function createViewport(canvas, wrap) {
 		const geom = new THREE.BufferGeometry()
 		geom.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3))
 		geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
-		return addMeshFromGeometry(geom)
+		return addMeshFromGeometry(geom).meta
 	}
 
 	function scaleModelUniform(factor) {
@@ -404,6 +507,82 @@ export async function createViewport(canvas, wrap) {
 		loadModel,
 		setMeshData,
 		scaleModelUniform,
+		// ── Multi-object selection API (Phase 3b) ──
+		pickObjectAt,
+		selectObject(id) {
+			selectObjectById(id)
+		},
+		deselect() {
+			selectObjectById(null)
+		},
+		getSelectedId() {
+			return selectedId
+		},
+		setSelectionChangeHandler(fn) {
+			onSelectionChange = fn
+		},
+		listObjects() {
+			return objects.map(({ id, mesh }) => {
+				mesh.updateMatrixWorld(true)
+				const box = new THREE.Box3().setFromObject(mesh)
+				const size = box.getSize(new THREE.Vector3())
+				return { id, bbox: { x: size.x, y: size.y, z: size.z } }
+			})
+		},
+		removeObject(id) {
+			removeObjectById(id)
+		},
+		/** Clone the selected mesh's geometry into a new, staggered, selected object. */
+		duplicateSelected() {
+			const entry = selectedEntry()
+			if (!entry) {
+				return null
+			}
+			const geom = entry.mesh.geometry.clone()
+			const added = addMeshFromGeometry(geom)
+			// Copy the source transform, then the stagger already applied in add.
+			const dst = objects.find((o) => o.id === added.id)
+			if (dst) {
+				dst.mesh.rotation.copy(entry.mesh.rotation)
+				dst.mesh.scale.copy(entry.mesh.scale)
+				dst.mesh.position.copy(entry.mesh.position)
+				dst.mesh.position.x += 10
+				dst.mesh.position.y += 10
+				dst.mesh.updateMatrixWorld(true)
+			}
+			return added.id
+		},
+		/**
+		 * Export EVERY object with its world transform baked into vertices, in
+		 * stable order — for the multi-object slice path (3d). Each entry:
+		 * { id, positions, indices, bbox }.
+		 */
+		exportAllObjects() {
+			return objects.map(({ id, mesh }) => {
+				mesh.updateMatrixWorld(true)
+				const g = mesh.geometry.clone().applyMatrix4(mesh.matrixWorld)
+				const pos = g.attributes.position
+				const positions = new Float32Array(pos.array)
+				let indices
+				if (g.index) {
+					indices = new Uint32Array(g.index.array)
+				} else {
+					indices = new Uint32Array(pos.count)
+					for (let i = 0; i < pos.count; i++) {
+						indices[i] = i
+					}
+				}
+				g.computeBoundingBox()
+				const b = g.boundingBox
+				g.dispose()
+				return {
+					id,
+					positions,
+					indices,
+					bbox: { x: b.max.x - b.min.x, y: b.max.y - b.min.y, z: b.max.z - b.min.z },
+				}
+			})
+		},
 		recenter() {
 			if (modelMesh) {
 				centerMesh(modelMesh)

@@ -302,6 +302,9 @@ export const usePrintStore = defineStore('print', {
 		//     scale:[x,y,z], bbox|null, triangleCount, visible }
 		objects: [],
 		selectedObjectId: null,
+		// True while the "place on face" pick tool is armed — the viewport uses
+		// this to suppress click-to-select object picking.
+		facePickMode: false,
 		profiles: {
 			printers: [],
 			filaments: [],

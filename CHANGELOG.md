@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.44.0] - 2026-07-11
+
+Multi-object editor — selection + object list (Phase 3b). You can now load more
+than one object, click a part to select it, and move/duplicate/delete each
+independently.
+
+### Added — viewport multi-object
+
+- The 3D viewport holds N objects instead of one. `modelMesh` is now a live
+  ALIAS to the selected object, so every existing single-object path (gizmo,
+  clip, section, transform, export-selected) operates on the selection unchanged.
+- **Click a part to select it** (raycast pick). The selected object gets a subtle
+  emissive highlight and the gizmo attaches to it; clicking empty space in a
+  multi-object scene deselects. Selection is two-way with the object list — the
+  store is the single source of truth.
+- **Object list** (`SceneObjectList.vue`) in the Model & profiles panel: lists
+  every object; row-click selects, with per-row **duplicate** and **delete**
+  (delete disabled when only one remains).
+- Duplicate clones the selected geometry to a new, staggered, selected object;
+  newly-added objects auto-stagger so they don't spawn inside an existing one.
+- Gizmo lifecycle hardened: all attach/detach routes through one
+  `selectObjectById`, and `removeObjectById` detaches before disposing — no stale
+  attach to a freed mesh. Ids stay in lockstep because the viewport owns object
+  identity and the store mirrors it (`_syncSceneFromViewport`).
+
+### Notes
+
+- Slicing still uses the single/merged path; per-object baked multi-slice lands
+  in 3d (next). Cut still keeps one half — cut-into-two-parts is 3c.
+
+### Tests
+
+- vitest `viewport-multiobject.spec` (handle API present; gizmo detach-before-
+  dispose + single-attach-path invariants; store↔viewport sync). Full suite
+  green (328).
+
 ## [1.43.0] - 2026-07-11
 
 Multi-object editor — foundation (Phase 3a of the Prepare rework). No visible
