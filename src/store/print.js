@@ -421,6 +421,11 @@ export const usePrintStore = defineStore('print', {
 			sentTo: '',
 			printing: false,
 			error: '',
+			// Multi-plate results (4d): one entry per plate when slicing several
+			// plates. Each: { index, label, jobId, gcodeFilename, gcodeBlob,
+			// gcodeSizeBytes, estimatedTimeS, filamentUsedG }. Empty for a normal
+			// single-plate slice.
+			plates: [],
 		},
 		// Smart-ETA prediction for the current slice (learned slicer-vs-actual
 		// correction). null until predicted; { predicted_minutes, multiplier,
@@ -2714,6 +2719,57 @@ export const usePrintStore = defineStore('print', {
 				}
 			}
 			return done
+		},
+
+		/** Reset multi-plate accumulation before a plate batch. */
+		startPlateBatch() {
+			this.sliceJob.plates = []
+			this.sliceJob.status = 'running'
+		},
+
+		/**
+		 * Accumulate one plate's slice result into sliceJob.plates (4d). Downloads
+		 * the plate's gcode. Best-effort; a failed download marks that plate's
+		 * error but doesn't abort the batch.
+		 * @param {object} done slice done payload
+		 * @param {{ index: number, label?: string }} meta
+		 */
+		async applyPlateSliceResult(done = {}, { index = 0, label = '' } = {}) {
+			const jobId = done.job_id || done.jobId || null
+			const stem = (this.model.name || 'plate').replace(/\.[^.]+$/, '')
+			const entry = {
+				index,
+				label: label || `Plate ${index + 1}`,
+				jobId,
+				gcodeFilename: `${stem}-plate${index + 1}.gcode`,
+				gcodeBlob: null,
+				gcodeSizeBytes: 0,
+				estimatedTimeS: done.estimated_time_s || 0,
+				filamentUsedG: (done.filament_used_g || []).reduce((a, b) => a + b, 0),
+				error: '',
+			}
+			if (jobId) {
+				try {
+					entry.gcodeBlob = await downloadGcode(jobId)
+					entry.gcodeSizeBytes = entry.gcodeBlob?.size || 0
+				} catch (e) {
+					entry.error = 'G-code download failed'
+				}
+			}
+			this.sliceJob.plates.push(entry)
+			return entry
+		},
+
+		/** Mark a completed plate batch done + summarise. */
+		finishPlateBatch() {
+			this.sliceJob.status = 'done'
+			const ok = this.sliceJob.plates.filter((p) => p.gcodeBlob).length
+			const total = this.sliceJob.plates.length
+			if (ok === total && total > 0) {
+				toastSuccess(`Sliced ${total} plate${total > 1 ? 's' : ''}`)
+			} else {
+				toastWarning(`Sliced ${ok}/${total} plates — some g-code downloads failed`)
+			}
 		},
 
 		async sendGcodeToPrinter(gcodeBlob, filename, start = false) {

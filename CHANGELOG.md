@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.50.0] - 2026-07-11
+
+Multiple build plates (Group 3, final) — arrange and slice several plates in one
+session, one g-code per plate.
+
+### Added — multi-plate
+
+- **Plate tabs** in Arrange plate: add/remove plates, switch between them, and
+  move a model to another plate. Each plate keeps its own model list (with the
+  existing per-object overrides); plate 1 also carries the current prepared
+  model.
+- **Slice N plates**: slices each plate as its own job sequentially (respecting
+  the engine's concurrency cap) and accumulates one downloadable g-code per plate
+  (`sliceJob.plates[]`, named `<model>-plateN.gcode`). Multi-model plates still
+  auto-arrange within that plate; single-model plates skip arrange. A failed
+  g-code download marks that plate's error without aborting the batch.
+
+### Notes
+
+- This is the pragmatic multi-plate path: N independent slice jobs → N g-code
+  files (sent to the printer per plate), which matches the app's "one job = one
+  g-code" model. A true single multi-plate 3MF project (one file, N plates) needs
+  the engine's `--export-3mf`, which crashes in this fork build — deferred and
+  documented.
+
+### Tests
+
+- vitest `plate-batch.spec`: batch reset, per-plate accumulation + gcode download,
+  distinct plate filenames, per-plate download-error isolation, finish marks
+  done. Full suite green (355).
+
 ## [1.49.0] - 2026-07-11
 
 Import filament settings from an OrcaSlicer / Bambu preset (Group 3).

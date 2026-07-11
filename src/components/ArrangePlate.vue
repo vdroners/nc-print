@@ -3,8 +3,31 @@
 		<h3 class="arrange__title">Arrange plate</h3>
 		<p class="arrange__hint">
 			Add extra models to slice together on one plate. The engine auto-arranges
-			them so they don't overlap.
+			them so they don't overlap. Add more plates to slice several jobs at once
+			(one g-code per plate).
 		</p>
+
+		<div class="arrange__plate-tabs" role="tablist">
+			<button
+				v-for="(pl, i) in plates"
+				:key="pl.id"
+				type="button"
+				class="arrange__plate-tab"
+				:class="{ 'is-active': i === activePlate }"
+				role="tab"
+				:aria-selected="i === activePlate ? 'true' : 'false'"
+				@click="selectPlate(i)">
+				Plate {{ i + 1 }}
+				<span class="arrange__plate-count">{{ pl.models.length + (i === 0 && printStore.model?.name ? 1 : 0) }}</span>
+				<span
+					v-if="plates.length > 1"
+					class="arrange__plate-close"
+					role="button"
+					:aria-label="`Remove plate ${i + 1}`"
+					@click.stop="removePlate(i)">✕</span>
+			</button>
+			<button type="button" class="arrange__plate-add" :disabled="busy" @click="addPlate">+ Plate</button>
+		</div>
 
 		<ul v-if="models.length" class="arrange__list">
 			<li v-for="(m, i) in models" :key="m.key" class="arrange__item">
@@ -17,6 +40,17 @@
 						@click="m.showSettings = !m.showSettings">
 						⚙ per-object{{ hasPerObject(m) ? ' •' : '' }}
 					</button>
+					<select
+						v-if="multiPlate"
+						class="arrange__move"
+						title="Move to plate"
+						aria-label="Move to plate"
+						@change="moveToPlate(i, Number($event.target.value)); $event.target.value = ''">
+						<option value="">→ plate…</option>
+						<option v-for="(pl, pi) in plates" :key="pl.id" :value="pi" :disabled="pi === activePlate">
+							Plate {{ pi + 1 }}
+						</option>
+					</select>
 					<button type="button" class="arrange__remove" @click="remove(i)" aria-label="Remove model">✕</button>
 				</div>
 				<div v-if="m.showSettings" class="arrange__perobj">
@@ -55,11 +89,20 @@
 				+ Add model from Files
 			</button>
 			<button
+				v-if="!multiPlate"
 				type="button"
 				class="arrange__btn arrange__btn--primary"
 				:disabled="busy || models.length === 0"
 				@click="sliceArranged">
 				{{ busy ? progressLabel : `Slice ${totalCount} models arranged` }}
+			</button>
+			<button
+				v-else
+				type="button"
+				class="arrange__btn arrange__btn--primary"
+				:disabled="busy"
+				@click="sliceAllPlates">
+				{{ busy ? progressLabel : `Slice ${plates.length} plates` }}
 			</button>
 		</div>
 
@@ -80,7 +123,10 @@ export default {
 	name: 'ArrangePlate',
 	data() {
 		return {
-			models: [],
+			// Multi-plate (4d): each plate has its own added-model list. Plate 0 is
+			// the default; the current prepared model always rides on plate 0.
+			plates: [{ id: ++_key, models: [] }],
+			activePlate: 0,
 			busy: false,
 			error: '',
 			progressLabel: 'Slicing…',
@@ -89,12 +135,44 @@ export default {
 	},
 	computed: {
 		...mapStores(usePrintStore),
+		// The active plate's added models — the template binds to this so the
+		// existing per-model UI keeps working unchanged.
+		models() {
+			return this.plates[this.activePlate]?.models || []
+		},
+		multiPlate() {
+			return this.plates.length > 1
+		},
 		totalCount() {
-			// current prepared model + added models
-			return this.models.length + (this.printStore.model?.name ? 1 : 0)
+			// current prepared model (plate 0 only) + added models on active plate
+			const preparedOnThis = this.activePlate === 0 && this.printStore.model?.name ? 1 : 0
+			return this.models.length + preparedOnThis
 		},
 	},
 	methods: {
+		addPlate() {
+			this.plates.push({ id: ++_key, models: [] })
+			this.activePlate = this.plates.length - 1
+		},
+		removePlate(i) {
+			if (this.plates.length <= 1) {
+				return
+			}
+			this.plates.splice(i, 1)
+			this.activePlate = Math.min(this.activePlate, this.plates.length - 1)
+		},
+		selectPlate(i) {
+			this.activePlate = i
+		},
+		moveToPlate(modelIndex, targetPlate) {
+			if (targetPlate === this.activePlate) {
+				return
+			}
+			const [m] = this.plates[this.activePlate].models.splice(modelIndex, 1)
+			if (m) {
+				this.plates[targetPlate].models.push(m)
+			}
+		},
 		async addFromFiles() {
 			this.error = ''
 			try {
@@ -193,6 +271,66 @@ export default {
 				this.busy = false
 			}
 		},
+		/**
+		 * Slice every plate as its own job (one gcode per plate). Plate 0 also
+		 * includes the current prepared model. Runs sequentially to respect the
+		 * engine's concurrency cap.
+		 */
+		async sliceAllPlates() {
+			this.error = ''
+			this.busy = true
+			const sel = this.printStore.selection || {}
+			const filamentIds = sel.filamentIds?.length
+				? sel.filamentIds
+				: (sel.filamentId ? [sel.filamentId] : [])
+			const overrides = buildSliceOverrides(this.printStore.overrides || {})
+			this.printStore.startPlateBatch?.()
+			try {
+				for (let p = 0; p < this.plates.length; p++) {
+					const models = []
+					const objectOverrides = []
+					if (p === 0) {
+						const prepared = this.currentPreparedModel()
+						if (prepared) {
+							models.push(prepared)
+							objectOverrides.push({})
+						}
+					}
+					for (const m of this.plates[p].models) {
+						models.push({ data: m.blob, filename: m.filename })
+						objectOverrides.push(this.cleanOverrides(m.overrides))
+					}
+					if (!models.length) {
+						continue // skip an empty plate
+					}
+					this.progressLabel = `Plate ${p + 1}/${this.plates.length}…`
+					const done = await sliceStreamMulti({
+						models,
+						printerId: sel.printerId,
+						processId: sel.processId,
+						filamentIds,
+						overrides,
+						objectOverrides,
+						// Multiple models on a plate still auto-arrange within THAT
+						// plate; single-model plates need no arrange.
+						arrange: models.length > 1,
+						onEvent: (ev) => {
+							if (ev.event === 'progress' && ev.parsed) {
+								const pct = Math.round(ev.parsed.pct ?? 0)
+								this.progressLabel = `Plate ${p + 1}/${this.plates.length} — ${ev.parsed.stage || 'slicing'} ${pct}%`
+							}
+						},
+					})
+					await this.printStore.applyPlateSliceResult?.(done, { index: p })
+				}
+				this.printStore.finishPlateBatch?.()
+				this.$emit('sliced-plates', this.printStore.sliceJob.plates)
+			} catch (e) {
+				this.error = e?.message || 'Multi-plate slice failed'
+			} finally {
+				this.busy = false
+			}
+		},
 	},
 }
 </script>
@@ -202,6 +340,55 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: 8px;
+}
+.arrange__plate-tabs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	border-bottom: 1px solid var(--nc-gcs-border);
+	padding-bottom: 6px;
+}
+.arrange__plate-tab {
+	align-items: center;
+	background: var(--color-background-hover);
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: 6px;
+	cursor: pointer;
+	display: inline-flex;
+	font-size: 12px;
+	gap: 6px;
+	padding: 4px 8px;
+
+	&.is-active {
+		background: var(--color-primary-element-light, var(--color-background-dark));
+		border-color: var(--nc-app-accent, var(--color-primary-element));
+		font-weight: 600;
+	}
+}
+.arrange__plate-count {
+	background: var(--nc-gcs-border);
+	border-radius: 8px;
+	font-size: 10px;
+	min-width: 16px;
+	padding: 0 5px;
+	text-align: center;
+}
+.arrange__plate-close {
+	color: var(--nc-gcs-text-muted);
+	cursor: pointer;
+	&:hover { color: var(--color-error, #c33); }
+}
+.arrange__plate-add {
+	background: none;
+	border: 1px dashed var(--nc-gcs-border);
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 12px;
+	padding: 4px 8px;
+}
+.arrange__move {
+	font-size: 11px;
+	padding: 2px 4px;
 }
 .arrange__title {
 	margin: 0;
