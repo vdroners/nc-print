@@ -442,17 +442,23 @@ export async function createViewport(canvas, wrap) {
 		}
 
 		if (lower.endsWith('.3mf')) {
-			const { parse3mfMesh } = await import(/* webpackChunkName: "nc-print-mesh" */ '@/services/mesh-convert.js')
-			const mesh = await parse3mfMesh(buf, options)
-			const geom = new THREE.BufferGeometry()
-			geom.setAttribute('position', new THREE.BufferAttribute(mesh.positions, 3))
-			geom.setIndex(new THREE.BufferAttribute(mesh.indices, 1))
-			modelMeta = {
-				bbox: mesh.bbox,
-				triangleCount: mesh.triangleCount,
-				convertedFrom3mf: true,
+			// Phase 3e: load each build item as an independent, movable object.
+			const { parse3mfMeshes } = await import(/* webpackChunkName: "nc-print-mesh" */ '@/services/mesh-convert.js')
+			const meshes = await parse3mfMeshes(buf, options)
+			let totalTris = 0
+			for (const m of meshes) {
+				const geom = new THREE.BufferGeometry()
+				geom.setAttribute('position', new THREE.BufferAttribute(m.positions, 3))
+				geom.setIndex(new THREE.BufferAttribute(m.indices, 1))
+				addMeshFromGeometry(geom)
+				totalTris += m.triangleCount || 0
 			}
-			addMeshFromGeometry(geom)
+			modelMeta = {
+				bbox: meshes[0]?.bbox || null,
+				triangleCount: totalTris,
+				convertedFrom3mf: true,
+				objectCount: meshes.length,
+			}
 			return modelMeta
 		}
 

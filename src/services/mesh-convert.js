@@ -342,6 +342,86 @@ export async function parse3mfMesh(arrayBuffer, options = {}) {
 	}
 }
 
+/** Compute an xyz bbox {x,y,z} from a flat position array. */
+function bboxOf(posArr) {
+	let minX = Infinity, minY = Infinity, minZ = Infinity
+	let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity
+	for (let i = 0; i < posArr.length; i += 3) {
+		minX = Math.min(minX, posArr[i]); maxX = Math.max(maxX, posArr[i])
+		minY = Math.min(minY, posArr[i + 1]); maxY = Math.max(maxY, posArr[i + 1])
+		minZ = Math.min(minZ, posArr[i + 2]); maxZ = Math.max(maxZ, posArr[i + 2])
+	}
+	return { x: maxX - minX, y: maxY - minY, z: maxZ - minZ }
+}
+
+/**
+ * Parse a 3MF into ONE mesh per build item (Phase 3e), so a multi-object 3MF
+ * loads as independent, movable objects instead of a single merged mesh. Returns
+ * an array of { id, name, positions, indices, triangleCount, bbox }. Falls back
+ * to a single merged mesh (id 'all') for 3MFs without build items. Honors
+ * options.selectedIds + the printable flag, like parse3mfMesh.
+ * @param {ArrayBuffer} arrayBuffer
+ * @param {{ selectedIds?: string[] }} [options]
+ * @returns {Promise<Array<{id:string,name:string,positions:Float32Array,indices:Uint32Array,triangleCount:number,bbox:object}>>}
+ */
+export async function parse3mfMeshes(arrayBuffer, options = {}) {
+	const zip = await JSZip.loadAsync(arrayBuffer)
+	const rootPath = zip.file('3D/3dmodel.model') ? '3D/3dmodel.model' : null
+	if (!rootPath) {
+		throw new Error('Not a valid 3MF (missing 3D/3dmodel.model)')
+	}
+	const selectedSet = options.selectedIds?.length
+		? new Set(options.selectedIds.map(String))
+		: null
+	const rootDoc = parseModelXml(await zip.file(rootPath).async('text'))
+	const buildItems = rootDoc.getElementsByTagNameNS(CORE_NS, 'item')
+
+	// No build items → single merged mesh (reuse the existing merge parser).
+	if (buildItems.length === 0) {
+		const merged = await parse3mfMesh(arrayBuffer, options)
+		return [{ id: 'all', name: 'Object', ...merged }]
+	}
+
+	const objectById = objectMapFromDoc(rootDoc)
+	const out = []
+	for (let i = 0; i < buildItems.length; i++) {
+		const item = buildItems[i]
+		const itemId = item.getAttribute('id') || String(i + 1)
+		if (selectedSet && !selectedSet.has(String(itemId))) {
+			continue
+		}
+		if (item.getAttribute('printable') === '0') {
+			continue
+		}
+		const objectId = item.getAttribute('objectid')
+		const itemT = parse3mfTransform(item.getAttribute('transform'))
+		const topObj = objectById.get(objectId)
+		if (!topObj) {
+			continue
+		}
+		const positions = []
+		const indices = []
+		await emitObjectMesh(topObj, objectById, itemT, positions, indices, zip, rootPath, new Set())
+		if (indices.length < 3) {
+			continue
+		}
+		const posArr = new Float32Array(positions)
+		const name = topObj.getAttribute?.('name') || `Object ${out.length + 1}`
+		out.push({
+			id: String(itemId),
+			name,
+			positions: posArr,
+			indices: new Uint32Array(indices),
+			triangleCount: indices.length / 3,
+			bbox: bboxOf(posArr),
+		})
+	}
+	if (!out.length) {
+		throw new Error('3MF contains no printable triangle mesh')
+	}
+	return out
+}
+
 /**
  * @param {{ positions: Float32Array, indices: Uint32Array }} mesh
  * @returns {ArrayBuffer}

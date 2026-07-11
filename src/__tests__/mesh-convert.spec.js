@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { readFileSync } from 'node:fs'
 import JSZip from 'jszip'
-import { parse3mfMesh, convert3mfToStlBuffer, parse3mfTransform, multiplyTransform, transformPoint, list3mfBuildItems } from '../services/mesh-convert.js'
+import { parse3mfMesh, parse3mfMeshes, convert3mfToStlBuffer, parse3mfTransform, multiplyTransform, transformPoint, list3mfBuildItems } from '../services/mesh-convert.js'
 
 const SERVOHOLD_3MF = '/media/4TB/3dprints/lib_1782856946964_servohold_test.3mf'
 // Real-world file that broke parsing: build references a component-wrapper object
@@ -120,6 +120,84 @@ describe('mesh-convert 3MF', () => {
 		expect(items.length).toBeGreaterThan(0)
 		expect(items[0]).toHaveProperty('id')
 		expect(items[0]).toHaveProperty('name')
+	})
+})
+
+// Two independent build items (two cubes) → parse3mfMeshes should return two
+// separate meshes (Phase 3e), where parse3mfMesh merges them into one.
+async function makeTwoItem3mf() {
+	const cubeMesh = `<mesh>
+<vertices>
+<vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="10" y="10" z="0"/><vertex x="0" y="10" z="0"/>
+<vertex x="0" y="0" z="10"/><vertex x="10" y="0" z="10"/><vertex x="10" y="10" z="10"/><vertex x="0" y="10" z="10"/>
+</vertices>
+<triangles>
+<triangle v1="0" v2="2" v3="1"/><triangle v1="0" v2="3" v3="2"/>
+<triangle v1="4" v2="5" v3="6"/><triangle v1="4" v2="6" v3="7"/>
+<triangle v1="0" v2="1" v3="5"/><triangle v1="0" v2="5" v3="4"/>
+<triangle v1="1" v2="2" v3="6"/><triangle v1="1" v2="6" v3="5"/>
+<triangle v1="2" v2="3" v3="7"/><triangle v1="2" v2="7" v3="6"/>
+<triangle v1="3" v2="0" v3="4"/><triangle v1="3" v2="4" v3="7"/>
+</triangles>
+</mesh>`
+	const model = `<?xml version="1.0"?>
+<model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" unit="millimeter">
+<resources>
+<object id="1" type="model">${cubeMesh}</object>
+<object id="2" type="model">${cubeMesh}</object>
+</resources>
+<build>
+<item objectid="1"/>
+<item objectid="2" transform="1 0 0 0 1 0 0 0 1 30 0 0"/>
+</build>
+</model>`
+	const zip = new JSZip()
+	zip.file('[Content_Types].xml', CT_XML)
+	zip.file('_rels/.rels', RELS_XML)
+	zip.file('3D/3dmodel.model', model)
+	const u8 = await zip.generateAsync({ type: 'uint8array' })
+	return u8.buffer.slice(u8.byteOffset, u8.byteOffset + u8.byteLength)
+}
+
+describe('parse3mfMeshes (Phase 3e — independent build items)', () => {
+	it('returns one mesh per build item', async () => {
+		const ab = await makeTwoItem3mf()
+		const meshes = await parse3mfMeshes(ab)
+		expect(meshes).toHaveLength(2)
+		for (const m of meshes) {
+			expect(m.triangleCount).toBe(12) // 12 tris per cube
+			expect(m.indices.length).toBe(36) // 12 tris × 3 indices
+			expect(m.positions.length % 3).toBe(0)
+			expect(m.bbox.x).toBeCloseTo(10, 3)
+		}
+	})
+
+	it('the second item carries its build transform (offset in X)', async () => {
+		const ab = await makeTwoItem3mf()
+		const meshes = await parse3mfMeshes(ab)
+		const minX = (m) => {
+			let x = Infinity
+			for (let i = 0; i < m.positions.length; i += 3) {
+				x = Math.min(x, m.positions[i])
+			}
+			return x
+		}
+		const xs = meshes.map(minX).sort((a, b) => a - b)
+		expect(xs[0]).toBeCloseTo(0, 3)
+		expect(xs[1]).toBeCloseTo(30, 3)
+	})
+
+	it('honors selectedIds', async () => {
+		const ab = await makeTwoItem3mf()
+		const meshes = await parse3mfMeshes(ab, { selectedIds: ['2'] })
+		expect(meshes).toHaveLength(1)
+	})
+
+	it('falls back to a single merged mesh when there are no build items', async () => {
+		const ab = await makeComponentWrapper3mf() // has a build item though → 1 mesh
+		const meshes = await parse3mfMeshes(ab)
+		expect(meshes.length).toBeGreaterThanOrEqual(1)
+		expect(meshes[0].triangleCount).toBe(12)
 	})
 })
 

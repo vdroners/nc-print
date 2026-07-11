@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.47.0] - 2026-07-11
+
+Multi-object 3MFs load as independent objects (Phase 3e) — completes the
+multi-object editor rework.
+
+### Added
+
+- A multi-object 3MF now loads as **one movable object per build item** instead
+  of a single merged mesh, so each part is independently selectable /
+  transformable / cuttable and slices with the multi-object baked path (3d). New
+  `parse3mfMeshes()` emits one mesh per printable build item (honoring
+  `selectedIds` + the printable flag); the viewport loads each as its own object.
+  3MFs without build items still load as a single merged mesh (fallback).
+
+### Tests
+
+- vitest `mesh-convert.spec`: `parse3mfMeshes` returns one mesh per item, carries
+  each item's build transform, honors `selectedIds`, and falls back to one mesh.
+  Full suite green (339).
+
+### Multi-object editor rework — complete (3a–3e)
+
+Load multiple objects (STL drops or a multi-item 3MF), click to select, move /
+rotate / scale / duplicate / delete each independently, cut one into two movable
+halves, and slice them all with the placed layout preserved.
+
 ## [1.46.0] - 2026-07-11
 
 Multi-object slicing (Phase 3d) — a multi-part scene now slices with each part
