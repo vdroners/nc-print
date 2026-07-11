@@ -478,7 +478,7 @@ export default {
 			</div>
 		</div>
 
-		<div v-if="showPrintControl" class="nc-print-card">
+		<div v-if="showPrintControl" class="nc-print-card" data-print-control-card>
 			<div class="nc-print-card__header">
 				<h2 class="nc-print-card__title">
 					<span class="nc-print-card__title-row">

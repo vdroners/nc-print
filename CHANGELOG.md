@@ -1,5 +1,29 @@
 # Changelog
 
+## [1.41.1] - 2026-07-11
+
+Print-tab sticky status-bar fixes (reported from live use).
+
+### Fixed
+
+- **Status bar no longer clips the workflow bar.** `PrintStatusBar` was
+  `position: sticky; top: 0; z-index: 20`, so on scroll it overlapped the
+  chrome/workflow bar (`top: 0; z-index: 3`). It now sticks BELOW the chrome
+  using `top: var(--nc-print-chrome-h)` and `z-index: 2` — the same pattern as
+  `WorkspaceRail`.
+- **Trimmed redundant status-bar info.** The sticky bar duplicated the
+  Print-control card (filename / % / ETA / a second progress bar). It now drops
+  its own full-width progress bar (the control card owns that) and only shows the
+  ETA once the control card has scrolled off-screen (via an IntersectionObserver
+  on the card). While the card is visible the bar is a slim filename + % +
+  pause/cancel line; the controls stay available at all times.
+
+### Tests
+
+- vitest `spacing.spec` asserts the status bar sticks below the chrome
+  (`top: var(--nc-print-chrome-h)`, z-index < 3) and no longer renders the
+  redundant progress bar. Full suite green (304).
+
 ## [1.41.0] - 2026-07-10
 
 Fold the remaining data-dependent Print panels into the collapsible/pinnable

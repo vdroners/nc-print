@@ -5,15 +5,26 @@ import { formatPrintTime } from '@/services/slicer-utils.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
 /**
- * Sticky print-status bar for the top of the Print tab. Always visible while a
- * print is active/paused so the user never has to scroll up to see progress or
- * hit pause/cancel. Idle → renders nothing (the idle guide card covers that).
- * Controls delegate to the shared store actions (single source of truth with the
- * Print-control card + command palette).
+ * Sticky print-status bar for the top of the Print tab. It sticks BELOW the
+ * chrome/workflow bar (top: --nc-print-chrome-h) so it never clips it. To avoid
+ * duplicating the Print-control card, it watches that card with an
+ * IntersectionObserver: while the card is on-screen the bar collapses to a slim
+ * one-liner (filename + % + controls); once the card scrolls off it expands to
+ * add ETA. The full progress bar lives only on the control card — not repeated
+ * here. Controls delegate to the shared store actions (single source of truth
+ * with the control card + command palette). Idle → renders nothing.
  */
 export default {
 	name: 'PrintStatusBar',
 	components: { NcPrintIcon },
+	data() {
+		return {
+			// True when the Print-control card is scrolled out of view; drives the
+			// "expanded" bar (adds ETA). Starts false (card assumed visible on load).
+			cardOffscreen: false,
+			_observer: null,
+		}
+	},
 	computed: {
 		...mapStores(usePrintStore),
 		controls() {
@@ -46,7 +57,35 @@ export default {
 			return this.printStore.printControlBusy
 		},
 	},
+	mounted() {
+		this._setupObserver()
+	},
+	updated() {
+		// The control card mounts/unmounts with print state; re-bind if needed.
+		if (this.visible && !this._observer) {
+			this.$nextTick(() => this._setupObserver())
+		}
+	},
+	beforeDestroy() {
+		if (this._observer) {
+			this._observer.disconnect()
+			this._observer = null
+		}
+	},
 	methods: {
+		_setupObserver() {
+			if (this._observer || typeof IntersectionObserver === 'undefined') {
+				return
+			}
+			const card = document.querySelector('[data-print-control-card]')
+			if (!card) {
+				return
+			}
+			this._observer = new IntersectionObserver((entries) => {
+				this.cardOffscreen = !entries[0]?.isIntersecting
+			}, { threshold: 0 })
+			this._observer.observe(card)
+		},
 		onPause() {
 			return this.printStore.printPause()
 		},
@@ -71,10 +110,8 @@ export default {
 			<NcPrintIcon :name="paused ? 'pause' : 'printer'" :size="16" />
 			<span class="nc-print-statusbar__name" :title="filename">{{ filename }}</span>
 			<span class="nc-print-statusbar__pct">{{ pctLabel }}</span>
-			<span v-if="etaLabel" class="nc-print-statusbar__eta">{{ etaLabel }}</span>
-		</div>
-		<div class="nc-print-statusbar__bar" :aria-label="`Progress ${pctLabel}`">
-			<div class="nc-print-statusbar__fill" :style="{ width: pct + '%' }" />
+			<!-- ETA only when the control card (which shows it in full) is scrolled off. -->
+			<span v-if="cardOffscreen && etaLabel" class="nc-print-statusbar__eta">{{ etaLabel }}</span>
 		</div>
 		<div class="nc-print-statusbar__actions">
 			<button
@@ -116,8 +153,10 @@ export default {
 	gap: var(--nc-gcs-space-sm, 8px);
 	padding: 8px 12px;
 	position: sticky;
-	top: 0;
-	z-index: 20;
+	/* Stick BELOW the chrome/workflow bar (which is sticky top:0 z-index:3), not
+	   over it — same pattern as WorkspaceRail. */
+	top: var(--nc-print-chrome-h, 0px);
+	z-index: 2;
 }
 
 .nc-print-statusbar__info {
@@ -145,22 +184,6 @@ export default {
 	color: var(--nc-gcs-text-muted);
 	font-size: var(--nc-gcs-text-sm);
 	white-space: nowrap;
-}
-
-.nc-print-statusbar__bar {
-	background: var(--color-background-dark, #ddd);
-	border-radius: 3px;
-	flex: 1 1 120px;
-	height: 6px;
-	order: 3;
-	overflow: hidden;
-	width: 100%;
-}
-
-.nc-print-statusbar__fill {
-	background: var(--nc-app-accent, var(--color-primary-element));
-	height: 100%;
-	transition: width 0.3s ease;
 }
 
 .nc-print-statusbar__actions {
