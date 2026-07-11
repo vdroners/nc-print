@@ -99,6 +99,15 @@ export default {
 				this.paletteOpen = !this.paletteOpen
 				return
 			}
+			// Undo/redo — only on the Prepare tab; allowed regardless of focus
+			// target so it works while a numeric transform field is focused too.
+			if (mod && e.key.toLowerCase() === 'z' && this.printStore.activeTab === TABS.PREPARE) {
+				e.preventDefault()
+				window.dispatchEvent(new CustomEvent('nc-print-undo-redo', {
+					detail: { redo: e.shiftKey },
+				}))
+				return
+			}
 			if (e.target?.closest('input, textarea, select, [contenteditable="true"]')) {
 				return
 			}

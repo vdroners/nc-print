@@ -27,6 +27,7 @@ export default {
 			scaleUniform: 100,
 			scaleAxis: { x: 100, y: 100, z: 100 },
 			toSize: { axis: 'x', value: 0 },
+			unit: 'mm', // 'mm' | 'in' for the "to size" field
 			lockAspect: true,
 			cut: { axis: 'z', pos: 50, keep: 'bottom', cap: true },
 			wireframe: false,
@@ -116,9 +117,20 @@ export default {
 			this.scaleAxis = { x: 100, y: 100, z: 100 }
 		},
 		emitToSize() {
-			const value = Number(this.toSize.value)
-			if (value > 0) {
+			const raw = Number(this.toSize.value)
+			if (raw > 0) {
+				// Engine works in mm; convert if the field is showing inches.
+				const value = this.unit === 'in' ? raw * 25.4 : raw
 				this.$emit('scale-to-size', { axis: this.toSize.axis, value, lockAspect: this.lockAspect })
+			}
+		},
+		toggleUnit() {
+			if (this.unit === 'mm') {
+				this.unit = 'in'
+				this.toSize.value = Math.round((Number(this.toSize.value) / 25.4) * 100) / 100
+			} else {
+				this.unit = 'mm'
+				this.toSize.value = Math.round(Number(this.toSize.value) * 25.4 * 10) / 10
 			}
 		},
 		emitCutPreview() {
@@ -164,7 +176,8 @@ export default {
 			<div class="nc-print-tool-panel__actions">
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitMove">Set position</button>
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('drop-to-bed')">Drop to bed</button>
-				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('center')">Center</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" title="Center on X/Y, keep current height" @click="$emit('center-xy')">Center XY</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" title="Center on bed and drop to z=0" @click="$emit('center')">Center + drop</button>
 			</div>
 			<p class="nc-print-tool-panel__hint">Drag the on-screen arrows to move; snaps to 1 mm.</p>
 		</div>
@@ -183,6 +196,16 @@ export default {
 				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { x: 90 })">+90 X</button>
 				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { y: 90 })">+90 Y</button>
 				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" @click="$emit('rotate-degrees', { z: 90 })">+90 Z</button>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Rotate 45° around X" @click="$emit('rotate-degrees', { x: 45 })">+45 X</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Rotate 45° around Y" @click="$emit('rotate-degrees', { y: 45 })">+45 Y</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Rotate 45° around Z" @click="$emit('rotate-degrees', { z: 45 })">+45 Z</button>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Flip 180° around X" @click="$emit('rotate-degrees', { x: 180 })">Flip X</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Flip 180° around Y" @click="$emit('rotate-degrees', { y: 180 })">Flip Y</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Snap each axis to the nearest 90°" @click="$emit('snap-axis')">Snap 90°</button>
 			</div>
 			<div class="nc-print-tool-panel__actions">
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('lay-flat')">Lay flat</button>
@@ -206,6 +229,10 @@ export default {
 			<div class="nc-print-tool-panel__actions">
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitScaleAxis">Apply per-axis</button>
 			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Double the size" @click="$emit('scale-uniform', 2)">×2</button>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" title="Halve the size" @click="$emit('scale-uniform', 0.5)">÷2</button>
+			</div>
 			<div class="nc-print-tool-panel__row">
 				<label>To size
 					<select v-model="toSize.axis" :disabled="disabled">
@@ -214,14 +241,16 @@ export default {
 						<option value="z">Z</option>
 					</select>
 				</label>
-				<label>mm <input v-model.number="toSize.value" type="number" min="0" step="0.5" :disabled="disabled"></label>
+				<label>{{ unit }} <input v-model.number="toSize.value" type="number" min="0" step="0.5" :disabled="disabled"></label>
+				<button type="button" class="nc-print-btn nc-print-btn--sm" :disabled="disabled" :title="`Switch to ${unit === 'mm' ? 'inches' : 'mm'}`" @click="toggleUnit">{{ unit }}</button>
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="emitToSize">Apply</button>
 			</div>
 			<label class="nc-print-tool-panel__check">
 				<input v-model="lockAspect" type="checkbox" :disabled="disabled"> Lock aspect ratio
 			</label>
 			<div class="nc-print-tool-panel__actions">
-				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('scale-to-fit')">Scale to fit bed</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" title="Uniform scale to fit build volume" @click="$emit('scale-to-fit')">Scale to fit bed</button>
+				<button type="button" class="nc-print-btn" :disabled="disabled" title="Largest uniform scale that still fits the bed" @click="$emit('scale-max-fit')">Max fit</button>
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('reset-scale')">Reset</button>
 			</div>
 			<p v-if="bbox" class="nc-print-tool-panel__hint">

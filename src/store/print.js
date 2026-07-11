@@ -33,6 +33,7 @@ import {
 	clearHistory as clearHistoryApi,
 } from '@/services/history-api.js'
 import { validateModelFile } from '@/shared/modelFileNode.js'
+import { createUndoStack } from '@/utils/undo-stack.js'
 // mesh-convert.js (pulls JSZip) and mesh-analyze-api.js are imported dynamically
 // at their call sites below so JSZip stays out of the startup bundle — they're
 // only needed on 3MF handling / server printability, not at app load.
@@ -208,6 +209,14 @@ function defaultMeshState() {
 	}
 }
 
+// Module-level undo/redo history of transform snapshots for the Prepare editor.
+// Kept outside Pinia state (it holds a bounded array of past transforms, not
+// reactive UI state); the store mirrors canUndo/canRedo into reactive flags.
+const meshUndo = createUndoStack(50)
+// Set while undo/redo re-applies a snapshot, so the resulting setMeshTransform
+// doesn't push it back onto the stack.
+let applyingUndo = false
+
 export const usePrintStore = defineStore('print', {
 	state: () => ({
 		activeTab: TABS.PREPARE,
@@ -273,6 +282,9 @@ export const usePrintStore = defineStore('print', {
 			autoApply: true,
 			applying: false,
 		},
+		// Reactive mirror of the module-level undo stack (for toolbar enable state).
+		meshCanUndo: false,
+		meshCanRedo: false,
 		profiles: {
 			printers: [],
 			filaments: [],
@@ -924,6 +936,14 @@ export const usePrintStore = defineStore('print', {
 			this.meshState = defaultMeshState()
 			this.resetMeshHealth()
 			this._applyMeshPrefsForModel(file?.name || '')
+			// Seed undo history with the (possibly restored) baseline transform.
+			this.resetMeshUndo()
+			meshUndo.push({
+				position: this.meshState.position,
+				rotation: this.meshState.rotation,
+				scale: this.meshState.scale,
+			})
+			this._refreshUndoFlags()
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
 			this._updateModelMetaFromFile(file)
@@ -1069,6 +1089,72 @@ export const usePrintStore = defineStore('print', {
 				this.meshState.scale = [...transform.scale]
 			}
 			this._persistMeshTransform()
+			// Record into undo history (dedup'd), unless we're mid-undo/redo.
+			if (!applyingUndo) {
+				meshUndo.push({
+					position: this.meshState.position,
+					rotation: this.meshState.rotation,
+					scale: this.meshState.scale,
+				})
+				this._refreshUndoFlags()
+			}
+		},
+
+		_refreshUndoFlags() {
+			this.meshCanUndo = meshUndo.canUndo()
+			this.meshCanRedo = meshUndo.canRedo()
+		},
+
+		/**
+		 * Re-apply a snapshot to the viewport + store without re-recording it.
+		 * The viewport is the source of truth for the mesh, so we push the
+		 * transform back into it and mirror into meshState.
+		 * @param {object} snap
+		 * @param {object} viewport
+		 */
+		_applyTransformSnapshot(snap, viewport) {
+			if (!snap) {
+				return
+			}
+			applyingUndo = true
+			try {
+				if (viewport?.setTransform) {
+					viewport.setTransform(snap)
+				}
+				this.meshState.position = [...snap.position]
+				this.meshState.rotation = [...snap.rotation]
+				this.meshState.scale = [...snap.scale]
+				this.meshState.dirty = true
+				this._persistMeshTransform()
+			} finally {
+				applyingUndo = false
+			}
+			this._refreshUndoFlags()
+		},
+
+		undoTransform(viewport) {
+			const snap = meshUndo.undo()
+			if (snap) {
+				this._applyTransformSnapshot(snap, viewport)
+				if (this.meshState.autoApply && viewport) {
+					void this.applyMeshToSlice(viewport, { silent: true })
+				}
+			}
+		},
+
+		redoTransform(viewport) {
+			const snap = meshUndo.redo()
+			if (snap) {
+				this._applyTransformSnapshot(snap, viewport)
+				if (this.meshState.autoApply && viewport) {
+					void this.applyMeshToSlice(viewport, { silent: true })
+				}
+			}
+		},
+
+		resetMeshUndo() {
+			meshUndo.reset()
+			this._refreshUndoFlags()
 		},
 
 		async exportMeshFromViewport(viewport) {
@@ -1176,6 +1262,7 @@ export const usePrintStore = defineStore('print', {
 			this.modelMeta = { bbox: null, fitsBed: true, triangleCount: 0, parseError: '', previewSkipped: false }
 			this.meshState = defaultMeshState()
 			this.resetMeshHealth()
+			this.resetMeshUndo()
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
 			this._persistMeshTransform()

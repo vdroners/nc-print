@@ -341,6 +341,26 @@ export function scaleToFitBed(bbox, buildVolume, margin = 0.98) {
 }
 
 /**
+ * Largest uniform factor that still fits the build volume — like scaleToFitBed
+ * but WITHOUT the shrink-only cap, so a small model grows to fill the bed.
+ * @param {{ x: number, y: number, z: number }} bbox
+ * @param {number[]} buildVolume [x, y, z] mm
+ * @param {number} [margin=0.98]
+ * @returns {number} factor (>0); 1 if inputs are unusable
+ */
+export function scaleToMaxFitBed(bbox, buildVolume, margin = 0.98) {
+	if (!bbox || !buildVolume || buildVolume.length < 2) {
+		return 1
+	}
+	const [bx, by, bz = Infinity] = buildVolume
+	const sx = bbox.x > 0 ? (bx * margin) / bbox.x : Infinity
+	const sy = bbox.y > 0 ? (by * margin) / bbox.y : Infinity
+	const sz = bbox.z > 0 && Number.isFinite(bz) ? (bz * margin) / bbox.z : Infinity
+	const f = Math.min(sx, sy, sz)
+	return Number.isFinite(f) && f > 0 ? f : 1
+}
+
+/**
  * @param {Float32Array} positions
  * @param {number} scale
  * @returns {Float32Array}

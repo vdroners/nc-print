@@ -1,5 +1,45 @@
 # Changelog
 
+## [1.42.0] - 2026-07-11
+
+Prepare-tab editor: undo/redo + ~10 more transform tools (Creality/Orca-style).
+
+### Added — undo/redo
+
+- **Undo / redo for model transforms.** A bounded (50-step) snapshot stack of
+  the move/rotate/scale/mirror/cut/lay-flat/auto-orient state. Toolbar **↶ Undo /
+  ↷ Redo** buttons (enabled state reactive) plus **Ctrl+Z** / **Ctrl+Shift+Z**
+  (only on the Prepare tab). Pure `utils/undo-stack.js`; the store records on
+  every committed transform (deduped) and re-applies snapshots through the
+  viewport. History resets when a new model loads.
+
+### Added — transform tools
+
+Reusing the existing tool-panel/viewport primitives (no new geometry engine):
+
+- **Rotate:** +45° X/Y/Z, Flip 180° X/Y, and **Snap 90°** (snaps each axis to the
+  nearest right angle so a hand-rotated part lands square).
+- **Scale:** **×2 / ÷2** quick factors, **Max fit** (largest uniform scale that
+  fills the bed — new `scaleToMaxFitBed`, grow-capable unlike shrink-only
+  `scaleToFitBed`), and an **mm ↔ in** unit toggle on the "to size" field
+  (converts to mm for the engine).
+- **Move:** **Center XY** (centres on the plate keeping current height) alongside
+  the existing Center + drop.
+- **Toolbar:** a **Reset** (all transforms) button next to undo/redo.
+
+### Tests
+
+- vitest `undo-stack.spec` (push/undo/redo, dedupe, redo-tail truncation, bound
+  eviction, snapshot cloning) and extended `mesh-analyze.spec` for
+  `scaleToMaxFitBed` (grows small models, shrinks large, safe on bad input).
+  Full suite green (315).
+
+### Notes
+
+- Duplicate / delete / arrange-multiple and per-part selection are intentionally
+  deferred to the multi-object editor rework (next group), where they become
+  meaningful.
+
 ## [1.41.1] - 2026-07-11
 
 Print-tab sticky status-bar fixes (reported from live use).

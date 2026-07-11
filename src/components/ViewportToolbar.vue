@@ -74,6 +74,15 @@ export default {
 		onAutoApplyChange(e) {
 			this.printStore.setMeshAutoApply(e.target.checked)
 		},
+		onUndo() {
+			this.$emit('undo')
+		},
+		onRedo() {
+			this.$emit('redo')
+		},
+		onResetTransform() {
+			this.$emit('reset-transform')
+		},
 	},
 }
 </script>
@@ -101,6 +110,36 @@ export default {
 				class="nc-print-btn"
 				@click="onClear">
 				Clear
+			</button>
+		</div>
+
+		<!-- Group 1b: undo/redo + object ops -->
+		<div v-if="printStore.hasModel" class="nc-print-toolbar-group">
+			<button
+				type="button"
+				class="nc-print-btn nc-print-btn--compact"
+				:disabled="!printStore.meshCanUndo"
+				title="Undo (Ctrl+Z)"
+				aria-label="Undo"
+				@click="onUndo">
+				↶ Undo
+			</button>
+			<button
+				type="button"
+				class="nc-print-btn nc-print-btn--compact"
+				:disabled="!printStore.meshCanRedo"
+				title="Redo (Ctrl+Shift+Z)"
+				aria-label="Redo"
+				@click="onRedo">
+				↷ Redo
+			</button>
+			<button
+				type="button"
+				class="nc-print-btn nc-print-btn--compact"
+				:disabled="!canTransform"
+				title="Reset all transforms"
+				@click="onResetTransform">
+				Reset
 			</button>
 		</div>
 

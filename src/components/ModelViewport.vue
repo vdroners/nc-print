@@ -11,6 +11,7 @@ import {
 	autoRepair,
 	layFlat,
 	scaleToFitBed,
+	scaleToMaxFitBed,
 	applyUniformScale,
 	mirrorMesh,
 	rotationMatrixFromTo,
@@ -345,6 +346,52 @@ export default {
 			this.printStore.setMeshHealth(result)
 			toastSuccess(`Scaled to ${Math.round(factor * 100)}% to fit bed`)
 			return true
+		},
+		async scaleMaxFitMesh() {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const factor = scaleToMaxFitBed(mesh.bbox, this.buildVolume)
+			if (Math.abs(factor - 1) < 0.001) {
+				toastInfo('Model already fills the build volume')
+				return false
+			}
+			const scaled = applyUniformScale(mesh.positions, factor)
+			await this.applyMeshSnapshot({ positions: scaled, indices: mesh.indices })
+			const result = analyzeMesh(scaled, mesh.indices)
+			this.printStore.setMeshHealth(result)
+			toastSuccess(`Scaled to ${Math.round(factor * 100)}% to fill bed`)
+			return true
+		},
+		// Center on X/Y only, keeping the current Z (height) — uses live world
+		// bounds + bed centre, then a world-delta translate.
+		centerXY() {
+			const bounds = this.getWorldBounds()
+			if (!bounds) {
+				return
+			}
+			const [bx, by] = this.buildVolume
+			const dx = (bx / 2) - bounds.center[0]
+			const dy = (by / 2) - bounds.center[1]
+			this.translateBy([dx, dy, 0])
+		},
+		// Snap each rotation axis to the nearest 90°, so a hand-rotated part lands
+		// square to the bed.
+		snapRotationToAxis() {
+			const t = this.viewport?.getTransform?.()
+			if (!t?.rotation) {
+				return
+			}
+			const halfPi = Math.PI / 2
+			const target = t.rotation.map((r) => Math.round(r / halfPi) * halfPi)
+			const delta = [
+				target[0] - t.rotation[0],
+				target[1] - t.rotation[1],
+				target[2] - t.rotation[2],
+			]
+			const toDeg = (r) => (r * 180) / Math.PI
+			this.applyRotationDegrees({ x: toDeg(delta[0]), y: toDeg(delta[1]), z: toDeg(delta[2]) })
 		},
 		setGizmoMode(mode) {
 			this.viewport?.setGizmoMode?.(mode)

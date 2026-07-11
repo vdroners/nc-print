@@ -74,16 +74,31 @@ export default {
 		this._onRecenter = () => this.onCenter()
 		this._onChecklistAction = (e) => this.onChecklistAction(e.detail?.action)
 		this._onCanvasClick = (e) => this.onCanvasClick(e)
+		this._onUndoRedo = (e) => (e.detail?.redo ? this.onRedo() : this.onUndo())
 		window.addEventListener('nc-print-recenter', this._onRecenter)
 		window.addEventListener('nc-print-checklist-action', this._onChecklistAction)
+		window.addEventListener('nc-print-undo-redo', this._onUndoRedo)
 	},
 	beforeDestroy() {
 		window.removeEventListener('nc-print-recenter', this._onRecenter)
 		window.removeEventListener('nc-print-checklist-action', this._onChecklistAction)
+		window.removeEventListener('nc-print-undo-redo', this._onUndoRedo)
 	},
 	methods: {
 		onToolbarImport(file) {
 			this.printStore.setModel(file, 'import')
+		},
+		onUndo() {
+			this.printStore.undoTransform(this.$refs.viewport?.viewport)
+			this.refreshBounds()
+		},
+		onRedo() {
+			this.printStore.redoTransform(this.$refs.viewport?.viewport)
+			this.refreshBounds()
+		},
+		onResetTransformAll() {
+			this.$refs.viewport?.resetTransform?.()
+			this.refreshBounds()
 		},
 		onCenter() {
 			this.$refs.viewport?.recenter()
@@ -99,6 +114,18 @@ export default {
 		},
 		async onScaleToFit() {
 			await this.$refs.viewport?.scaleToFitMesh()
+			this.refreshBounds()
+		},
+		async onScaleMaxFit() {
+			await this.$refs.viewport?.scaleMaxFitMesh()
+			this.refreshBounds()
+		},
+		onCenterXY() {
+			this.$refs.viewport?.centerXY?.()
+			this.refreshBounds()
+		},
+		onSnapAxis() {
+			this.$refs.viewport?.snapRotationToAxis?.()
 			this.refreshBounds()
 		},
 		async onAutoOrient() {
@@ -369,6 +396,9 @@ export default {
 					:can-transform="canTransform"
 					@import="onToolbarImport"
 					@pick-files="pickFromFiles"
+					@undo="onUndo"
+					@redo="onRedo"
+					@reset-transform="onResetTransformAll"
 					@center="onCenter"
 					@rotate="onRotate"
 					@lay-flat="onLayFlat"
@@ -397,7 +427,9 @@ export default {
 					@move-delta="onMoveDelta"
 					@drop-to-bed="onDropToBed"
 					@center="onCenter"
+					@center-xy="onCenterXY"
 					@rotate-degrees="onRotateDegrees"
+					@snap-axis="onSnapAxis"
 					@lay-flat="onLayFlat"
 					@auto-orient="onAutoOrient"
 					@reset-rotation="onResetRotation"
@@ -405,6 +437,7 @@ export default {
 					@scale-axis="onScaleAxis"
 					@scale-to-size="onScaleToSize"
 					@scale-to-fit="onScaleToFit"
+					@scale-max-fit="onScaleMaxFit"
 					@reset-scale="onResetScale"
 					@face-pick-toggle="onFacePickToggle"
 					@mirror="onMirror"

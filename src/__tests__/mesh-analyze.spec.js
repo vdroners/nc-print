@@ -11,6 +11,7 @@ import {
 	layFlat,
 	parseStlToMesh,
 	scaleToFitBed,
+	scaleToMaxFitBed,
 } from '../services/mesh-analyze.js'
 
 function makeOpenBoxMesh() {
@@ -93,6 +94,26 @@ describe('mesh-analyze', () => {
 		const factor = scaleToFitBed({ x: 300, y: 100, z: 50 }, [220, 220, 220])
 		expect(factor).toBeLessThan(1)
 		expect(factor).toBeCloseTo(220 / 300 * 0.98, 2)
+	})
+
+	it('scaleToFitBed caps at 1 for a small model (shrink-only)', () => {
+		expect(scaleToFitBed({ x: 20, y: 20, z: 20 }, [220, 220, 220])).toBe(1)
+	})
+
+	it('scaleToMaxFitBed grows a small model to fill the bed (no cap)', () => {
+		const factor = scaleToMaxFitBed({ x: 20, y: 20, z: 20 }, [220, 220, 220])
+		expect(factor).toBeGreaterThan(1)
+		expect(factor).toBeCloseTo(220 / 20 * 0.98, 2)
+	})
+
+	it('scaleToMaxFitBed shrinks an oversized model like fit', () => {
+		const factor = scaleToMaxFitBed({ x: 300, y: 100, z: 50 }, [220, 220, 220])
+		expect(factor).toBeCloseTo(220 / 300 * 0.98, 2)
+	})
+
+	it('scaleToMaxFitBed returns 1 for unusable inputs', () => {
+		expect(scaleToMaxFitBed(null, [220, 220, 220])).toBe(1)
+		expect(scaleToMaxFitBed({ x: 0, y: 0, z: 0 }, [220, 220, 220])).toBe(1)
 	})
 
 	it('applyUniformScale shrinks positions', () => {
