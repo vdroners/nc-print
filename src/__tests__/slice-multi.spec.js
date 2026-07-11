@@ -71,4 +71,30 @@ describe('sliceStreamMulti object_overrides', () => {
 		})
 		expect(captured.has('object_overrides')).toBe(false)
 	})
+
+	it('sends arrange=0 when arrange:false (baked multi-object layout preserved)', async () => {
+		await sliceStreamMulti({
+			models: [{ data: cube(), filename: 'a.stl' }, { data: cube(), filename: 'b.stl' }],
+			printerId: 'K1',
+			arrange: false,
+		})
+		expect(captured.get('arrange')).toBe('0')
+	})
+
+	it('sends arrange=1 by default (arrange-plate flow)', async () => {
+		await sliceStreamMulti({
+			models: [{ data: cube(), filename: 'a.stl' }],
+			printerId: 'K1',
+		})
+		expect(captured.get('arrange')).toBe('1')
+	})
+
+	it('sends one model part per object', async () => {
+		await sliceStreamMulti({
+			models: [{ data: cube(), filename: 'x-part1.stl' }, { data: cube(), filename: 'x-part2.stl' }],
+			printerId: 'K1',
+			arrange: false,
+		})
+		expect(captured.getAll('model')).toHaveLength(2)
+	})
 })

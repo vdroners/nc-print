@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.46.0] - 2026-07-11
+
+Multi-object slicing (Phase 3d) — a multi-part scene now slices with each part
+kept exactly where you placed it. This makes the multi-object editor (3a–3c)
+actually printable.
+
+### Added — multi-object slice
+
+- **Apply for slicing** now bakes every scene object (its world transform into
+  the STL vertices) into per-object STL files (`sceneSliceFiles`) when the scene
+  has more than one object. The slice path branches: >1 object → `sliceStreamMulti`
+  with **arrange:false** so the engine keeps the placed layout; single object →
+  the existing path, unchanged.
+
+### Fixed — adapter (nc-print-slicer)
+
+- The slicer adapter no longer **forces** plate arrangement for any multi-model
+  request. `do_arrange` now honors the client `arrange` flag, so a baked-in-place
+  multi-object slice (`arrange=0`) preserves the user's layout, while the
+  arrange-plate flow (`arrange=1`) still auto-lays-out. Multi-object 3MFs are
+  written with identity build-item transforms (placement lives in the baked
+  vertices).
+
+### Tests
+
+- adapter: `test_multiobject_3mf_has_all_objects` now also asserts every build
+  item is at identity (layout comes from baked vertices, not engine arrange).
+- vitest `slice-multi.spec`: arrange=0 vs arrange=1 flag, one model part per
+  object. Full suite green (335); adapter suite runs against the rebuilt sidecar.
+
 ## [1.45.0] - 2026-07-11
 
 Plane cut into two independent parts (Phase 3c) — the long-standing gap where a

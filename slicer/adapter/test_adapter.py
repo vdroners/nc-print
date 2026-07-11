@@ -293,6 +293,10 @@ def test_multiobject_3mf_has_all_objects():
             # one <object> per model + one <item> per model
             assert model.count("<object id=") == 3
             assert model.count("<item objectid=") == 3
+            # Every build item is placed at IDENTITY: the multi-object slice path
+            # bakes each part's world placement into its STL vertices and slices
+            # with arrange=0, so the engine must NOT re-lay-out via item transforms.
+            assert model.count('transform="1 0 0 0 1 0 0 0 1 0 0 0"') == 3
 
 
 def test_multiobject_3mf_rejects_empty():

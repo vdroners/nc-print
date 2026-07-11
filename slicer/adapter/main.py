@@ -484,11 +484,15 @@ async def slice_stream(request: Request) -> Response:
         yield _sse("error", {"message": message, "code": code, "job_id": job_id})
 
     # 1. STL → 3MF (engine can't load STL). Multiple models → one multi-object
-    # 3MF, arranged on the plate by the engine.
+    # 3MF. Arrangement is client-controlled: the multi-object editor bakes each
+    # object's placement into its STL vertices and sends arrange=0 to PRESERVE
+    # that layout; the "arrange plate" flow sends arrange=1 to let the engine lay
+    # parts out. Honor the flag rather than forcing arrange for any multi request
+    # (which would discard a user's placement).
     model_3mf = os.path.join(job_dir, "model.3mf")
     models = fields["models"] or [fields["model"]]
     multi = len(models) > 1
-    do_arrange = multi or fields["arrange"]
+    do_arrange = bool(fields["arrange"])
     try:
         if multi:
             stls_to_multiobject_3mf(

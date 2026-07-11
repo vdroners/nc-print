@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { fetchProfiles, sliceStream, downloadGcode, uploadAndStart, cancelSliceJob } from '@/services/slicer-api.js'
+import { fetchProfiles, sliceStream, sliceStreamMulti, downloadGcode, uploadAndStart, cancelSliceJob } from '@/services/slicer-api.js'
 import {
 	buildSliceOverrides,
 	mergeProfileSettings,
@@ -302,6 +302,10 @@ export const usePrintStore = defineStore('print', {
 		//     scale:[x,y,z], bbox|null, triangleCount, visible }
 		objects: [],
 		selectedObjectId: null,
+		// Baked per-object STL Files for the multi-object slice path (3d), stashed
+		// by applyMeshToSlice when the scene has >1 object. Empty → single-object
+		// slice path is used. Each: File (world-transform baked into vertices).
+		sceneSliceFiles: [],
 		// True while the "place on face" pick tool is armed — the viewport uses
 		// this to suppress click-to-select object picking.
 		facePickMode: false,
@@ -1224,11 +1228,13 @@ export const usePrintStore = defineStore('print', {
 			})
 			this.objects = [obj]
 			this.selectedObjectId = obj.id
+			this.sceneSliceFiles = []
 		},
 
 		clearScene() {
 			this.objects = []
 			this.selectedObjectId = null
+			this.sceneSliceFiles = []
 		},
 
 		selectObject(id) {
@@ -1307,6 +1313,27 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
+		/**
+		 * Bake every scene object (world transform → vertices) into its own STL
+		 * File, in stable order, for the multi-object slice path (3d).
+		 * @returns {Promise<File[]>}
+		 */
+		async _exportSceneFiles(viewport) {
+			if (!viewport?.exportAllObjects) {
+				return []
+			}
+			const exported = viewport.exportAllObjects()
+			if (!exported?.length) {
+				return []
+			}
+			const { meshToStlBuffer } = await import('@/services/mesh-convert.js')
+			const stem = (this.model.name || 'model').replace(/\.[^.]+$/, '')
+			return exported.map((obj, i) => {
+				const buf = meshToStlBuffer({ positions: obj.positions, indices: obj.indices })
+				return new File([buf], `${stem}-part${i + 1}.stl`, { type: 'application/octet-stream' })
+			})
+		},
+
 		async exportMeshFromViewport(viewport) {
 			if (!viewport?.exportTransformedMesh) {
 				throw new Error('Viewport export unavailable')
@@ -1341,6 +1368,11 @@ export const usePrintStore = defineStore('print', {
 				this.setMeshTransform(transform)
 				const sliceFile = await this.exportMeshFromViewport(viewport)
 				this.meshState.sliceBlob = sliceFile
+				// Multi-object: also bake every object (world transforms in vertices)
+				// into per-object STL Files for the arrange:false multi-slice path.
+				this.sceneSliceFiles = this.objects.length > 1
+					? await this._exportSceneFiles(viewport)
+					: []
 				this.meshState.dirty = false
 				this.meshState.appliedAt = new Date().toISOString()
 				this._persistMeshTransform()
@@ -2536,37 +2568,55 @@ export const usePrintStore = defineStore('print', {
 			let jobIdForCancel = null
 
 			try {
-				const sliceFile = this.sliceModelFile()
-				if (!sliceFile) {
-					throw new Error(this.model.convertError || 'No slice-ready model file')
-				}
-				const done = await sliceStream({
-					model: sliceFile,
-					filename: sliceFile.name || this.model.name,
-					printerId: this.selection.printerId,
-					filamentIds,
-					processId: this.selection.processId,
-					overrides,
-					pauses: this.pauses,
-					signal,
-					onEvent: ({ event, parsed }) => {
-						if (event === 'progress' && parsed) {
-							this.sliceJob.stage = parsed.stage || ''
-							this.sliceJob.pct = parsed.pct ?? 0
-							if (parsed.job_id) {
-								jobIdForCancel = parsed.job_id
-								this.sliceJob.jobId = parsed.job_id
-							}
-						}
-						if (event === 'layer' && parsed) {
-							this.sliceJob.layer = parsed.layer ?? 0
-							this.sliceJob.totalLayers = parsed.total_layers ?? 0
-						}
-						if (event === 'done' && parsed?.job_id) {
+				const onEvent = ({ event, parsed }) => {
+					if (event === 'progress' && parsed) {
+						this.sliceJob.stage = parsed.stage || ''
+						this.sliceJob.pct = parsed.pct ?? 0
+						if (parsed.job_id) {
 							jobIdForCancel = parsed.job_id
+							this.sliceJob.jobId = parsed.job_id
 						}
-					},
-				})
+					}
+					if (event === 'layer' && parsed) {
+						this.sliceJob.layer = parsed.layer ?? 0
+						this.sliceJob.totalLayers = parsed.total_layers ?? 0
+					}
+					if (event === 'done' && parsed?.job_id) {
+						jobIdForCancel = parsed.job_id
+					}
+				}
+
+				let done
+				if (this.sceneSliceFiles.length > 1) {
+					// Multi-object: slice all parts with their baked layout, arrange
+					// OFF so the engine keeps each part where the user placed it.
+					done = await sliceStreamMulti({
+						models: this.sceneSliceFiles.map((f) => ({ data: f, filename: f.name })),
+						printerId: this.selection.printerId,
+						filamentIds,
+						processId: this.selection.processId,
+						overrides,
+						arrange: false,
+						signal,
+						onEvent,
+					})
+				} else {
+					const sliceFile = this.sliceModelFile()
+					if (!sliceFile) {
+						throw new Error(this.model.convertError || 'No slice-ready model file')
+					}
+					done = await sliceStream({
+						model: sliceFile,
+						filename: sliceFile.name || this.model.name,
+						printerId: this.selection.printerId,
+						filamentIds,
+						processId: this.selection.processId,
+						overrides,
+						pauses: this.pauses,
+						signal,
+						onEvent,
+					})
+				}
 
 				this.sliceJob.jobId = done.job_id || done.jobId || jobIdForCancel
 				if (this.sliceJob.jobId) {
