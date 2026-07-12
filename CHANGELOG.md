@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.52.2] - 2026-07-11
+
+Fix the blank camera view — resolve a fetchable snapshot URL, auto-discovering
+one from the printer when none is configured.
+
+### Fixed
+
+- The camera view was blank because no camera URL was configured and nothing
+  auto-discovered one. `ConfigService::resolveCameraUrl*` now falls back to the
+  printer's Moonraker `/server/webcams/list` when no per-printer/global
+  `camera_url` is set, preferring each webcam's `snapshot_url` (a single JPEG —
+  what the `/api/camera/frame.jpeg` proxy expects) over its MJPEG `stream_url`.
+  The discovered URL is cached in app config (`moonraker_camera_url_discovered`)
+  so Moonraker isn't queried on every frame, and it stays server-side proxied —
+  the browser never sees the raw LAN address.
+
+### Tests
+
+- phpunit `ConfigServiceRoutingTest`: configured value wins over discovery;
+  auto-discovers + caches the snapshot URL when unset; uses the cache on the next
+  call (no re-fetch); returns empty (clean degrade) when no webcam and no config.
+  Added OCP `Http\Client` stubs (`IClientService`/`IClient`/`IResponse`).
+
 ## [1.52.1] - 2026-07-11
 
 Fix "Slicer offline / timed out" — slim the profiles payload.

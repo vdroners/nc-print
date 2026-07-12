@@ -238,3 +238,22 @@ interface IQueryBuilder
 	public const PARAM_DATE = 3;
 	public const PARAM_STR_ARRAY = 102;
 }
+
+namespace OCP\Http\Client;
+
+interface IResponse
+{
+	public function getBody();
+
+	public function getStatusCode(): int;
+}
+
+interface IClient
+{
+	public function get(string $uri, array $options = []): IResponse;
+}
+
+interface IClientService
+{
+	public function newClient(): IClient;
+}

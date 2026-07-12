@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace OCA\NcPrint\Service;
 
 use OCA\NcPrint\AppInfo\Application;
+use OCP\Http\Client\IClientService;
 use OCP\IConfig;
+use Psr\Log\LoggerInterface;
 
 class ConfigService
 {
 	public const KEY_SLICER_INTERNAL_URL = 'slicer_internal_url';
 	public const KEY_MOONRAKER_INTERNAL_URL = 'moonraker_internal_url';
 	public const KEY_MOONRAKER_CAMERA_URL = 'moonraker_camera_url';
+	/** Auto-discovered webcam URL cache (Moonraker /server/webcams/list); refreshed when the config is unset. */
+	public const KEY_MOONRAKER_CAMERA_URL_DISCOVERED = 'moonraker_camera_url_discovered';
 	public const KEY_SLICER_ENABLED = 'slicer_enabled';
 	public const KEY_MOONRAKER_ENABLED = 'moonraker_enabled';
 	public const KEY_PRINTER_DISPLAY_NAME = 'printer_display_name';
@@ -41,6 +45,8 @@ class ConfigService
 		private IConfig $config,
 		private InternalUrlResolver $internalUrlResolver,
 		private SessionPrinterService $sessionPrinters,
+		private IClientService $clientService,
+		private LoggerInterface $logger,
 	) {
 	}
 
@@ -367,7 +373,85 @@ class ConfigService
 			}
 		}
 
-		return $this->getMoonrakerCameraUrl();
+		$configured = $this->getMoonrakerCameraUrl();
+		if ($configured !== '') {
+			return $configured;
+		}
+
+		// Nothing configured — auto-discover from the printer's Moonraker
+		// webcam registry. Stays server-side (CameraController proxies it), and
+		// the result is cached so we don't hit Moonraker on every frame.
+		return $this->discoverCameraUrl($printerId);
+	}
+
+	/**
+	 * Ask the printer's Moonraker for its webcam list and return a fetchable
+	 * snapshot URL (preferring snapshot_url over stream_url — the frame proxy
+	 * wants a single JPEG, not an MJPEG multipart stream). Cached in app config;
+	 * returns '' when discovery is unavailable so callers degrade cleanly.
+	 */
+	private function discoverCameraUrl(?string $printerId): string
+	{
+		$cached = trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_MOONRAKER_CAMERA_URL_DISCOVERED,
+			'',
+		));
+		if ($cached !== '') {
+			return $cached;
+		}
+
+		try {
+			$base = rtrim($this->resolveMoonrakerUrlOrFail($printerId), '/');
+		} catch (\InvalidArgumentException) {
+			return '';
+		}
+		if ($base === '') {
+			return '';
+		}
+
+		try {
+			$client = $this->clientService->newClient();
+			$response = $client->get($base . '/server/webcams/list', [
+				'timeout' => 4,
+				'connect_timeout' => 3,
+				'nextcloud' => ['allow_local_address' => true],
+			]);
+			$data = json_decode((string) $response->getBody(), true);
+		} catch (\Throwable $e) {
+			$this->logger->debug('Camera auto-discovery failed', ['exception' => $e->getMessage()]);
+			return '';
+		}
+
+		$webcams = $data['result']['webcams'] ?? null;
+		if (!is_array($webcams)) {
+			return '';
+		}
+		foreach ($webcams as $cam) {
+			if (!is_array($cam)) {
+				continue;
+			}
+			if (isset($cam['enabled']) && $cam['enabled'] === false) {
+				continue;
+			}
+			$url = '';
+			if (isset($cam['snapshot_url']) && is_string($cam['snapshot_url']) && trim($cam['snapshot_url']) !== '') {
+				$url = trim($cam['snapshot_url']);
+			} elseif (isset($cam['stream_url']) && is_string($cam['stream_url']) && trim($cam['stream_url']) !== '') {
+				$url = trim($cam['stream_url']);
+			}
+			if ($url === '') {
+				continue;
+			}
+			$this->config->setAppValue(
+				Application::APP_ID,
+				self::KEY_MOONRAKER_CAMERA_URL_DISCOVERED,
+				$url,
+			);
+			return $url;
+		}
+
+		return '';
 	}
 
 	public function resolveCameraUrl(?string $printerId = null): string
@@ -375,7 +459,9 @@ class ConfigService
 		try {
 			return $this->resolveCameraUrlOrFail($printerId);
 		} catch (\InvalidArgumentException) {
-			return $this->getMoonrakerCameraUrl();
+			// Unknown printer id — fall back to the global config, then discovery.
+			$configured = $this->getMoonrakerCameraUrl();
+			return $configured !== '' ? $configured : $this->discoverCameraUrl(null);
 		}
 	}
 
