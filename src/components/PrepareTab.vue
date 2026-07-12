@@ -9,6 +9,7 @@ import PrepareOverrides from './PrepareOverrides.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
 import ViewportHistoryBox from './ViewportHistoryBox.vue'
 import ViewportOrientPad from './ViewportOrientPad.vue'
+import PlateTabs from './PlateTabs.vue'
 import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
 import SceneObjectList from './SceneObjectList.vue'
@@ -35,6 +36,7 @@ export default {
 		ViewportToolbar,
 		ViewportHistoryBox,
 		ViewportOrientPad,
+		PlateTabs,
 		MeshHealthPanel,
 		ThreeMfObjectPicker,
 		SceneObjectList,
@@ -547,6 +549,9 @@ export default {
 					:file="printStore.model.file"
 					:build-volume="buildVolume" />
 
+				<!-- Build-plate switcher (bottom-left, clear of the corner controls). -->
+				<PlateTabs class="nc-print-viewport-plates" />
+
 				<!-- Docked info + apply chip (top-left, inboard of the side card). -->
 				<div v-if="printStore.hasModel" class="nc-print-viewport-chip">
 					<ViewportToolbar ref="toolbar" @apply="onApplyMesh" />
@@ -658,7 +663,8 @@ export default {
    absolutely-positions them into the viewport corners (min-width:1201px below). */
 .nc-print-viewport-chip,
 .nc-print-viewport-history,
-.nc-print-viewport-orientpad {
+.nc-print-viewport-orientpad,
+.nc-print-viewport-plates {
 	margin-bottom: var(--nc-gcs-space-sm);
 }
 
@@ -713,6 +719,15 @@ export default {
 		position: absolute;
 		bottom: 8px;
 		right: 276px;
+		z-index: 6;
+		margin: 0;
+	}
+
+	/* Plate tabs — bottom-left, inboard of the left 300px card. */
+	.nc-print-prepare--immersive .nc-print-viewport-plates {
+		position: absolute;
+		bottom: 8px;
+		left: 316px;
 		z-index: 6;
 		margin: 0;
 	}

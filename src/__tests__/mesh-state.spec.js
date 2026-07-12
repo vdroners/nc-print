@@ -286,4 +286,45 @@ describe('meshState (Sprint B)', () => {
 		const prefs = JSON.parse(localStorage.getItem(PREFS_KEY))
 		expect(prefs.viewPrefs.modelColor).toBe('#ff0000')
 	})
+
+	it('build plates: add / switch preserves each plate independent scene', () => {
+		const store = usePrintStore()
+		// Plate 1 gets a model.
+		store.model.file = makeFile('a.stl')
+		store.model.name = 'a.stl'
+		expect(store.plates).toHaveLength(1)
+
+		// Add a new plate → active switches, scene is cleared for the new plate.
+		store.addPlate()
+		expect(store.plates).toHaveLength(2)
+		expect(store.activePlateId).toBe('plate-2')
+		expect(store.model.file).toBeNull()
+
+		// Load a different model on plate 2.
+		store.model.file = makeFile('b.stl')
+		store.model.name = 'b.stl'
+
+		// Switch back to plate 1 → its model is restored.
+		store.switchPlate('plate-1')
+		expect(store.activePlateId).toBe('plate-1')
+		expect(store.model.name).toBe('a.stl')
+
+		// And forward to plate 2 → its model is restored.
+		store.switchPlate('plate-2')
+		expect(store.model.name).toBe('b.stl')
+	})
+
+	it('build plates: removePlate keeps at least one and reactivates a neighbour', () => {
+		const store = usePrintStore()
+		store.addPlate() // plate-2 active
+		store.addPlate() // plate-3 active
+		expect(store.plates).toHaveLength(3)
+		store.removePlate('plate-3')
+		expect(store.plates).toHaveLength(2)
+		expect(store.activePlateId).toBe('plate-2')
+		// Can't remove the last plate.
+		store.removePlate('plate-2')
+		store.removePlate('plate-1')
+		expect(store.plates.length).toBeGreaterThanOrEqual(1)
+	})
 })

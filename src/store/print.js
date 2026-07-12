@@ -339,6 +339,15 @@ export const usePrintStore = defineStore('print', {
 		// True while the "place on face" pick tool is armed — the viewport uses
 		// this to suppress click-to-select object picking.
 		facePickMode: false,
+		// Build plates (lightweight switcher). Each plate is an independent scene
+		// snapshot; switching saves the live scene into the active plate and
+		// restores the target. The viewport reloads from `model.file` on switch, so
+		// a snapshot only needs the scene state fields (not the meshes themselves).
+		//   { id, name, snapshot: { model, modelMeta, meshState, sliceJob,
+		//     threeMfBuildItems, threeMfSelectedIds } | null }
+		plates: [{ id: 'plate-1', name: 'Plate 1', snapshot: null }],
+		activePlateId: 'plate-1',
+		_plateSeq: 1,
 		profiles: {
 			printers: [],
 			filaments: [],
@@ -1291,6 +1300,90 @@ export const usePrintStore = defineStore('print', {
 			this.objects = []
 			this.selectedObjectId = null
 			this.sceneSliceFiles = []
+		},
+
+		// ── Build plates (lightweight switcher) ──────────────────────────────────
+		/** Capture the live scene into a plain snapshot object. */
+		_snapshotScene() {
+			return {
+				model: { ...this.model },
+				modelMeta: { ...this.modelMeta },
+				meshState: { ...this.meshState },
+				sliceJob: { ...this.sliceJob },
+				objects: this.objects.map((o) => ({ ...o })),
+				selectedObjectId: this.selectedObjectId,
+				sceneSliceFiles: [...this.sceneSliceFiles],
+				threeMfBuildItems: [...this.threeMfBuildItems],
+				threeMfSelectedIds: [...this.threeMfSelectedIds],
+			}
+		},
+		/** Restore a snapshot (or a clean scene when null) into the live state. */
+		_restoreScene(snap) {
+			if (!snap) {
+				this.model = { file: null, sliceFile: null, name: '', size: 0, source: null,
+					fileId: null, davPath: '', convertError: '', convertedFrom3mf: false }
+				this.modelMeta = { bbox: null, fitsBed: true, triangleCount: 0, parseError: '', previewSkipped: false }
+				this.meshState = defaultMeshState()
+				this.resetSliceJob()
+				this.objects = []
+				this.selectedObjectId = null
+				this.sceneSliceFiles = []
+				this.threeMfBuildItems = []
+				this.threeMfSelectedIds = []
+				this.resetMeshUndo()
+				return
+			}
+			this.model = { ...snap.model }
+			this.modelMeta = { ...snap.modelMeta }
+			this.meshState = { ...snap.meshState }
+			this.sliceJob = { ...snap.sliceJob }
+			this.objects = (snap.objects || []).map((o) => ({ ...o }))
+			this.selectedObjectId = snap.selectedObjectId ?? null
+			this.sceneSliceFiles = [...(snap.sceneSliceFiles || [])]
+			this.threeMfBuildItems = [...(snap.threeMfBuildItems || [])]
+			this.threeMfSelectedIds = [...(snap.threeMfSelectedIds || [])]
+			this.resetMeshUndo()
+		},
+		addPlate() {
+			// Save the current scene into the active plate before creating a new one.
+			this.switchPlate(null, { createNew: true })
+		},
+		switchPlate(plateId, { createNew = false } = {}) {
+			// Stash the live scene into the currently-active plate.
+			const active = this.plates.find((p) => p.id === this.activePlateId)
+			if (active) {
+				active.snapshot = this._snapshotScene()
+			}
+			if (createNew) {
+				this._plateSeq += 1
+				const id = `plate-${this._plateSeq}`
+				this.plates.push({ id, name: `Plate ${this._plateSeq}`, snapshot: null })
+				this.activePlateId = id
+				this._restoreScene(null)
+				return
+			}
+			const target = this.plates.find((p) => p.id === plateId)
+			if (!target || target.id === this.activePlateId) {
+				return
+			}
+			this.activePlateId = target.id
+			this._restoreScene(target.snapshot)
+		},
+		removePlate(plateId) {
+			if (this.plates.length <= 1) {
+				return
+			}
+			const idx = this.plates.findIndex((p) => p.id === plateId)
+			if (idx < 0) {
+				return
+			}
+			const wasActive = this.plates[idx].id === this.activePlateId
+			this.plates.splice(idx, 1)
+			if (wasActive) {
+				const next = this.plates[Math.max(0, idx - 1)]
+				this.activePlateId = next.id
+				this._restoreScene(next.snapshot)
+			}
 		},
 
 		selectObject(id) {

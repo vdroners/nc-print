@@ -168,7 +168,8 @@ describe('place-on-face rotation math (G-tool-4)', () => {
 describe('prepare tool UI presence (G-tool-5)', () => {
 	it('rail lists the full tool palette', () => {
 		const rail = readComponent('PrepareToolRail.vue')
-		for (const id of ['move', 'rotate', 'scale', 'face', 'mirror', 'cut', 'view']) {
+		for (const id of ['move', 'rotate', 'scale', 'autoorient', 'face', 'mirror', 'cut',
+			'drill', 'hollow', 'emboss', 'view', 'measure', 'arrange']) {
 			expect(rail).toContain(`id: '${id}'`)
 		}
 		expect(rail).toContain("$emit('tool-change'")
@@ -176,7 +177,8 @@ describe('prepare tool UI presence (G-tool-5)', () => {
 
 	it('contextual panel handles every tool branch', () => {
 		const panel = readComponent('PrepareToolPanel.vue')
-		for (const branch of ['move', 'rotate', 'scale', 'face', 'mirror', 'cut', 'view']) {
+		for (const branch of ['move', 'rotate', 'scale', 'autoorient', 'face', 'mirror', 'cut',
+			'drill', 'hollow', 'emboss', 'view', 'measure', 'arrange']) {
 			expect(panel).toContain(`tool === '${branch}'`)
 		}
 	})

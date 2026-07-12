@@ -1,5 +1,46 @@
 # Changelog
 
+## [1.56.0] - 2026-07-12
+
+Prepare-tab tool expansion — CSG mesh tools, multiple build plates, and a
+continuity pass. (Support/seam painting + variable layer height deferred — they
+need per-triangle/per-layer 3MF encoding proven on the engine first.)
+
+### Added — new Prepare tools
+
+- **Drill** — pick a face and bore a cylindrical hole (diameter / depth / through)
+  via CSG subtraction along the face normal.
+- **Hollow** — shell a solid model to a wall thickness (with a too-thin guard) to
+  save filament, with an optional drain hole.
+- **Emboss / deboss** — type text, click a face, and add it raised (CSG union) or
+  recessed (CSG subtract) at a chosen size/depth. Bundled font (helvetiker).
+- **Measure** — click two surface points for a distance readout; live bounding-box
+  dimensions shown.
+- **Arrange all** — lay every object on the plate out without overlap (client-side
+  shelf packer), complementing the slice-time engine arrange.
+- **Multiple build plates** — a plate-tab strip above the viewport; each plate is
+  an independent scene (its own model/objects/slice), switch between them and slice
+  each separately (lightweight switcher; per-plate scene snapshot).
+
+### Changed
+
+- New CSG capability: `three-bvh-csg` + `three-mesh-bvh` (pinned to the line
+  compatible with three 0.170) + `src/services/mesh-boolean.js`
+  (subtract/union/intersect/makeCylinder), used by drill/emboss/hollow.
+- Tool rail regrouped by kind: Modify now holds cut/drill/hollow/emboss; a
+  View/utility group holds view/measure/arrange. A unified canvas pick-mode
+  dispatcher drives all face-based tools (place-on-face/drill/emboss/measure).
+- Continuity: the new baked ops mark the mesh dirty + auto-apply through the same
+  `applyMeshSnapshot` path as the existing plane-cut, so they flow into slicing
+  consistently.
+
+### Tests
+
+- vitest: mesh-boolean (subtract opens a hole, union, cylinder), mesh-hollow
+  (two-shell + too-thin guard), mesh-arrange (no overlap + overflow), mesh-emboss
+  (text mesh + empty guard), plate store (add/switch/remove independent scenes),
+  expanded rail/panel palette assertions. Full suite green (419).
+
 ## [1.55.0] - 2026-07-12
 
 New **Overview** management console + Prepare-tab polish + four 3DPrintForge-
