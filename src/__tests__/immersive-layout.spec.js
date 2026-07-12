@@ -10,6 +10,8 @@ import { fileURLToPath } from 'node:url'
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const layout = read('../components/PrepareStudioLayout.vue')
 const prepare = read('../components/PrepareTab.vue')
+const slice = read('../components/SliceTab.vue')
+const toolpath = read('../components/Toolpath3D.vue')
 
 describe('immersive full-bleed layout', () => {
 	it('PrepareStudioLayout exposes a reversible mode prop (studio|immersive)', () => {
@@ -47,5 +49,31 @@ describe('immersive full-bleed layout', () => {
 		expect(prepare).toMatch(/@media \(min-width:\s*1201px\)/)
 		expect(prepare).toMatch(/nc-print-tool-rail\)\s*\{\s*left:\s*316px/)
 		expect(prepare).toMatch(/nc-print-tool-panel\)\s*\{\s*right:\s*316px/)
+	})
+
+	it('SliceTab reuses the immersive studio layout with the toolpath as background', () => {
+		expect(slice).toMatch(/PrepareStudioLayout/)
+		expect(slice).toMatch(/mode="immersive"/)
+		// Toolpath3D fills the center (#center slot) in immersive mode.
+		expect(slice).toMatch(/#center/)
+		expect(slice).toMatch(/<Toolpath3D[\s\S]*?mode="immersive"/)
+		// Workflow cards on the left, results on the right.
+		expect(slice).toMatch(/#left/)
+		expect(slice).toMatch(/#right/)
+		expect(slice).toMatch(/SliceResultTabs/)
+	})
+
+	it('Toolpath3D supports an immersive mode with a floating bottom control bar', () => {
+		expect(toolpath).toMatch(/mode:\s*\{/)
+		expect(toolpath).toMatch(/\['panel', 'immersive'\]/)
+		expect(toolpath).toMatch(/tp3d--immersive/)
+		// controls float at the bottom, viewport fills (inset:0).
+		const m = toolpath.match(/\.tp3d--immersive \.tp3d__controls \{([^}]*)\}/)
+		expect(m).not.toBeNull()
+		expect(m[1]).toMatch(/position:\s*absolute/)
+		expect(m[1]).toMatch(/bottom:/)
+		expect(m[1]).toMatch(/backdrop-filter/)
+		// narrow screens fall back to a static bar.
+		expect(toolpath).toMatch(/@media \(max-width:\s*1200px\)/)
 	})
 })

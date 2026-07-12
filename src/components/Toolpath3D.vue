@@ -1,5 +1,5 @@
 <template>
-	<div class="tp3d">
+	<div class="tp3d" :class="{ 'tp3d--immersive': immersive }">
 		<div v-if="loading" class="tp3d__status">Loading toolpath…</div>
 		<div v-else-if="error" class="tp3d__status tp3d__status--error">{{ error }}</div>
 
@@ -52,6 +52,21 @@ export default {
 	props: {
 		jobId: { type: String, default: '' },
 		buildVolume: { type: Array, default: () => [220, 220, 220] },
+		/**
+		 * 'panel'     — classic stacked card (viewport above, controls below).
+		 * 'immersive' — viewport fills the background; the layer slider + feature
+		 *               legend float as a bottom overlay bar (Slice full-bleed).
+		 */
+		mode: {
+			type: String,
+			default: 'panel',
+			validator: (v) => ['panel', 'immersive'].includes(v),
+		},
+	},
+	computed: {
+		immersive() {
+			return this.mode === 'immersive'
+		},
 	},
 	data() {
 		return {
@@ -210,5 +225,59 @@ export default {
 	height: 10px;
 	border-radius: 2px;
 	display: inline-block;
+}
+
+/* ── Immersive: viewport fills the parent; controls float as a bottom bar. ──── */
+.tp3d--immersive {
+	position: absolute;
+	inset: 0;
+	min-height: 0;
+	gap: 0;
+}
+.tp3d--immersive .tp3d__viewport {
+	border-radius: 0;
+	min-height: 0;
+}
+.tp3d--immersive .tp3d__status {
+	position: absolute;
+	top: 12px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 7;
+	border-radius: 999px;
+	background: color-mix(in srgb, var(--nc-gcs-bg-surface, #161b22) 82%, transparent);
+	backdrop-filter: blur(8px);
+}
+.tp3d--immersive .tp3d__controls {
+	position: absolute;
+	bottom: 16px;
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 7;
+	width: max-content;
+	max-width: min(720px, calc(100% - 680px)); /* clear of the 300px side cards + margins */
+	padding: 10px 14px;
+	border: 1px solid var(--nc-gcs-border, #30363d);
+	border-radius: var(--nc-gcs-radius-md, 12px);
+	background: color-mix(in srgb, var(--nc-gcs-bg-surface, #161b22) 82%, transparent);
+	backdrop-filter: blur(8px);
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.tp3d--immersive .tp3d__slider {
+	min-width: 260px;
+}
+/* On narrow screens the Slice layout goes static; the bar spans normally. */
+@media (max-width: 1200px) {
+	.tp3d--immersive {
+		position: relative;
+		inset: auto;
+		min-height: 360px;
+	}
+	.tp3d--immersive .tp3d__controls {
+		position: static;
+		transform: none;
+		max-width: none;
+		width: auto;
+	}
 }
 </style>

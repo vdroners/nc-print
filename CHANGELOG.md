@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.53.0] - 2026-07-11
+
+Full-bleed "immersive" Slice preview — the sliced toolpath fills the background,
+mirroring the immersive Prepare tab.
+
+### Changed — Slice tab
+
+- The Slice tab now uses the same immersive studio layout as Prepare: the 3D
+  g-code toolpath viewer (`Toolpath3D`) fills the whole studio area as an
+  orbitable background, with the layer slider + feature-color legend floating as
+  a blurred bottom bar. Before slicing (or while slicing) the center shows a
+  contextual empty state.
+- Workflow + slice actions (checklist, Slice card + actions, handoff, settings
+  hint, arrange/pause/color/calibration/material) float on the **left**; slice
+  results (review, `SliceResultTabs`, job history) float on the **right** — both
+  independently-scrollable blurred overlay cards. Replaces the old
+  `WorkspaceRail` two-column split with the buried Toolpath3D tab.
+- `Toolpath3D` gained a reversible `mode` prop (`panel` | `immersive`); immersive
+  fills its parent (`inset:0`) and floats the controls as a bottom bar.
+- Below 1200px both fall back to a static column flow (overlays are unusable on
+  narrow screens) — same breakpoint as Prepare.
+
+### Tests
+
+- vitest `immersive-layout`: SliceTab reuses the immersive layout with Toolpath3D
+  as the center background and left/right floating cards; Toolpath3D exposes the
+  immersive mode with a floating bottom control bar + narrow-screen fallback.
+  Full suite green (381).
+
 ## [1.52.2] - 2026-07-11
 
 Fix the blank camera view — resolve a fetchable snapshot URL, auto-discovering
