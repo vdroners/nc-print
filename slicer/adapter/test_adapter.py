@@ -121,6 +121,39 @@ def test_find_profile_settings_by_name_and_kind():
     assert find_profile_settings(profiles, "missing") is None
 
 
+def test_sliceable_profiles_drops_unresolvable_printers():
+    # The engine lists a built-in "Default Printer" with no on-disk machine
+    # preset; slicing it raises "unknown printer preset". _sliceable_profiles
+    # must drop such printers from the LIST while leaving process/filament alone.
+    import main
+
+    class FakeIndex:
+        def path_for(self, kind, name):
+            # Only real Creality machines resolve; "Default Printer" does not.
+            if kind == "machine" and name and name.startswith("Creality"):
+                return f"/data/machine/{name}.json"
+            return None
+
+    orig = main._index
+    main._index = lambda: FakeIndex()
+    try:
+        profiles = [
+            {"name": "Default Printer", "kind": "printer"},
+            {"name": "Creality K1 Max (0.4 nozzle)", "kind": "printer"},
+            {"name": "Generic PLA", "kind": "filament"},
+            {"name": "0.20mm Standard", "kind": "process"},
+        ]
+        out = main._sliceable_profiles(profiles)
+        names = [(p["name"], p["kind"]) for p in out]
+        assert ("Default Printer", "printer") not in names
+        assert ("Creality K1 Max (0.4 nozzle)", "printer") in names
+        # non-printer kinds always pass through (repaired at slice time)
+        assert ("Generic PLA", "filament") in names
+        assert ("0.20mm Standard", "process") in names
+    finally:
+        main._index = orig
+
+
 def test_override_mapping_scopes_and_keys():
     from overrides import split_overrides
     proc, fil, unknown = split_overrides({

@@ -954,6 +954,31 @@ async def _fetch_engine_profiles(kind: str = "all") -> dict:
         return upstream.json() or {}
 
 
+def _machine_sliceable(name: str) -> bool:
+    """A printer profile the slice path can actually resolve on disk.
+
+    The engine lists a built-in "Default Printer" (and can surface other
+    placeholders) that have no machine/*.json in the preset tree, so
+    resolve_triple() raises "unknown printer preset" on them. Filtering them out
+    of the LIST keeps the picker to printers that will actually slice.
+    """
+    return bool(name) and _index().path_for("machine", name) is not None
+
+
+def _sliceable_profiles(profiles: list) -> list:
+    """Drop printer profiles that have no on-disk machine preset to slice with.
+
+    Non-printer kinds pass through untouched — process/filament get
+    compatibility-repaired against the chosen printer at slice time.
+    """
+    out = []
+    for p in profiles or []:
+        if p.get("kind") == "printer" and not _machine_sliceable(p.get("name")):
+            continue
+        out.append(p)
+    return out
+
+
 @app.get("/api/profiles")
 async def profiles_list(request: Request) -> JSONResponse:
     """Slim profile LIST — omits the heavy per-profile `settings` object."""
@@ -964,7 +989,8 @@ async def profiles_list(request: Request) -> JSONResponse:
         return JSONResponse({"error": "engine_error", "message": str(exc)}, 502)
     profiles = data.get("profiles") or []
     _PROFILE_CACHE["data"] = profiles  # feed the per-profile settings lookup
-    return JSONResponse({"profiles": [slim_profile(p) for p in profiles]})
+    sliceable = _sliceable_profiles(profiles)
+    return JSONResponse({"profiles": [slim_profile(p) for p in sliceable]})
 
 
 @app.get("/api/profile-settings")

@@ -1783,6 +1783,27 @@ export const usePrintStore = defineStore('print', {
 			savePrefs({ selectedPrinterId: '' })
 		},
 
+		/**
+		 * Ensure the selected slicer profile trio still exists in the loaded
+		 * (filtered) profile lists. A saved selection can name a profile the
+		 * engine no longer offers — most importantly the "Default Printer"
+		 * placeholder, which the adapter now hides because it has no on-disk
+		 * machine preset, so slicing it fails with "unknown printer preset".
+		 * Re-pick a real default for any dangling id.
+		 */
+		_validateProfileSelection() {
+			const fix = (idKey, kind, list) => {
+				const id = this.selection[idKey]
+				if (id && (list || []).some(p => String(p.id) === String(id))) {
+					return
+				}
+				this.selection[idKey] = pickDefaultProfileId(this.profiles, kind)
+			}
+			fix('printerId', 'printer', this.profiles.printers)
+			fix('filamentId', 'filament', this.profiles.filaments)
+			fix('processId', 'process', this.profiles.processes)
+		},
+
 		_mergeLocalPrinterRow(row) {
 			if (!row?.id || !row?.moonraker_url) {
 				return
@@ -2170,6 +2191,11 @@ export const usePrintStore = defineStore('print', {
 					this.selection.processId = pickDefaultProfileId(this.profiles, 'process')
 				}
 				this.restorePrefs()
+				// A saved selection can name a profile the engine no longer offers
+				// (e.g. the old "Default Printer" placeholder, now filtered out
+				// because it has no on-disk machine preset to slice with). Re-pick a
+				// real default so slicing never fails on a stale localStorage value.
+				this._validateProfileSelection()
 				await this.ensureSessionTarget()
 				// The list is slim (no settings); hydrate the selected trio's full
 				// settings before anything that reads them (defaults, bed, slice).

@@ -67,3 +67,37 @@ describe('hydrateSelectedSettings (slim-profiles support)', () => {
 		expect(store.profiles.filaments[0].settings_json).toBeUndefined()
 	})
 })
+
+describe('_validateProfileSelection (self-heal stale/removed profiles)', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('re-picks a real printer when the saved one is gone (e.g. Default Printer)', () => {
+		const store = usePrintStore()
+		store.profiles.printers = [
+			{ id: 'Creality K1 Max (0.4 nozzle)', name: 'Creality K1 Max (0.4 nozzle)', kind: 'printer', is_default: true },
+		]
+		store.profiles.filaments = [{ id: 'Generic PLA', name: 'Generic PLA', kind: 'filament', is_default: true }]
+		store.profiles.processes = [{ id: 'std', name: 'std', kind: 'process', is_default: true }]
+		// Stale selection that no longer exists in the (filtered) lists.
+		store.selection = { printerId: 'Default Printer', filamentId: 'ghost', processId: 'std' }
+
+		store._validateProfileSelection()
+
+		expect(store.selection.printerId).toBe('Creality K1 Max (0.4 nozzle)')
+		expect(store.selection.filamentId).toBe('Generic PLA')
+		expect(store.selection.processId).toBe('std') // still valid → untouched
+	})
+
+	it('leaves a valid selection untouched', () => {
+		const store = usePrintStore()
+		store.profiles.printers = [{ id: 'p1', name: 'p1', kind: 'printer' }]
+		store.profiles.filaments = [{ id: 'f1', name: 'f1', kind: 'filament' }]
+		store.profiles.processes = [{ id: 'q1', name: 'q1', kind: 'process' }]
+		store.selection = { printerId: 'p1', filamentId: 'f1', processId: 'q1' }
+		store._validateProfileSelection()
+		expect(store.selection).toEqual({ printerId: 'p1', filamentId: 'f1', processId: 'q1' })
+	})
+})

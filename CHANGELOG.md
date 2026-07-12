@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.53.1] - 2026-07-12
+
+Fix slicing failing with "unknown printer preset: 'Default Printer'" → "could not
+read the model" — the UI could select a non-sliceable printer.
+
+### Fixed
+
+- The engine's profile list includes a built-in **"Default Printer"** placeholder
+  that has no machine preset on disk, so the slice path (which resolves presets
+  from the on-disk tree) raised "unknown printer preset" and the whole slice
+  aborted with "could not read the model". If the picker defaulted to it (or a
+  stale selection named it), slicing was broken end-to-end and no toolpath ever
+  rendered.
+- **Adapter** (`/api/profiles`): the slim list now drops printer profiles that
+  have no on-disk machine preset (`_sliceable_profiles` cross-references the
+  `PresetIndex`), so the picker only ever offers printers that will actually
+  slice. Process/filament profiles still pass through (they're
+  compatibility-repaired against the chosen printer at slice time).
+- **Store**: `_validateProfileSelection()` (run after `restorePrefs` in
+  `loadProfiles`) re-picks a real default for any saved printer/filament/process
+  id that is no longer in the loaded lists — so a stale "Default Printer" in
+  localStorage self-heals instead of failing the next slice.
+
+Verified: slicing the same model through the adapter with a real preset
+(`Creality K1 Max (0.4 nozzle)`) completes end-to-end (done, 695 KB g-code,
+22.9 g filament) where "Default Printer" failed identically for every model.
+
+### Tests
+
+- adapter: `_sliceable_profiles` drops the unresolvable printer, keeps real ones
+  + all process/filament.
+- vitest: `_validateProfileSelection` re-picks a real printer/filament when the
+  saved one is gone; leaves a valid selection untouched. Full suite green.
+
 ## [1.53.0] - 2026-07-11
 
 Full-bleed "immersive" Slice preview — the sliced toolpath fills the background,
