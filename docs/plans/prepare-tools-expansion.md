@@ -1,5 +1,54 @@
 # Prepare tools expansion (Creality-style)
 
+Status: v1.11.0 (original palette, below) → **v1.56.0 adds the deferred tools
+(see "v1.56.0 expansion" at the bottom).**
+
+---
+
+## v1.56.0 expansion (2026-07-12)
+
+Picks up the tools the v1.11.0 plan explicitly deferred, plus a continuity pass.
+Build straight through, ship one v1.56.0. Rail grouped by kind: Transform
+(move/rotate/scale) · Orient (auto-orient/lay-on-face/mirror) · Modify
+(cut/drill/hollow/emboss) · View/utility (view & section, measure, arrange all).
+Multiple build plates render as tabs above the viewport.
+
+**Deferred still** (need per-triangle/per-layer 3MF encoding proven on the
+OrcaSlicer-fork engine first): support painting, seam painting, variable layer
+height.
+
+### Infrastructure
+- Add `three-bvh-csg` + `three-mesh-bvh`. New `src/services/mesh-boolean.js`:
+  `subtract/union/intersect({positions,indices}, {positions,indices})`. Cap tri
+  count for perf; used by drill, emboss, hollow drain hole.
+
+### New tools
+1. **Multiple build plates** — store `plates[]` (per-plate object set + selection)
+   + `activePlateId`; plate-tab strip above the viewport; Slice slices the active
+   plate. Reuses the multi-object scene + per-plate sceneSliceFiles.
+2. **Arrange all** — Prepare-side grid/bin-pack of the active plate's objects
+   within bed bounds (viewport `arrangeObjects()`), a utility action.
+3. **Measure** — click two surface points → distance; live bbox-dims HUD.
+4. **Drill** — pick face+normal → cylinder → CSG subtract (diameter/depth/through).
+5. **Hollowing (robust)** — inner offset shell at a wall thickness (SDF/offset with
+   self-intersection guard) + optional drain hole (CSG).
+6. **Emboss/deboss** — text → mesh (one bundled font) on a picked face, raised
+   (union) or recessed (subtract) at a depth.
+
+### Continuity pass
+Review move/rotate/scale/auto-orient/lay-on-face/mirror/cut: gizmo↔panel sync,
+undo coverage, apply-to-slice, multi-object correctness; fix gaps.
+
+### Tests + ship
+vitest: mesh-boolean (subtract removes volume/opens a hole), arrange (no overlap,
+within bed), plates store (add/switch/remove per-plate objects), emboss text mesh,
+source-regex for new rail tools/panels. `make ship`; live-verify each tool on the
+K1 Max; commit v1.56.0.
+
+---
+
+## v1.11.0 (original palette)
+
 Status: implemented in v1.11.0
 
 ## Goal

@@ -17,6 +17,8 @@
     "jszip": "^3.10.1",
     "pinia": "^2.1.7",
     "three": "^0.170.0",
+    "three-bvh-csg": "^0.0.17",
+    "three-mesh-bvh": "^0.7.8",
     "vue": "^2.7.16"
   },
   "devDependencies": {
