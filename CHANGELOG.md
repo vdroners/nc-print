@@ -1,5 +1,31 @@
 # Changelog
 
+## [1.52.1] - 2026-07-11
+
+Fix "Slicer offline / timed out" — slim the profiles payload.
+
+### Fixed
+
+- Loading profiles could time out ("timed out after 5002ms with 0 bytes") even
+  though the sidecar was healthy. Cause: the profile list had grown to ~4.9 MB
+  (609 presets × the full resolved `settings` inlined per row — bloated by the
+  Creality + OrcaFilamentLibrary imports), which the browser couldn't download
+  inside its request timeout over the network.
+- The adapter's `/api/profiles` now returns a **slim list** (id / name / vendor /
+  kind / is_default; ~50 KB) and exposes the full per-profile `settings` on demand
+  via a new `/api/profile-settings?kind=&name=` endpoint. The store hydrates the
+  full settings only for the **selected** printer/filament/process
+  (`hydrateSelectedSettings`, called on load + profile change) — everything that
+  reads `.settings_json` (override defaults, bed volume) keeps working.
+  `fetchProfiles` also gets an explicit 30 s timeout as a belt-and-braces guard.
+
+### Tests
+
+- adapter: `slim_profile` drops `settings`; `find_profile_settings` by name/kind.
+- vitest: `fetchProfiles`/`fetchProfileSettings` params + timeout; store
+  `hydrateSelectedSettings` stamps the selected trio, is idempotent, best-effort.
+  Full suite green (379).
+
 ## [1.52.0] - 2026-07-11
 
 Full-bleed "immersive" Prepare layout — the 3D viewport fills the background with

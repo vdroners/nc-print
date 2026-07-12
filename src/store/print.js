@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { fetchProfiles, sliceStream, sliceStreamMulti, downloadGcode, uploadAndStart, cancelSliceJob } from '@/services/slicer-api.js'
+import { fetchProfiles, fetchProfileSettings, sliceStream, sliceStreamMulti, downloadGcode, uploadAndStart, cancelSliceJob } from '@/services/slicer-api.js'
 import {
 	buildSliceOverrides,
 	mergeProfileSettings,
@@ -1723,7 +1723,10 @@ export const usePrintStore = defineStore('print', {
 			this.overrides = mergedToOverrideForm(merged)
 		},
 
-		onProfileChange() {
+		async onProfileChange() {
+			// Hydrate the newly-selected profiles' settings (slim list omits them)
+			// before deriving override defaults / bed volume.
+			await this.hydrateSelectedSettings()
 			this.applyProfileDefaults()
 			const count = this.extruderCount
 			if (!this.selection.filamentIds?.length) {
@@ -2168,12 +2171,46 @@ export const usePrintStore = defineStore('print', {
 				}
 				this.restorePrefs()
 				await this.ensureSessionTarget()
+				// The list is slim (no settings); hydrate the selected trio's full
+				// settings before anything that reads them (defaults, bed, slice).
+				await this.hydrateSelectedSettings()
 				this.applyProfileDefaults()
 				this.selection.filamentIds = resolveFilamentIds(this.selection, this.extruderCount)
 			} catch (e) {
 				this.profiles.error = e?.message || 'Profile load failed'
 				toastError('Could not load slicer profiles', e)
 			}
+		},
+
+		/**
+		 * Fetch + stamp full `settings_json` onto the currently-selected printer /
+		 * filament / process rows (the slim list omits settings). Idempotent: skips
+		 * rows already hydrated. Best-effort — a failed fetch leaves that row
+		 * without settings (falls back to profile defaults / 220 bed).
+		 */
+		async hydrateSelectedSettings() {
+			const jobs = [
+				['printer', this.profiles.printers, this.selection.printerId],
+				['filament', this.profiles.filaments, this.selection.filamentId],
+				['process', this.profiles.processes, this.selection.processId],
+			]
+			await Promise.all(jobs.map(async ([kind, list, id]) => {
+				if (!id) {
+					return
+				}
+				const row = (list || []).find(p => String(p.id) === String(id))
+				if (!row || row.settings_json || row.settings) {
+					return // missing row or already hydrated
+				}
+				const settings = await fetchProfileSettings(kind, String(id))
+				if (settings && Object.keys(settings).length) {
+					// Vue2 reactivity: replace the row object so consumers recompute.
+					const idx = list.indexOf(row)
+					if (idx >= 0) {
+						list.splice(idx, 1, { ...row, settings_json: settings })
+					}
+				}
+			}))
 		},
 
 		async refreshPrinterState() {

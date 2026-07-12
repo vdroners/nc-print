@@ -32,6 +32,7 @@ class ProxyAllowlistTest extends TestCase
 		foreach ([
 			"'api/health'",
 			"'api/profiles'",
+			"'api/profile-settings'",
 			"'api/slice'",
 			"'api/jobs/'",
 			"'api/mesh/'",
@@ -51,8 +52,8 @@ class ProxyAllowlistTest extends TestCase
 	public function testSlicerAllowlistAcceptsAndRejects(): void
 	{
 		$prefixes = [
-			'api/health', 'api/version', 'api/profiles', 'api/printers',
-			'api/slice', 'api/jobs/', 'api/mesh/', 'api/calibration',
+			'api/health', 'api/version', 'api/profiles', 'api/profile-settings',
+			'api/printers', 'api/slice', 'api/jobs/', 'api/mesh/', 'api/calibration',
 		];
 		$allowed = static function (string $p) use ($prefixes): bool {
 			foreach ($prefixes as $prefix) {
@@ -64,7 +65,7 @@ class ProxyAllowlistTest extends TestCase
 		};
 		foreach (['api/health', 'api/slice/stream', 'api/jobs/abc/gcode',
 			'api/jobs/abc/toolpath', 'api/mesh/analyze', 'api/calibration/list',
-			'api/profiles'] as $ok) {
+			'api/profiles', 'api/profile-settings'] as $ok) {
 			$this->assertTrue($allowed($ok), "should allow $ok");
 		}
 		foreach (['api/admin/reset', 'api/', 'api/system', 'api/debug',

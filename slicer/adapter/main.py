@@ -915,7 +915,80 @@ async def job_cancel(job_id: str) -> JSONResponse:
     return JSONResponse({"ok": True, "killed": killed})
 
 
-# ── Pass-through (profiles, printers, version, single profile, …) ─────────
+# ── Profiles (slim list + lazy per-profile settings) ─────────────────────
+#
+# The engine returns each profile with its full resolved `settings` (~8KB each);
+# with 600+ presets that's a ~5MB list the browser can't download inside its
+# request timeout. The dropdowns only need id/name/vendor/kind/default, so we
+# strip `settings` from the LIST and expose it per-profile on demand.
+
+# Cache the last full engine profiles payload so per-profile settings lookups
+# don't re-hit the engine for every selection. Keyed by kind; short-lived.
+_PROFILE_CACHE: dict = {"data": None}
+
+
+def slim_profile(p: dict) -> dict:
+    """Project a full engine profile down to the list fields (drop `settings`)."""
+    return {
+        "id": p.get("id"),
+        "name": p.get("name"),
+        "vendor": p.get("vendor", ""),
+        "kind": p.get("kind"),
+        "is_default": p.get("is_default", False),
+    }
+
+
+def find_profile_settings(profiles: list, name: str, kind: str = "") -> dict | None:
+    """Return one profile's `settings` by name (+ optional kind), or None."""
+    for p in profiles or []:
+        if p.get("name") == name and (not kind or p.get("kind") == kind):
+            return p.get("settings") or {}
+    return None
+
+
+async def _fetch_engine_profiles(kind: str = "all") -> dict:
+    async with httpx.AsyncClient(timeout=_QUICK_TIMEOUT) as client:
+        upstream = await client.get(f"{ENGINE_BASE}/api/profiles",
+                                    params={"kind": kind})
+        upstream.raise_for_status()
+        return upstream.json() or {}
+
+
+@app.get("/api/profiles")
+async def profiles_list(request: Request) -> JSONResponse:
+    """Slim profile LIST — omits the heavy per-profile `settings` object."""
+    kind = request.query_params.get("kind", "all")
+    try:
+        data = await _fetch_engine_profiles(kind)
+    except httpx.HTTPError as exc:
+        return JSONResponse({"error": "engine_error", "message": str(exc)}, 502)
+    profiles = data.get("profiles") or []
+    _PROFILE_CACHE["data"] = profiles  # feed the per-profile settings lookup
+    return JSONResponse({"profiles": [slim_profile(p) for p in profiles]})
+
+
+@app.get("/api/profile-settings")
+async def profile_settings(request: Request) -> JSONResponse:
+    """Full resolved `settings` for ONE profile, fetched on demand."""
+    name = request.query_params.get("name", "")
+    kind = request.query_params.get("kind", "")
+    if not name:
+        return JSONResponse({"error": "bad_request", "message": "name required"}, 400)
+    cached = _PROFILE_CACHE.get("data")
+    if not cached:
+        try:
+            data = await _fetch_engine_profiles("all")
+        except httpx.HTTPError as exc:
+            return JSONResponse({"error": "engine_error", "message": str(exc)}, 502)
+        cached = data.get("profiles") or []
+        _PROFILE_CACHE["data"] = cached
+    settings = find_profile_settings(cached, name, kind)
+    if settings is not None:
+        return JSONResponse({"name": name, "kind": kind, "settings": settings})
+    return JSONResponse({"error": "not_found", "message": "profile not found"}, 404)
+
+
+# ── Pass-through (printers, version, …) ───────────────────────────────────
 
 @app.api_route("/api/{path:path}",
                methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])

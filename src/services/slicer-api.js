@@ -8,11 +8,40 @@ export { parseSseBlock, parseSseChunk, buildSliceOverrides } from './slicer-util
 const apiBase = () => generateUrl('/apps/nc_print/api/slicer')
 
 /**
+ * Fetch the SLIM profile list (id/name/vendor/kind/default; no settings). The
+ * full per-profile settings are fetched lazily via fetchProfileSettings for the
+ * selected trio — the list alone is ~50 KB vs ~5 MB with settings inlined, which
+ * is what tripped the request timeout. Generous explicit timeout regardless.
  * @param {'printer'|'filament'|'process'|'all'} kind
  */
 export async function fetchProfiles(kind = 'all') {
-	const { data } = await axios.get(`${apiBase()}/profiles`, { params: { kind } })
+	const { data } = await axios.get(`${apiBase()}/profiles`, {
+		params: { kind },
+		timeout: 30000,
+	})
 	return data.profiles || []
+}
+
+/**
+ * Full resolved `settings` for ONE profile (lazy; used to hydrate the selected
+ * printer/filament/process before slicing / bed calc).
+ * @param {'printer'|'filament'|'process'} kind
+ * @param {string} name profile name (the engine's key)
+ * @returns {Promise<object>} settings object (empty {} if none/not found)
+ */
+export async function fetchProfileSettings(kind, name) {
+	if (!name) {
+		return {}
+	}
+	try {
+		const { data } = await axios.get(`${apiBase()}/profile-settings`, {
+			params: { kind, name },
+			timeout: 15000,
+		})
+		return data.settings || {}
+	} catch {
+		return {}
+	}
 }
 
 /**

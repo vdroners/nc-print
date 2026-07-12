@@ -213,6 +213,7 @@ class SlicerProxyController extends Controller
 		'api/health',
 		'api/version',
 		'api/profiles',
+		'api/profile-settings', // full settings for one profile (slim-list lazy hydrate)
 		'api/printers',
 		'api/slice',        // covers api/slice and api/slice/stream
 		'api/jobs/',

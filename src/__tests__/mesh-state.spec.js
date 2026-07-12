@@ -157,12 +157,13 @@ describe('meshState (Sprint B)', () => {
 		expect(store.sliceModelFile()?.name).toMatch(/prepared\.stl$/)
 	})
 
-	it('persists profile selection and mesh transform to localStorage', () => {
+	it('persists profile selection and mesh transform to localStorage', async () => {
 		const store = usePrintStore()
 		store.selection.printerId = 'p1'
 		store.selection.filamentId = 'f1'
 		store.selection.processId = 'q1'
-		store.onProfileChange()
+		// onProfileChange is async now (hydrates slim-profile settings first).
+		await store.onProfileChange()
 		store.meshState.position = [5, 5, 0]
 		store.meshState.rotation = [0, 0, 1.57]
 		store.meshState.dirty = true

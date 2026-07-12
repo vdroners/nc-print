@@ -95,6 +95,32 @@ def test_duration_parser():
     assert _parse_duration("no numbers") is None
 
 
+def test_slim_profile_drops_settings():
+    # The list projection keeps id/name/vendor/kind/default and DROPS the heavy
+    # `settings` object (the ~5MB-list bloat that tripped the client timeout).
+    from main import slim_profile
+    full = {"id": "Generic PLA @System", "name": "Generic PLA @System",
+            "vendor": "OrcaFilamentLibrary", "kind": "filament", "is_default": False,
+            "settings": {"layer_height": "0.2", "a": "b", "big": "x" * 5000}}
+    slim = slim_profile(full)
+    assert slim == {"id": "Generic PLA @System", "name": "Generic PLA @System",
+                    "vendor": "OrcaFilamentLibrary", "kind": "filament",
+                    "is_default": False}
+    assert "settings" not in slim
+
+
+def test_find_profile_settings_by_name_and_kind():
+    from main import find_profile_settings
+    profiles = [
+        {"name": "A", "kind": "filament", "settings": {"x": "1"}},
+        {"name": "A", "kind": "process", "settings": {"y": "2"}},
+    ]
+    assert find_profile_settings(profiles, "A", "filament") == {"x": "1"}
+    assert find_profile_settings(profiles, "A", "process") == {"y": "2"}
+    assert find_profile_settings(profiles, "A") == {"x": "1"}  # first match, kind optional
+    assert find_profile_settings(profiles, "missing") is None
+
+
 def test_override_mapping_scopes_and_keys():
     from overrides import split_overrides
     proc, fil, unknown = split_overrides({
