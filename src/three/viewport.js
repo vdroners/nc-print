@@ -784,6 +784,36 @@ export async function createViewport(canvas, wrap) {
 			const worldNormal = hits[0].face.normal.clone().applyMatrix3(normalMatrix).normalize()
 			return { x: worldNormal.x, y: worldNormal.y, z: worldNormal.z }
 		},
+		/**
+		 * Raycast the scene under the cursor, returning the world-space hit point
+		 * AND face normal (drill / emboss / measure). Hits ANY object, not just the
+		 * selected one. Returns null when the cursor misses all meshes.
+		 * @returns {{point:[number,number,number], normal:[number,number,number], objectId:string|null}|null}
+		 */
+		pickSurfacePoint(clientX, clientY) {
+			if (!objects.length) {
+				return null
+			}
+			const rect = canvas.getBoundingClientRect()
+			const ndc = new THREE.Vector2(
+				((clientX - rect.left) / rect.width) * 2 - 1,
+				-((clientY - rect.top) / rect.height) * 2 + 1,
+			)
+			raycaster.setFromCamera(ndc, camera)
+			const hits = raycaster.intersectObjects(objects.map((o) => o.mesh), false)
+			if (!hits.length || !hits[0].face) {
+				return null
+			}
+			const hit = hits[0]
+			const nMat = new THREE.Matrix3().getNormalMatrix(hit.object.matrixWorld)
+			const n = hit.face.normal.clone().applyMatrix3(nMat).normalize()
+			const found = objects.find((o) => o.mesh === hit.object)
+			return {
+				point: [hit.point.x, hit.point.y, hit.point.z],
+				normal: [n.x, n.y, n.z],
+				objectId: found ? found.id : null,
+			}
+		},
 		setWireframe(on) {
 			wireframe = !!on
 			if (modelMesh) {

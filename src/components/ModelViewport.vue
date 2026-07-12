@@ -18,6 +18,10 @@ import {
 	applyRotationMatrix,
 } from '@/services/mesh-analyze.js'
 import { cutMeshByPlane, cutMeshBothHalves } from '@/services/mesh-cut.js'
+import { subtract as csgSubtract, union as csgUnion, makeCylinder } from '@/services/mesh-boolean.js'
+import { hollowMesh } from '@/services/mesh-hollow.js'
+import { makeTextMesh } from '@/services/mesh-emboss.js'
+import { arrangeObjects } from '@/services/mesh-arrange.js'
 
 export default {
 	name: 'ModelViewport',
@@ -618,6 +622,142 @@ export default {
 			this._scheduleTransformSync()
 			toastSuccess('Cut into two parts — drag either to reposition')
 			return true
+		},
+		// ── Drill: subtract a cylinder bored along the picked face normal. ────────
+		async drillAt(clientX, clientY, { diameter = 4, depth = 0, through = true } = {}) {
+			const hit = this.viewport?.pickSurfacePoint?.(clientX, clientY)
+			if (!hit) {
+				toastInfo('Click directly on a model face to drill')
+				return false
+			}
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const bounds = this.getWorldBounds()
+			const span = bounds ? Math.hypot(bounds.size[0], bounds.size[1], bounds.size[2]) : 100
+			// Through-hole: a cylinder longer than the part, centred on the hit so it
+			// exits both sides. Blind hole: `depth` deep from the surface inward.
+			const cylLen = through ? span * 1.5 : Math.max(0.5, depth)
+			const inDir = [-hit.normal[0], -hit.normal[1], -hit.normal[2]] // into the part
+			// Centre the cylinder: through → at the hit point; blind → half-depth in.
+			const c = through
+				? hit.point
+				: [
+					hit.point[0] + inDir[0] * (cylLen / 2),
+					hit.point[1] + inDir[1] * (cylLen / 2),
+					hit.point[2] + inDir[2] * (cylLen / 2),
+				]
+			const cyl = makeCylinder(c, hit.normal, Math.max(0.2, diameter / 2), cylLen)
+			try {
+				const out = csgSubtract(mesh, cyl)
+				if (!out.positions.length) {
+					toastInfo('Drill removed the whole model — reduce the diameter')
+					return false
+				}
+				await this.applyMeshSnapshot(out)
+				this.printStore.setMeshHealth(analyzeMesh(out.positions, out.indices))
+				toastSuccess(`Drilled a ${diameter}mm ${through ? 'through-' : ''}hole`)
+				return true
+			} catch (e) {
+				toastError(e?.message === 'csg_too_large' ? 'Model too dense to drill (try simplifying)' : 'Drill failed', e)
+				return false
+			}
+		},
+		// ── Hollow: shell the current mesh to a wall thickness (+ optional drain). ─
+		async hollowCurrent({ thickness = 2, drainDiameter = 0 } = {}) {
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const shell = hollowMesh(mesh.positions, mesh.indices, thickness)
+			if (!shell.ok) {
+				toastInfo(shell.reason === 'too_thin'
+					? `Model too thin to hollow at ${thickness}mm walls`
+					: 'Could not hollow this model')
+				return false
+			}
+			let out = { positions: shell.positions, indices: shell.indices }
+			if (drainDiameter > 0) {
+				// Drain hole bored straight up through the bottom (−Z face).
+				const b = this.getWorldBounds()
+				if (b) {
+					const cx = b.center[0]
+					const cy = b.center[1]
+					const cyl = makeCylinder([cx, cy, b.min[2]], [0, 0, 1],
+						Math.max(0.5, drainDiameter / 2), thickness * 4)
+					try {
+						out = csgSubtract(out, cyl)
+					} catch { /* keep the shell without a drain if CSG bails */ }
+				}
+			}
+			await this.applyMeshSnapshot(out)
+			this.printStore.setMeshHealth(analyzeMesh(out.positions, out.indices))
+			toastSuccess(`Hollowed to ${thickness}mm walls${drainDiameter > 0 ? ' + drain hole' : ''}`)
+			return true
+		},
+		// ── Emboss / deboss text on a picked face. ───────────────────────────────
+		async embossAt(clientX, clientY, { text, size = 6, depth = 1, mode = 'emboss' } = {}) {
+			if (!String(text || '').trim()) {
+				toastInfo('Enter text to emboss')
+				return false
+			}
+			const hit = this.viewport?.pickSurfacePoint?.(clientX, clientY)
+			if (!hit) {
+				toastInfo('Click directly on a model face to place the text')
+				return false
+			}
+			const mesh = await this.getMeshSnapshot()
+			if (!mesh) {
+				return false
+			}
+			const textMesh = makeTextMesh({ text, size, depth, point: hit.point, normal: hit.normal })
+			if (!textMesh) {
+				toastInfo('Could not build text geometry')
+				return false
+			}
+			try {
+				const out = mode === 'deboss'
+					? csgSubtract(mesh, textMesh)
+					: csgUnion(mesh, textMesh)
+				await this.applyMeshSnapshot(out)
+				this.printStore.setMeshHealth(analyzeMesh(out.positions, out.indices))
+				toastSuccess(`${mode === 'deboss' ? 'Debossed' : 'Embossed'} "${text}"`)
+				return true
+			} catch (e) {
+				toastError(e?.message === 'csg_too_large' ? 'Model too dense for text (try simplifying)' : 'Emboss failed', e)
+				return false
+			}
+		},
+		// ── Arrange all scene objects on the bed without overlap. ────────────────
+		arrangeAll() {
+			const list = this.viewport?.listObjects?.() || []
+			if (list.length < 2) {
+				toastInfo('Add more objects to arrange')
+				return false
+			}
+			const items = list.map((o) => ({
+				id: o.id,
+				size: [o.bbox?.x || 10, o.bbox?.y || 10],
+				z: 0,
+			}))
+			const { placements, overflow } = arrangeObjects(items, this.buildVolume)
+			for (const pl of placements) {
+				this.viewport?.selectObject?.(pl.id)
+				this.viewport?.setPosition?.(pl.center)
+			}
+			this._syncSceneFromViewport?.()
+			this.refreshBoundsAfterOp?.()
+			if (overflow > 0) {
+				toastWarning(`Arranged — ${overflow} object(s) don't fit the bed`)
+			} else {
+				toastSuccess('Arranged all objects on the bed')
+			}
+			return true
+		},
+		// ── Measure: pick a surface point (for point-to-point distance). ─────────
+		pickMeasurePoint(clientX, clientY) {
+			return this.viewport?.pickSurfacePoint?.(clientX, clientY)?.point || null
 		},
 		onDrop(e) {
 			e.preventDefault()

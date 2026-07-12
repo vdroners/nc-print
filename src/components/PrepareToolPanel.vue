@@ -10,7 +10,12 @@ const TITLES = {
 	face: 'Place on face',
 	mirror: 'Mirror',
 	cut: 'Plane cut',
+	drill: 'Drill hole',
+	hollow: 'Hollow',
+	emboss: 'Emboss text',
 	view: 'View & section',
+	measure: 'Measure',
+	arrange: 'Arrange all',
 }
 
 export default {
@@ -20,6 +25,8 @@ export default {
 		bounds: { type: Object, default: null },
 		disabled: { type: Boolean, default: false },
 		facePickActive: { type: Boolean, default: false },
+		// Point-to-point measurement result (mm), or null. Owned by PrepareTab.
+		measureDistance: { type: Number, default: null },
 	},
 	data() {
 		return {
@@ -35,6 +42,12 @@ export default {
 			section: { enabled: false, axis: 'z', offset: 0, flip: false },
 			modelColor: '#22c55e',
 			modelOpacity: 0.85,
+			drill: { diameter: 4, depth: 5, through: true },
+			hollow: { thickness: 2, drainDiameter: 0 },
+			emboss: { text: '', size: 6, depth: 1, mode: 'emboss' },
+			drillArmed: false,
+			embossArmed: false,
+			measureArmed: false,
 		}
 	},
 	computed: {
@@ -163,6 +176,21 @@ export default {
 		},
 		emitModelOpacity() {
 			this.$emit('model-opacity', Number(this.modelOpacity))
+		},
+		toggleDrill() {
+			this.drillArmed = !this.drillArmed
+			this.$emit('drill-arm', this.drillArmed ? { ...this.drill } : null)
+		},
+		emitHollow() {
+			this.$emit('hollow', { ...this.hollow })
+		},
+		toggleEmboss() {
+			this.embossArmed = !this.embossArmed
+			this.$emit('emboss-arm', this.embossArmed ? { ...this.emboss } : null)
+		},
+		toggleMeasure() {
+			this.measureArmed = !this.measureArmed
+			this.$emit('measure-arm', this.measureArmed)
 		},
 		emitSection() {
 			this.$emit('section', { ...this.section, offset: Number(this.section.offset) })
@@ -416,6 +444,96 @@ export default {
 					:disabled="disabled"
 					@input="emitSection">
 			</label>
+		</div>
+
+		<!-- Drill -->
+		<div v-else-if="tool === 'drill'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">Set the hole, then click a face to drill.</p>
+			<div class="nc-print-tool-panel__grid">
+				<label>Ø mm <input v-model.number="drill.diameter" type="number" min="0.5" step="0.5" :disabled="disabled"></label>
+				<label>Depth mm <input v-model.number="drill.depth" type="number" min="0.5" step="0.5" :disabled="disabled || drill.through"></label>
+			</div>
+			<label class="nc-print-tool-panel__check">
+				<input v-model="drill.through" type="checkbox" :disabled="disabled"> Through hole
+			</label>
+			<button
+				type="button"
+				class="nc-print-btn nc-print-btn--primary"
+				:class="{ 'nc-print-btn--active': drillArmed }"
+				:disabled="disabled"
+				@click="toggleDrill">
+				{{ drillArmed ? 'Click a face… (cancel)' : 'Pick face to drill' }}
+			</button>
+		</div>
+
+		<!-- Hollow -->
+		<div v-else-if="tool === 'hollow'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">Shell the model to a wall thickness for less filament.</p>
+			<div class="nc-print-tool-panel__grid">
+				<label>Wall mm <input v-model.number="hollow.thickness" type="number" min="0.4" step="0.2" :disabled="disabled"></label>
+				<label>Drain Ø mm <input v-model.number="hollow.drainDiameter" type="number" min="0" step="0.5" :disabled="disabled"></label>
+			</div>
+			<button type="button" class="nc-print-btn nc-print-btn--primary" :disabled="disabled" @click="emitHollow">
+				Hollow model
+			</button>
+		</div>
+
+		<!-- Emboss -->
+		<div v-else-if="tool === 'emboss'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">Type text, then click a face to place it.</p>
+			<label class="nc-print-tool-panel__field">Text
+				<input v-model="emboss.text" type="text" maxlength="40" :disabled="disabled" placeholder="Label">
+			</label>
+			<div class="nc-print-tool-panel__grid">
+				<label>Size mm <input v-model.number="emboss.size" type="number" min="1" step="0.5" :disabled="disabled"></label>
+				<label>Depth mm <input v-model.number="emboss.depth" type="number" min="0.2" step="0.2" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<label class="nc-print-tool-panel__check">
+					<input v-model="emboss.mode" type="radio" value="emboss" :disabled="disabled"> Raised
+				</label>
+				<label class="nc-print-tool-panel__check">
+					<input v-model="emboss.mode" type="radio" value="deboss" :disabled="disabled"> Recessed
+				</label>
+			</div>
+			<button
+				type="button"
+				class="nc-print-btn nc-print-btn--primary"
+				:class="{ 'nc-print-btn--active': embossArmed }"
+				:disabled="disabled || !emboss.text"
+				@click="toggleEmboss">
+				{{ embossArmed ? 'Click a face… (cancel)' : 'Pick face to place' }}
+			</button>
+		</div>
+
+		<!-- Measure -->
+		<div v-else-if="tool === 'measure'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">Click two points on the model to measure the distance.</p>
+			<div v-if="bbox" class="nc-print-tool-panel__row">
+				<span>Bounding box: {{ Math.round(bbox.x) }} × {{ Math.round(bbox.y) }} × {{ Math.round(bbox.z) }} mm</span>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:class="{ 'nc-print-btn--active': measureArmed }"
+					:disabled="disabled"
+					@click="toggleMeasure">
+					{{ measureArmed ? 'Measuring… (cancel)' : 'Start measuring' }}
+				</button>
+				<button v-if="measureDistance != null" type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('measure-clear')">Clear</button>
+			</div>
+			<p v-if="measureDistance != null" class="nc-print-tool-panel__result">
+				Distance: <strong>{{ measureDistance.toFixed(2) }} mm</strong>
+			</p>
+		</div>
+
+		<!-- Arrange -->
+		<div v-else-if="tool === 'arrange'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">Lay every object out on the bed without overlap.</p>
+			<button type="button" class="nc-print-btn nc-print-btn--primary" :disabled="disabled" @click="$emit('arrange-all')">
+				Arrange all objects
+			</button>
 		</div>
 	</div>
 </template>

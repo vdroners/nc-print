@@ -53,6 +53,11 @@ export default {
 			activeTool: '',
 			worldBounds: null,
 			facePickActive: false,
+			// Canvas pick mode for face-based tools: 'face'|'drill'|'emboss'|'measure'|null.
+			pickMode: null,
+			pickParams: null,
+			measurePoints: [],
+			measureDistance: null,
 		}
 	},
 	computed: {
@@ -188,6 +193,14 @@ export default {
 			if (this.activeTool !== 'face' && this.facePickActive) {
 				this.setFacePick(false)
 			}
+			// Switching tools always disarms any face-pick mode (drill/emboss/measure)
+			// so a stale armed handler can't fire under the new tool.
+			if (!['face', 'drill', 'emboss', 'measure'].includes(this.activeTool)) {
+				this.setPickMode(null)
+			}
+			if (this.activeTool !== 'measure') {
+				this.measurePoints = []
+			}
 			if (this.activeTool === 'cut') {
 				this.refreshBounds()
 				this.$refs.viewport?.showCutPlane?.('z', 0.5)
@@ -265,23 +278,74 @@ export default {
 			this.setFacePick(on)
 		},
 		setFacePick(on) {
+			// 'Place on face' tool → route canvas clicks to the 'face' pick mode.
 			this.facePickActive = !!on
 			this.printStore.facePickMode = !!on
+			this.setPickMode(on ? 'face' : null)
+		},
+		// Unified canvas pick-mode arming for all face-based tools.
+		setPickMode(mode, params = null) {
+			this.pickMode = mode
+			this.pickParams = params
 			const el = this.$refs.viewportWrap
 			if (!el) {
 				return
 			}
-			if (on) {
+			el.removeEventListener('click', this._onCanvasClick)
+			if (mode) {
 				el.addEventListener('click', this._onCanvasClick)
-			} else {
-				el.removeEventListener('click', this._onCanvasClick)
 			}
 		},
 		async onCanvasClick(e) {
-			if (!this.facePickActive || e.target?.tagName !== 'CANVAS') {
+			if (!this.pickMode || e.target?.tagName !== 'CANVAS') {
 				return
 			}
-			await this.$refs.viewport?.placeOnFaceAt?.(e.clientX, e.clientY)
+			const vp = this.$refs.viewport
+			if (this.pickMode === 'face') {
+				await vp?.placeOnFaceAt?.(e.clientX, e.clientY)
+				this.refreshBounds()
+			} else if (this.pickMode === 'drill') {
+				await vp?.drillAt?.(e.clientX, e.clientY, this.pickParams || {})
+				this.refreshBounds()
+			} else if (this.pickMode === 'emboss') {
+				await vp?.embossAt?.(e.clientX, e.clientY, this.pickParams || {})
+				this.refreshBounds()
+			} else if (this.pickMode === 'measure') {
+				const pt = vp?.pickMeasurePoint?.(e.clientX, e.clientY)
+				if (pt) {
+					this.measurePoints.push(pt)
+					if (this.measurePoints.length === 2) {
+						const [a, b] = this.measurePoints
+						this.measureDistance = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+						this.measurePoints = []
+					}
+				}
+			}
+		},
+		// ── New-tool panel events ────────────────────────────────────────────────
+		onDrillArm(params) {
+			this.setPickMode(params ? 'drill' : null, params)
+		},
+		onEmbossArm(params) {
+			this.setPickMode(params ? 'emboss' : null, params)
+		},
+		onMeasureArm(on) {
+			this.measurePoints = []
+			if (!on) {
+				this.measureDistance = null
+			}
+			this.setPickMode(on ? 'measure' : null)
+		},
+		onMeasureClear() {
+			this.measurePoints = []
+			this.measureDistance = null
+		},
+		async onHollow(params) {
+			await this.$refs.viewport?.hollowCurrent?.(params || {})
+			this.refreshBounds()
+		},
+		onArrangeAll() {
+			this.$refs.viewport?.arrangeAll?.()
 			this.refreshBounds()
 		},
 		onCloseTool() {
@@ -518,6 +582,13 @@ export default {
 					:bounds="worldBounds"
 					:disabled="!canTransform"
 					:face-pick-active="facePickActive"
+					:measure-distance="measureDistance"
+					@drill-arm="onDrillArm"
+					@emboss-arm="onEmbossArm"
+					@measure-arm="onMeasureArm"
+					@measure-clear="onMeasureClear"
+					@hollow="onHollow"
+					@arrange-all="onArrangeAll"
 					@close="onCloseTool"
 					@move-delta="onMoveDelta"
 					@drop-to-bed="onDropToBed"

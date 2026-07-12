@@ -22,12 +22,17 @@ const GROUPS = [
 		label: 'Modify',
 		tools: [
 			{ id: 'cut', icon: 'cut', label: 'Plane cut' },
+			{ id: 'drill', icon: 'target', label: 'Drill hole' },
+			{ id: 'hollow', icon: 'cube', label: 'Hollow' },
+			{ id: 'emboss', icon: 'terminal', label: 'Emboss text' },
 		],
 	},
 	{
 		label: 'View',
 		tools: [
 			{ id: 'view', icon: 'eye', label: 'View & section' },
+			{ id: 'measure', icon: 'target', label: 'Measure' },
+			{ id: 'arrange', icon: 'grid', label: 'Arrange all' },
 		],
 	},
 ]
