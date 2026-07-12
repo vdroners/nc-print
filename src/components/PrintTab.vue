@@ -22,8 +22,6 @@ import NcPrintIcon from './NcPrintIcon.vue'
 import ReopenMenu from './ReopenMenu.vue'
 import JobHistoryPanel from './JobHistoryPanel.vue'
 import TemperatureGraph from './TemperatureGraph.vue'
-import HistoryPanel from './HistoryPanel.vue'
-import PrintHistoryPanel from './PrintHistoryPanel.vue'
 import GcodeThumbnail from './GcodeThumbnail.vue'
 import GcodeConsole from './GcodeConsole.vue'
 import BedMeshPanel from './BedMeshPanel.vue'
@@ -105,8 +103,6 @@ export default {
 		ReopenMenu,
 		JobHistoryPanel,
 		TemperatureGraph,
-		HistoryPanel,
-		PrintHistoryPanel,
 		GcodeThumbnail,
 		GcodeConsole,
 		BedMeshPanel,
@@ -700,10 +696,6 @@ export default {
 			</div>
 
 			<JobHistoryPanel compact :limit="5" />
-
-			<HistoryPanel />
-
-			<PrintHistoryPanel />
 		</template>
 
 		<teleport to="body">

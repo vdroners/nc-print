@@ -3,19 +3,38 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import PrintWorkflowBanner from './PrintWorkflowBanner.vue'
 import ServiceHealthBanner from './ServiceHealthBanner.vue'
-import ReopenMenu from './ReopenMenu.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
+import { TABS } from '@/constants/tabs.js'
 
 export default {
 	name: 'AppChromeBar',
-	components: { PrintWorkflowBanner, ServiceHealthBanner, ReopenMenu, NcPrintIcon },
+	components: { PrintWorkflowBanner, ServiceHealthBanner, NcPrintIcon },
 	data() {
 		return {
 			notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
 		}
 	},
+	methods: {
+		async onBellClick() {
+			const result = await this.printStore.requestPrintNotifications()
+			if (typeof Notification !== 'undefined') {
+				this.notifPermission = Notification.permission
+			} else {
+				this.notifPermission = result
+			}
+		},
+		onOverviewClick() {
+			// Overview is a management console, not a workflow step — toggle back
+			// to Prepare on a second click for quick in/out.
+			const next = this.printStore.activeTab === TABS.OVERVIEW ? TABS.PREPARE : TABS.OVERVIEW
+			this.printStore.setActiveTab(next)
+		},
+	},
 	computed: {
 		...mapStores(usePrintStore),
+		overviewActive() {
+			return this.printStore.activeTab === TABS.OVERVIEW
+		},
 		notifSupported() {
 			return this.notifPermission !== 'unsupported'
 		},
@@ -35,16 +54,6 @@ export default {
 			return 'Enable browser notifications for print complete / failed'
 		},
 	},
-	methods: {
-		async onBellClick() {
-			const result = await this.printStore.requestPrintNotifications()
-			if (typeof Notification !== 'undefined') {
-				this.notifPermission = Notification.permission
-			} else {
-				this.notifPermission = result
-			}
-		},
-	},
 }
 </script>
 
@@ -53,7 +62,16 @@ export default {
 		<div class="nc-print-chrome-bar__row">
 			<PrintWorkflowBanner class="nc-print-chrome-bar__workflow" />
 			<div class="nc-print-chrome-bar__actions">
-				<ReopenMenu />
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--icon nc-print-chrome-bar__overview"
+					:class="{ 'nc-print-chrome-bar__overview--on': overviewActive }"
+					:aria-current="overviewActive ? 'page' : undefined"
+					aria-label="Overview — printers, materials, history & more"
+					title="Overview — printers, materials, history & more"
+					@click="onOverviewClick">
+					<NcPrintIcon name="cog" :size="18" />
+				</button>
 				<button
 					v-if="notifSupported"
 					type="button"
@@ -92,6 +110,12 @@ export default {
 
 .nc-print-chrome-bar__bell--on {
 	border-color: color-mix(in srgb, var(--nc-app-accent) 60%, var(--nc-gcs-border));
+	color: var(--nc-app-accent);
+}
+
+.nc-print-chrome-bar__overview--on {
+	background: color-mix(in srgb, var(--nc-app-accent) 15%, transparent);
+	border-color: var(--nc-app-accent);
 	color: var(--nc-app-accent);
 }
 </style>

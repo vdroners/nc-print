@@ -243,4 +243,47 @@ describe('meshState (Sprint B)', () => {
 		store.sliceJob.jobId = 'job-err'
 		expect(store.canUndoAny).toBe(true)
 	})
+
+	it('clearModel resets both the model file and any slice result', () => {
+		const store = usePrintStore()
+		store.model.file = makeFile('part.stl')
+		store.model.name = 'part.stl'
+		store.sliceJob.status = 'done'
+		store.sliceJob.jobId = 'job-1'
+		store.clearModel()
+		expect(store.model.file).toBeNull()
+		expect(store.sliceJob.status).toBe('idle')
+		expect(store.sliceJob.jobId).toBeFalsy()
+	})
+
+	it('setActiveTab persists the tab and restorePrefs restores Overview unconditionally', () => {
+		const store = usePrintStore()
+		store.setActiveTab('overview')
+		expect(store.activeTab).toBe('overview')
+		const prefs = JSON.parse(localStorage.getItem(PREFS_KEY))
+		expect(prefs.activeTab).toBe('overview')
+		// A fresh store restores overview (no model needed).
+		setActivePinia(createPinia())
+		const store2 = usePrintStore()
+		store2.restorePrefs()
+		expect(store2.activeTab).toBe('overview')
+	})
+
+	it('restorePrefs falls back to Prepare for a gated tab with no model', () => {
+		localStorage.setItem(PREFS_KEY, JSON.stringify({ activeTab: 'slice' }))
+		const store = usePrintStore()
+		expect(store.prepareComplete).toBe(false) // no model
+		store.restorePrefs()
+		expect(store.activeTab).toBe('prepare')
+	})
+
+	it('setViewPref persists model colour/opacity', () => {
+		const store = usePrintStore()
+		store.setViewPref('modelColor', '#ff0000')
+		store.setViewPref('modelOpacity', 0.5)
+		expect(store.viewPrefs.modelColor).toBe('#ff0000')
+		expect(store.viewPrefs.modelOpacity).toBe(0.5)
+		const prefs = JSON.parse(localStorage.getItem(PREFS_KEY))
+		expect(prefs.viewPrefs.modelColor).toBe('#ff0000')
+	})
 })

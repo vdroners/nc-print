@@ -14,6 +14,7 @@ import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFil
 const PrepareTab = () => import(/* webpackChunkName: "nc-print-prepare" */ './components/PrepareTab.vue')
 const SliceTab = () => import(/* webpackChunkName: "nc-print-slice" */ './components/SliceTab.vue')
 const PrintTab = () => import(/* webpackChunkName: "nc-print-print" */ './components/PrintTab.vue')
+const OverviewTab = () => import(/* webpackChunkName: "nc-print-overview" */ './components/OverviewTab.vue')
 
 export default {
 	name: 'App',
@@ -24,6 +25,7 @@ export default {
 		PrepareTab,
 		SliceTab,
 		PrintTab,
+		OverviewTab,
 		CommandPalette,
 		DropZoneOverlay,
 	},
@@ -131,6 +133,9 @@ export default {
 				if (this.printStore.printMonitorReachable || this.printStore.printStepEnabled) {
 					this.printStore.setActiveTab(TABS.PRINT)
 				}
+			} else if (e.key === '4') {
+				// Overview is always reachable (management console).
+				this.printStore.setActiveTab(TABS.OVERVIEW)
 			} else if (e.key.toLowerCase() === 'r' && !mod) {
 				this.recenterShortcut()
 			}
@@ -216,6 +221,7 @@ export default {
 			<PrepareTab v-if="printStore.activeTab === TABS.PREPARE" />
 			<SliceTab v-if="printStore.activeTab === TABS.SLICE" />
 			<PrintTab v-if="printStore.activeTab === TABS.PRINT" />
+			<OverviewTab v-if="printStore.activeTab === TABS.OVERVIEW" />
 		</div>
 
 		<HelpDrawer :open.sync="helpOpen" :workflow-tab="printStore.activeTab" />

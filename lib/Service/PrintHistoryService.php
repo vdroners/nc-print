@@ -222,6 +222,86 @@ class PrintHistoryService
 	}
 
 	/**
+	 * Aggregated analytics for the Overview dashboard: reuses metrics() for the
+	 * totals / per-printer / per-material rollups and adds a weekly time series
+	 * (prints + filament grams) plus a rough filament-cost estimate.
+	 *
+	 * Cost is an estimate: grams × (default price per kg). We don't yet match a
+	 * print to a specific spool, so a single configurable default is used.
+	 *
+	 * @return array{overall:array,by_printer:array,by_material:array,weekly:list<array>,cost:array}
+	 */
+	public function analytics(string $uid, float $pricePerKg = 25.0): array
+	{
+		$metrics = $this->metrics($uid);
+
+		// Per-material rollup across all printers.
+		$byMaterial = [];
+		foreach ($metrics['by_printer'] as $p) {
+			foreach (($p['materials'] ?? []) as $mat => $cnt) {
+				$byMaterial[$mat] = ($byMaterial[$mat] ?? 0) + (int) $cnt;
+			}
+		}
+		arsort($byMaterial);
+		$materialList = [];
+		foreach ($byMaterial as $mat => $cnt) {
+			$materialList[] = ['material' => $mat, 'count' => $cnt];
+		}
+
+		// Weekly time series, bucketed in PHP (portable). Week key = the Monday
+		// (unix seconds) of the ISO week the print ended in.
+		$weekly = [];
+		try {
+			$rows = $this->mapper->analyticsRows($uid);
+			foreach ($rows as $r) {
+				$ended = (int) ($r['ended_at'] ?? 0);
+				if ($ended <= 0) {
+					continue;
+				}
+				$dow = (int) gmdate('N', $ended); // 1=Mon..7=Sun
+				$weekStart = $ended - (($dow - 1) * 86400);
+				$weekStart -= $weekStart % 86400; // floor to midnight UTC
+				$key = (string) $weekStart;
+				$weekly[$key] ??= ['week_start' => $weekStart, 'prints' => 0, 'complete' => 0,
+					'filament_g' => 0.0, 'print_hours' => 0.0];
+				$weekly[$key]['prints']++;
+				if ((string) ($r['result'] ?? '') === 'complete') {
+					$weekly[$key]['complete']++;
+				}
+				$weekly[$key]['filament_g'] += (float) ($r['filament_g'] ?? 0);
+				$weekly[$key]['print_hours'] += (float) ($r['duration_s'] ?? 0) / 3600.0;
+			}
+		} catch (\Throwable $e) {
+			$this->logger->warning('nc_print analytics weekly failed', ['exception' => $e]);
+		}
+		// Chronological, rounded, last 26 weeks.
+		ksort($weekly);
+		$weeklyList = array_map(static function ($w) {
+			$w['filament_g'] = round($w['filament_g'], 1);
+			$w['print_hours'] = round($w['print_hours'], 2);
+			return $w;
+		}, array_values($weekly));
+		if (count($weeklyList) > 26) {
+			$weeklyList = array_slice($weeklyList, -26);
+		}
+
+		$filamentG = (float) ($metrics['overall']['filament_g'] ?? 0);
+		$cost = [
+			'price_per_kg' => $pricePerKg,
+			'filament_g' => round($filamentG, 1),
+			'estimated_total' => round(($filamentG / 1000.0) * $pricePerKg, 2),
+		];
+
+		return [
+			'overall' => $metrics['overall'],
+			'by_printer' => $metrics['by_printer'],
+			'by_material' => $materialList,
+			'weekly' => $weeklyList,
+			'cost' => $cost,
+		];
+	}
+
+	/**
 	 * Consumable-wear estimates per printer. All figures are heuristic; callers
 	 * must present them as estimates.
 	 *

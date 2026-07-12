@@ -210,6 +210,35 @@ function defaultMeshState() {
 	}
 }
 
+// Single source of truth for a fresh slice job — used by state(), resetSliceJob(),
+// and clearModel() so clearing the model also wipes a stale slice result.
+function defaultSliceJob() {
+	return {
+		status: 'idle',
+		stage: '',
+		pct: 0,
+		layer: 0,
+		totalLayers: 0,
+		jobId: null,
+		gcodeBlob: null,
+		gcodeFilename: '',
+		gcodeSizeBytes: 0,
+		estimatedTimeS: 0,
+		filamentUsedG: 0,
+		filamentBreakdown: [],
+		layers: 0,
+		materialStats: {},
+		savedDavPath: '',
+		backendLabel: 'nc-print-slicer',
+		sentTo: '',
+		printing: false,
+		error: '',
+		// Multi-plate results (4d): one entry per plate when slicing several
+		// plates. Empty for a normal single-plate slice.
+		plates: [],
+	}
+}
+
 // Module-level undo/redo history of transform snapshots for the Prepare editor.
 // Kept outside Pinia state (it holds a bounded array of past transforms, not
 // reactive UI state); the store mirrors canUndo/canRedo into reactive flags.
@@ -399,35 +428,15 @@ export const usePrintStore = defineStore('print', {
 			bedType: '',
 		},
 		overridesCollapsed: true,
+		// Viewport appearance prefs (persisted) — model mesh colour + opacity.
+		viewPrefs: {
+			modelColor: '#22c55e',
+			modelOpacity: 0.85,
+		},
 		// Pause / filament-change points injected into gcode at a Z height.
 		// Each: { height: number, type: 'filament_change'|'pause' }
 		pauses: [],
-		sliceJob: {
-			status: 'idle',
-			stage: '',
-			pct: 0,
-			layer: 0,
-			totalLayers: 0,
-			jobId: null,
-			gcodeBlob: null,
-			gcodeFilename: '',
-			gcodeSizeBytes: 0,
-			estimatedTimeS: 0,
-			filamentUsedG: 0,
-			filamentBreakdown: [],
-			layers: 0,
-			materialStats: {},
-			savedDavPath: '',
-			backendLabel: 'nc-print-slicer',
-			sentTo: '',
-			printing: false,
-			error: '',
-			// Multi-plate results (4d): one entry per plate when slicing several
-			// plates. Each: { index, label, jobId, gcodeFilename, gcodeBlob,
-			// gcodeSizeBytes, estimatedTimeS, filamentUsedG }. Empty for a normal
-			// single-plate slice.
-			plates: [],
-		},
+		sliceJob: defaultSliceJob(),
 		// Smart-ETA prediction for the current slice (learned slicer-vs-actual
 		// correction). null until predicted; { predicted_minutes, multiplier,
 		// samples, confidence }.
@@ -977,6 +986,8 @@ export const usePrintStore = defineStore('print', {
 		setActiveTab(tab) {
 			if (Object.values(TABS).includes(tab)) {
 				this.activeTab = tab
+				// Remember the tab per user so returning to the app reopens it.
+				savePrefs({ activeTab: tab })
 			}
 		},
 
@@ -1493,6 +1504,9 @@ export const usePrintStore = defineStore('print', {
 			this.clearScene()
 			this.threeMfBuildItems = []
 			this.threeMfSelectedIds = []
+			// Clearing the model also discards any slice result — otherwise the
+			// Slice tab keeps showing a stale "complete" for a model that's gone.
+			this.resetSliceJob()
 			this._persistMeshTransform()
 		},
 
@@ -2168,6 +2182,26 @@ export const usePrintStore = defineStore('print', {
 			if (typeof prefs.overridesCollapsed === 'boolean') {
 				this.overridesCollapsed = prefs.overridesCollapsed
 			}
+			if (prefs.viewPrefs && typeof prefs.viewPrefs === 'object') {
+				if (typeof prefs.viewPrefs.modelColor === 'string') {
+					this.viewPrefs.modelColor = prefs.viewPrefs.modelColor
+				}
+				if (typeof prefs.viewPrefs.modelOpacity === 'number') {
+					this.viewPrefs.modelOpacity = prefs.viewPrefs.modelOpacity
+				}
+			}
+			// Restore the last-active tab, but only if it's currently reachable —
+			// Overview + Prepare always are; Slice needs a prepared model; Print
+			// needs a reachable printer. Otherwise fall back to Prepare so a cold
+			// reload never lands on an empty gated tab.
+			if (prefs.activeTab && Object.values(TABS).includes(prefs.activeTab)) {
+				const t = prefs.activeTab
+				const ok = t === TABS.OVERVIEW
+					|| t === TABS.PREPARE
+					|| (t === TABS.SLICE && this.prepareComplete)
+					|| (t === TABS.PRINT && (this.printMonitorReachable || this.printStepEnabled))
+				this.activeTab = ok ? t : TABS.PREPARE
+			}
 			if (prefs.overrides && typeof prefs.overrides === 'object') {
 				this.overrides = { ...this.overrides, ...prefs.overrides }
 			}
@@ -2596,27 +2630,7 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		resetSliceJob() {
-			this.sliceJob = {
-				status: 'idle',
-				stage: '',
-				pct: 0,
-				layer: 0,
-				totalLayers: 0,
-				jobId: null,
-				gcodeBlob: null,
-				gcodeFilename: '',
-				gcodeSizeBytes: 0,
-				estimatedTimeS: 0,
-				filamentUsedG: 0,
-				filamentBreakdown: [],
-				layers: 0,
-				materialStats: {},
-				savedDavPath: '',
-				backendLabel: 'nc-print-slicer',
-				sentTo: '',
-				printing: false,
-				error: '',
-			}
+			this.sliceJob = defaultSliceJob()
 		},
 
 		_applyMaterialStats(done = {}) {
@@ -3119,6 +3133,15 @@ export const usePrintStore = defineStore('print', {
 		toggleOverridesCollapsed() {
 			this.overridesCollapsed = !this.overridesCollapsed
 			savePrefs({ overridesCollapsed: this.overridesCollapsed })
+		},
+
+		// Viewport appearance prefs — model colour ('#rrggbb') / opacity (0..1).
+		setViewPref(key, value) {
+			if (key !== 'modelColor' && key !== 'modelOpacity') {
+				return
+			}
+			this.viewPrefs = { ...this.viewPrefs, [key]: value }
+			savePrefs({ viewPrefs: this.viewPrefs })
 		},
 
 		persistOverrides() {

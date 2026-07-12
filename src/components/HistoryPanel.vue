@@ -54,6 +54,8 @@ export default {
 		}
 	},
 	methods: {
+		// Expose the util to the template (templates can't see module imports).
+		formatPrintTime,
 		async load() {
 			this.loading = true
 			try {

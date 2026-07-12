@@ -40,7 +40,7 @@ export default {
 .nc-print-prepare-studio {
 	display: grid;
 	gap: var(--nc-gcs-space-md);
-	grid-template-columns: minmax(220px, 280px) minmax(480px, 1fr) minmax(240px, 320px);
+	grid-template-columns: minmax(220px, 280px) minmax(480px, 1fr) minmax(220px, 280px);
 }
 
 .nc-print-prepare-studio__right {
@@ -92,6 +92,9 @@ export default {
 
 .nc-print-prepare-studio--immersive .nc-print-prepare-studio__right {
 	right: var(--nc-gcs-space-md);
+	/* Thinner than the left card — the readiness/summary content is narrow, and
+	   this frees viewport width on the Prepare tab. */
+	width: 260px;
 }
 
 /* ── Responsive: below the multi-column breakpoint, both modes collapse to a

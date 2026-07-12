@@ -2,7 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { createViewport } from '@/three/viewport.js'
-import { toastError, toastInfo, toastSuccess } from '@/services/toast.js'
+import { toastError, toastInfo, toastSuccess, toastWarning } from '@/services/toast.js'
 import { isModelFilename } from '@/shared/modelFileNode.js'
 import { formatBedLegend } from '@/utils/viewport-format.js'
 import {
@@ -156,6 +156,9 @@ export default {
 			this.previewSkipped = false
 			if (!file) {
 				this.hasMesh = false
+				// Clearing the model must also remove the rendered mesh from the
+				// scene — otherwise the old model stays visible after Clear.
+				this.viewport?.clearModelMesh?.()
 				return
 			}
 			void this.flushPendingLoad()
@@ -370,6 +373,9 @@ export default {
 			if (s.filledTriangles) {
 				parts.push(`filled ${s.filledTriangles} hole tris`)
 			}
+			if (s.splitNonManifold) {
+				parts.push(`split ${s.splitNonManifold} non-manifold edge(s)`)
+			}
 			if (s.removedDegenerate) {
 				parts.push(`removed ${s.removedDegenerate} bad tris`)
 			}
@@ -377,7 +383,16 @@ export default {
 			if (result.watertight) {
 				toastSuccess(`Repaired — now watertight (${detail})`)
 			} else {
-				toastSuccess(`Repair improved mesh (${detail}); ${result.openEdgeCount} open edge(s) remain`)
+				// Report precisely what remains so the user knows the state.
+				const remain = []
+				if (result.openEdgeCount) {
+					remain.push(`${result.openEdgeCount} open edge(s)`)
+				}
+				if (result.nonManifoldCount) {
+					remain.push(`${result.nonManifoldCount} non-manifold edge(s)`)
+				}
+				const remainStr = remain.length ? remain.join(', ') : 'complex geometry'
+				toastWarning(`Repair applied (${detail}); still not watertight — ${remainStr} remain. It may still slice, but check the result.`)
 			}
 			return true
 		},

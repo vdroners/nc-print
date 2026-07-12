@@ -33,6 +33,8 @@ export default {
 			cut: { axis: 'z', pos: 50, keep: 'both', cap: true },
 			wireframe: false,
 			section: { enabled: false, axis: 'z', offset: 0, flip: false },
+			modelColor: '#22c55e',
+			modelOpacity: 0.85,
 		}
 	},
 	computed: {
@@ -66,6 +68,14 @@ export default {
 	},
 	mounted() {
 		this.syncFromBounds()
+		// Seed colour/opacity from the persisted view prefs.
+		const vp = this.printStore.viewPrefs || {}
+		if (typeof vp.modelColor === 'string') {
+			this.modelColor = vp.modelColor
+		}
+		if (typeof vp.modelOpacity === 'number') {
+			this.modelOpacity = vp.modelOpacity
+		}
 	},
 	methods: {
 		syncFromBounds() {
@@ -147,6 +157,12 @@ export default {
 		},
 		emitWireframe() {
 			this.$emit('wireframe', this.wireframe)
+		},
+		emitModelColor() {
+			this.$emit('model-color', this.modelColor)
+		},
+		emitModelOpacity() {
+			this.$emit('model-opacity', Number(this.modelOpacity))
 		},
 		emitSection() {
 			this.$emit('section', { ...this.section, offset: Number(this.section.offset) })
@@ -356,6 +372,21 @@ export default {
 				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'iso')">Iso</button>
 				<button type="button" class="nc-print-btn nc-print-btn--sm" @click="$emit('camera', 'fit')">Fit</button>
 			</div>
+			<div class="nc-print-tool-panel__row">
+				<label>Colour
+					<input v-model="modelColor" type="color" @input="emitModelColor">
+				</label>
+			</div>
+			<label class="nc-print-tool-panel__slider">
+				Opacity {{ Math.round(modelOpacity * 100) }}%
+				<input
+					v-model.number="modelOpacity"
+					type="range"
+					min="0.1"
+					max="1"
+					step="0.05"
+					@input="emitModelOpacity">
+			</label>
 			<label class="nc-print-tool-panel__check">
 				<input v-model="wireframe" type="checkbox" @change="emitWireframe"> Wireframe
 			</label>

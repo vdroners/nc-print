@@ -14,8 +14,6 @@ import NcPrintIcon from './NcPrintIcon.vue'
 import SliceHandoffCard from './SliceHandoffCard.vue'
 import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 import ArrangePlate from './ArrangePlate.vue'
-import CalibrationPanel from './CalibrationPanel.vue'
-import MaterialInfoPanel from './MaterialInfoPanel.vue'
 import ColorOrderPanel from './ColorOrderPanel.vue'
 import PausePlanner from './PausePlanner.vue'
 
@@ -34,8 +32,6 @@ export default {
 		SliceHandoffCard,
 		ErrorRecoveryCard,
 		ArrangePlate,
-		CalibrationPanel,
-		MaterialInfoPanel,
 		ColorOrderPanel,
 		PausePlanner,
 	},
@@ -292,14 +288,6 @@ export default {
 
 				<div class="nc-print-card nc-print-card--inset">
 					<ColorOrderPanel />
-				</div>
-
-				<div class="nc-print-card nc-print-card--inset">
-					<CalibrationPanel />
-				</div>
-
-				<div class="nc-print-card nc-print-card--inset">
-					<MaterialInfoPanel />
 				</div>
 			</template>
 		</template>

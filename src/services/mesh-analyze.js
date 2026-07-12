@@ -138,6 +138,34 @@ export function countOpenEdges(positions, indices) {
 }
 
 /**
+ * Count non-manifold edges — undirected edges shared by MORE than two triangles.
+ * A well-formed printable surface has every edge used by exactly two triangles.
+ * @param {Float32Array} positions
+ * @param {Uint32Array|number[]} indices
+ * @returns {number}
+ */
+export function countNonManifoldEdges(positions, indices) {
+	const edges = new Map()
+	const triCount = indices.length / 3
+	for (let f = 0; f < triCount; f++) {
+		const a = indices[3 * f]
+		const b = indices[3 * f + 1]
+		const c = indices[3 * f + 2]
+		for (const [e0, e1] of [[a, b], [b, c], [c, a]]) {
+			const key = edgeKey(e0, e1)
+			edges.set(key, (edges.get(key) || 0) + 1)
+		}
+	}
+	let nonManifold = 0
+	for (const count of edges.values()) {
+		if (count > 2) {
+			nonManifold++
+		}
+	}
+	return nonManifold
+}
+
+/**
  * @param {Float32Array} positions
  * @param {Uint32Array|number[]} indices
  * @param {{ overhangDeg?: number }} [options]
@@ -147,14 +175,17 @@ export function analyzeMesh(positions, indices, options = {}) {
 	const triangleCount = indices.length / 3
 	const bbox = computeBbox(positions)
 	const openEdgeCount = countOpenEdges(positions, indices)
+	const nonManifoldCount = countNonManifoldEdges(positions, indices)
 	const overhangFrac = computeOverhangFraction(positions, indices, overhangDeg)
 	return {
 		triangleCount,
 		bbox: { x: bbox.x, y: bbox.y, z: bbox.z },
 		openEdgeCount,
 		openEdges: openEdgeCount,
+		nonManifoldCount,
 		overhangPct: Math.round(overhangFrac * 1000) / 10,
-		watertight: openEdgeCount === 0,
+		// Printable when closed AND manifold.
+		watertight: openEdgeCount === 0 && nonManifoldCount === 0,
 	}
 }
 
@@ -525,11 +556,19 @@ export function autoRepair(positions, indices, epsilon = 1e-5) {
 		newIndices.push(a, b, c)
 	}
 
-	// Fill small boundary holes: any edge used by exactly one triangle is a
-	// boundary edge; chain them into loops and cap each loop with a triangle fan.
-	const filledTris = fillBoundaryHoles(newPositions, newIndices)
+	// Detach non-manifold fins (edges shared by >2 tris) so the geometry stops
+	// being rejected as non-manifold; this also opens gaps the hole-fill closes.
+	const splitEdges = splitNonManifoldEdges(newPositions, newIndices)
 
-	const welded = positions.length / 3 - newPositions.length / 3
+	// Fill boundary holes: any edge used by exactly one triangle is a boundary
+	// edge; chain them into loops and cap each (fan for small, centroid-fan for
+	// large). Run twice so gaps opened by the non-manifold split also close.
+	let filledTris = fillBoundaryHoles(newPositions, newIndices)
+	if (splitEdges) {
+		filledTris += fillBoundaryHoles(newPositions, newIndices)
+	}
+
+	const welded = positions.length / 3 - (newPositions.length / 3)
 	return {
 		positions: new Float32Array(newPositions),
 		indices: new Uint32Array(newIndices),
@@ -537,6 +576,7 @@ export function autoRepair(positions, indices, epsilon = 1e-5) {
 			weldedVertices: Math.max(0, welded),
 			removedDegenerate,
 			filledTriangles: filledTris,
+			splitNonManifold: splitEdges,
 		},
 	}
 }
@@ -551,7 +591,7 @@ export function autoRepair(positions, indices, epsilon = 1e-5) {
  * @param {number} [maxLoop] largest hole (in edges) to attempt
  * @returns {number}
  */
-export function fillBoundaryHoles(positions, indices, maxLoop = 200) {
+export function fillBoundaryHoles(positions, indices, maxLoop = 2000) {
 	// Directed edge count: +1 for (a,b), so a boundary edge has net use 1 in one
 	// direction. Track directed boundary edges as next[from] = to.
 	const dirCount = new Map()
@@ -600,13 +640,94 @@ export function fillBoundaryHoles(positions, indices, maxLoop = 200) {
 		}
 		// Only cap a genuine closed loop of manageable size.
 		if (cur === start && loop.length >= 3 && loop.length <= maxLoop) {
-			for (let i = 1; i < loop.length - 1; i++) {
-				indices.push(loop[0], loop[i], loop[i + 1])
-				added++
+			if (loop.length <= 8) {
+				// Small hole → simple triangle fan from the first vertex.
+				for (let i = 1; i < loop.length - 1; i++) {
+					indices.push(loop[0], loop[i], loop[i + 1])
+					added++
+				}
+			} else {
+				// Larger hole → add a centroid vertex and fan around it. A flat
+				// fan from one corner self-intersects on big, non-convex loops;
+				// a centroid fan stays well-formed and closes the surface.
+				let cxSum = 0
+				let cySum = 0
+				let czSum = 0
+				for (const v of loop) {
+					cxSum += positions[3 * v]
+					cySum += positions[3 * v + 1]
+					czSum += positions[3 * v + 2]
+				}
+				const centerIdx = positions.length / 3
+				positions.push(cxSum / loop.length, cySum / loop.length, czSum / loop.length)
+				for (let i = 0; i < loop.length; i++) {
+					const a = loop[i]
+					const b = loop[(i + 1) % loop.length]
+					indices.push(centerIdx, a, b)
+					added++
+				}
 			}
 		}
 	}
 	return added
+}
+
+/**
+ * Split non-manifold edges (shared by >2 triangles) by duplicating the offending
+ * vertices per-triangle so each fin becomes its own geometry. This does not make
+ * the mesh watertight but stops the engine rejecting it as non-manifold, and lets
+ * the boundary-hole pass then close the resulting gaps.
+ * Mutates `positions` and `indices`; returns the count of edges split.
+ * @param {number[]} positions
+ * @param {number[]} indices
+ * @returns {number}
+ */
+export function splitNonManifoldEdges(positions, indices) {
+	const triCount = indices.length / 3
+	const ukey = (a, b) => (a < b ? a * 0x100000000 + b : b * 0x100000000 + a)
+	// Count triangles per undirected edge.
+	const edgeTris = new Map()
+	for (let f = 0; f < triCount; f++) {
+		const a = indices[3 * f]
+		const b = indices[3 * f + 1]
+		const c = indices[3 * f + 2]
+		for (const [e0, e1] of [[a, b], [b, c], [c, a]]) {
+			const k = ukey(e0, e1)
+			const arr = edgeTris.get(k)
+			if (arr) {
+				arr.push(f)
+			} else {
+				edgeTris.set(k, [f])
+			}
+		}
+	}
+	// Vertices touching a non-manifold edge (>2 triangles).
+	const badVerts = new Set()
+	let split = 0
+	for (const [, tris] of edgeTris) {
+		if (tris.length > 2) {
+			split++
+			const f = tris[0]
+			badVerts.add(indices[3 * f])
+			badVerts.add(indices[3 * f + 1])
+			badVerts.add(indices[3 * f + 2])
+		}
+	}
+	if (!split) {
+		return 0
+	}
+	// Duplicate bad vertices per referencing triangle so the fins detach.
+	for (let f = 0; f < triCount; f++) {
+		for (let k = 0; k < 3; k++) {
+			const vi = indices[3 * f + k]
+			if (badVerts.has(vi)) {
+				const nv = positions.length / 3
+				positions.push(positions[3 * vi], positions[3 * vi + 1], positions[3 * vi + 2])
+				indices[3 * f + k] = nv
+			}
+		}
+	}
+	return split
 }
 
 /**

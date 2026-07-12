@@ -13,4 +13,9 @@ export const TABS = Object.freeze({
 	PREPARE: 'prepare',
 	SLICE: 'slice',
 	PRINT: 'print',
+	// Management console (printers, materials, filament inventory, history &
+	// analytics, maintenance, achievements). Not a linear workflow step — reached
+	// via the gear button in the chrome bar, appended last so the 1/2/3 workflow
+	// hotkeys keep their order.
+	OVERVIEW: 'overview',
 })

@@ -119,6 +119,24 @@ class PrintRecordMapper extends QBMapper
 	}
 
 	/**
+	 * Recent terminated prints for time-series analytics: ended timestamp,
+	 * duration, filament grams and result. Bucketed into weeks in PHP so the SQL
+	 * stays portable. Newest first, capped.
+	 *
+	 * @return array<int,array<string,mixed>>
+	 */
+	public function analyticsRows(string $uid, int $cap = 5000): array
+	{
+		$qb = $this->db->getQueryBuilder();
+		$qb->select('ended_at', 'duration_s', 'filament_g', 'result', 'material')
+			->from($this->getTableName())
+			->where($qb->expr()->eq('uid', $qb->createNamedParameter($uid)))
+			->orderBy('ended_at', 'DESC')
+			->setMaxResults(max(1, $cap));
+		return $qb->executeQuery()->fetchAll();
+	}
+
+	/**
 	 * Per-printer wear totals: cumulative print seconds + total filament grams,
 	 * plus filament grams restricted to abrasive materials (nozzle-wear proxy).
 	 *

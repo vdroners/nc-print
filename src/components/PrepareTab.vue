@@ -13,6 +13,7 @@ import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
 import SceneObjectList from './SceneObjectList.vue'
 import RecentModelsStrip from './RecentModelsStrip.vue'
+import ReopenMenu from './ReopenMenu.vue'
 import NcPrintCollapsible from './NcPrintCollapsible.vue'
 import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
@@ -38,6 +39,7 @@ export default {
 		ThreeMfObjectPicker,
 		SceneObjectList,
 		RecentModelsStrip,
+		ReopenMenu,
 		NcPrintCollapsible,
 		PrepareStudioLayout,
 		SliceSummaryCard,
@@ -71,9 +73,12 @@ export default {
 			this.facePickActive = false
 			this.worldBounds = null
 			this.$refs.viewport?.setGizmoMode?.(null)
+			// Re-apply persisted colour/opacity once the new mesh has loaded.
+			this.$nextTick(() => this.applyViewPrefs())
 		},
 		'printStore.meshState.appliedAt'() {
 			this.refreshBounds()
+			this.applyViewPrefs()
 		},
 	},
 	async mounted() {
@@ -236,6 +241,23 @@ export default {
 		onWireframe(on) {
 			this.$refs.viewport?.setWireframe?.(on)
 		},
+		onModelColor(hex) {
+			this.$refs.viewport?.setModelColor?.(hex)
+			this.printStore.setViewPref('modelColor', hex)
+		},
+		onModelOpacity(v) {
+			this.$refs.viewport?.setModelOpacity?.(v)
+			this.printStore.setViewPref('modelOpacity', v)
+		},
+		applyViewPrefs() {
+			const vp = this.printStore.viewPrefs || {}
+			if (vp.modelColor) {
+				this.$refs.viewport?.setModelColor?.(vp.modelColor)
+			}
+			if (typeof vp.modelOpacity === 'number') {
+				this.$refs.viewport?.setModelOpacity?.(vp.modelOpacity)
+			}
+		},
 		onSection(state) {
 			this.$refs.viewport?.setSectionClip?.(state)
 		},
@@ -308,6 +330,9 @@ export default {
 			e.target.value = ''
 		},
 		onClearModel() {
+			if (!window.confirm('Clear the current model? Unsaved orientation and slice results will be lost.')) {
+				return
+			}
 			this.printStore.clearModel()
 			this.activeTool = ''
 		},
@@ -381,6 +406,7 @@ export default {
 				<button type="button" class="nc-print-btn" @click="pickFromFiles">
 					From Files
 				</button>
+				<ReopenMenu inline />
 				<button
 					v-if="printStore.hasModel"
 					type="button"
@@ -514,7 +540,9 @@ export default {
 					@cut-apply="onCutApply"
 					@camera="onCamera"
 					@wireframe="onWireframe"
-					@section="onSection" />
+					@section="onSection"
+					@model-color="onModelColor"
+					@model-opacity="onModelOpacity" />
 			</div>
 		</template>
 
@@ -600,20 +628,20 @@ export default {
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 	}
 
-	/* History box — top-right corner, inboard of the right 300px card. */
+	/* History box — top-right corner, inboard of the right 260px card. */
 	.nc-print-prepare--immersive .nc-print-viewport-history {
 		position: absolute;
 		top: 8px;
-		right: 316px;
+		right: 276px;
 		z-index: 6;
 		margin: 0;
 	}
 
-	/* Orient keypad — bottom-right corner, inboard of the right 300px card. */
+	/* Orient keypad — bottom-right corner, inboard of the right 260px card. */
 	.nc-print-prepare--immersive .nc-print-viewport-orientpad {
 		position: absolute;
 		bottom: 8px;
-		right: 316px;
+		right: 276px;
 		z-index: 6;
 		margin: 0;
 	}
@@ -634,7 +662,7 @@ export default {
 	}
 
 	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-tool-panel) {
-		right: 316px;
+		right: 276px;
 	}
 }
 

@@ -7,11 +7,14 @@ import {
 	applyUniformScale,
 	computeBbox,
 	countOpenEdges,
+	countNonManifoldEdges,
 	computeOverhangFraction,
+	fillBoundaryHoles,
 	layFlat,
 	parseStlToMesh,
 	scaleToFitBed,
 	scaleToMaxFitBed,
+	splitNonManifoldEdges,
 } from '../services/mesh-analyze.js'
 
 function makeOpenBoxMesh() {
@@ -215,6 +218,58 @@ describe('mesh-analyze', () => {
 		expect(repaired.stats.filledTriangles).toBeGreaterThan(0)
 		const after = analyzeMesh(repaired.positions, repaired.indices)
 		expect(after.watertight).toBe(true)
+	})
+
+	it('fillBoundaryHoles closes a large (>8 edge) hole via a centroid fan', () => {
+		// An open regular polygon "lid" hole: a fan of triangles around a center
+		// with the outer ring left open (the outer boundary is a 12-edge loop).
+		const n = 12
+		const positions = [0, 0, 1] // center apex at index 0 (a shallow cone, open base)
+		for (let i = 0; i < n; i++) {
+			const t = (i / n) * Math.PI * 2
+			positions.push(Math.cos(t), Math.sin(t), 0)
+		}
+		const indices = []
+		for (let i = 0; i < n; i++) {
+			// side faces apex→ring[i]→ring[i+1] — the base ring stays open.
+			indices.push(0, 1 + i, 1 + ((i + 1) % n))
+		}
+		expect(countOpenEdges(positions, indices)).toBe(n)
+		const added = fillBoundaryHoles(positions, indices)
+		expect(added).toBeGreaterThan(0)
+		// The base ring (12 edges) is now closed → no open edges remain.
+		expect(countOpenEdges(positions, indices)).toBe(0)
+	})
+
+	it('splitNonManifoldEdges detaches a fin shared by three triangles', () => {
+		// Two triangles share edge (0,1); a third triangle also uses (0,1) → the
+		// edge is used by 3 faces (non-manifold).
+		const positions = [
+			0, 0, 0, // 0
+			1, 0, 0, // 1
+			0, 1, 0, // 2
+			0, -1, 0, // 3
+			0, 0, 1, // 4 (the fin's apex)
+		]
+		const indices = [
+			0, 1, 2,
+			1, 0, 3,
+			0, 1, 4, // third face on edge (0,1)
+		]
+		expect(countNonManifoldEdges(positions, indices)).toBeGreaterThan(0)
+		const split = splitNonManifoldEdges(positions, indices)
+		expect(split).toBeGreaterThan(0)
+		expect(countNonManifoldEdges(positions, indices)).toBe(0)
+	})
+
+	it('analyzeMesh reports nonManifoldCount and fails watertight when non-manifold', () => {
+		const positions = [
+			0, 0, 0, 1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1,
+		]
+		const indices = [0, 1, 2, 1, 0, 3, 0, 1, 4]
+		const a = analyzeMesh(positions, indices)
+		expect(a.nonManifoldCount).toBeGreaterThan(0)
+		expect(a.watertight).toBe(false)
 	})
 
 	it('applyRotationMatrix preserves vector length', () => {

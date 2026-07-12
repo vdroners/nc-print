@@ -599,10 +599,14 @@
 	 * layer six) so the workflow bar never clips behind them while scrolling.
 	 * Stays well below modals. */
 	z-index: 20;
+	/* A thin sticky background so scrolled content doesn't show through — the
+	 * workflow banner keeps its own surface box, so this stays subtle. Tightened
+	 * vertical padding (space-sm top, 0 bottom → the banner's own margin spaces
+	 * it) so the bar sits high with minimal blank space. */
 	background: var(--nc-gcs-bg-app);
 	/* full-bleed across the body's --nc-gcs-space-lg padding */
 	margin: calc(-1 * var(--nc-gcs-space-lg)) calc(-1 * var(--nc-gcs-space-lg)) 0;
-	padding: var(--nc-gcs-space-lg) var(--nc-gcs-space-lg) var(--nc-gcs-space-sm);
+	padding: var(--nc-gcs-space-sm) var(--nc-gcs-space-lg) 0;
 }
 
 /* Chrome content shares the centered content cap so it aligns with the

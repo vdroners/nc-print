@@ -1,5 +1,66 @@
 # Changelog
 
+## [1.55.0] - 2026-07-12
+
+New **Overview** management console + Prepare-tab polish + four 3DPrintForge-
+inspired management pillars. nc-print becomes "more than a slicer."
+
+### Added — Overview tab (management console)
+
+- A new **Overview** tab (gear button in the chrome bar, hotkey 4) that holds
+  everything that isn't the current print project. It is NOT a linear workflow
+  step — the Prepare · Slice · Print banner is unchanged. Reached any time; the
+  app now **remembers your last-active tab** across navigation (per user), falling
+  back to Prepare when a gated tab (Slice/Print) isn't reachable.
+- **Printer fleet** — the printer picker/discovery as a management view.
+- **Filament inventory** (new, standalone) — a spool library in Nextcloud's own
+  DB: brand / material / colour / weight remaining / cost / location, with
+  remaining-% bars, low-stock badges, add/edit/delete, and a totals summary. New
+  `oc_ncprint_spools` table + `/api/filament` CRUD.
+- **History & analytics** (new dashboard) — totals (prints, success rate,
+  filament kg, print-hours, est. cost), a weekly prints trend, per-material and
+  per-printer breakdowns, over the existing print history. New
+  `/api/history/analytics`.
+- **Maintenance / wear** (new) — component-lifetime tracking (brass/hardened
+  nozzle, PTFE, belts, plate, lubrication) with percent-used bars + "replace by"
+  status from tracked print-hours, and a replacement log. New
+  `oc_ncprint_maintenance` table + `/api/maintenance`.
+- **Achievements** (new, per Nextcloud user) — 15+ milestones derived from your
+  print history (first print, N prints, kg filament, materials/printers explored,
+  print-hours, success-rate), with earned/in-progress grid + XP. Computed on the
+  fly (no per-print storage). New `/api/achievements`.
+- **Materials & calibration** and **Cameras** sections (relocated here; cameras
+  stay on Print too).
+
+### Changed — Prepare tab
+
+- **Clear** now asks for confirmation AND actually clears the 3D viewport (the
+  rendered mesh was left behind) and discards any stale slice result.
+- **Model appearance**: the View tool gains a colour picker + opacity slider for
+  the model mesh; the choice is remembered across sessions.
+- Layout polish: the top chrome bar is thinner (less blank space, sits higher);
+  **Open recent** moved into the Import section; the right "Ready to slice" panel
+  is narrower to free viewport width.
+- **Relocations**: Materials/Calibration moved off Slice, durable History moved
+  off Print — both now live in Overview. Per-job panels (Arrange, Pause, Colour
+  order) and live panels (queue, tuning, temps, recent-jobs strip) stay put.
+
+### Improved — mesh repair
+
+- The Repair tool now closes larger holes (centroid-fan for big loops), splits
+  non-manifold edges (shared by >2 triangles) so they stop being rejected, and
+  reports precisely what was fixed vs what remains (open edges / non-manifold /
+  overhang). `analyzeMesh` now also reports `nonManifoldCount` and only calls a
+  mesh watertight when it is both closed and manifold.
+
+### Tests
+
+- vitest 407 green (new overview-tab source-regex; store: tab-persistence,
+  clearModel-resets-slice, viewPref persistence; mesh repair: centroid-fan large
+  holes, non-manifold split, nonManifoldCount).
+- phpunit 103 green (new OverviewPillarsTest: achievements derivation, filament
+  validation/rollup, maintenance percent-used).
+
 ## [1.54.0] - 2026-07-12
 
 Prepare-tab controls overhaul — relocate the floating buttons into docked boxes,

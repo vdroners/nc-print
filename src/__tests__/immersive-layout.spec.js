@@ -53,7 +53,8 @@ describe('immersive full-bleed layout', () => {
 		// rail/panel offset only applies on wide screens.
 		expect(prepare).toMatch(/@media \(min-width:\s*1201px\)/)
 		expect(prepare).toMatch(/nc-print-tool-rail\)\s*\{\s*left:\s*316px/)
-		expect(prepare).toMatch(/nc-print-tool-panel\)\s*\{\s*right:\s*316px/)
+		// Right offset thinned to 276px in v1.55.0 (right card 260px + margin).
+		expect(prepare).toMatch(/nc-print-tool-panel\)\s*\{\s*right:\s*276px/)
 	})
 
 	it('SliceTab reuses the immersive studio layout with the toolpath as background', () => {

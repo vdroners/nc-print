@@ -80,6 +80,9 @@ export async function createViewport(canvas, wrap) {
 	let onGizmoChange = null
 	// Non-destructive view state re-applied whenever modelMesh is rebuilt.
 	let wireframe = false
+	// Model material appearance (persisted by the store; re-applied to every mesh).
+	let modelColor = 0x22c55e
+	let modelOpacity = 0.85
 	const clipState = { enabled: false, axis: 'z', offset: 0, flip: false }
 	let clipPlane = null
 	let cutPlaneHelper = null
@@ -259,6 +262,10 @@ export async function createViewport(canvas, wrap) {
 
 	function applyMaterialState(mat) {
 		mat.wireframe = wireframe
+		mat.color.set(modelColor)
+		mat.opacity = modelOpacity
+		mat.transparent = modelOpacity < 1
+		mat.needsUpdate = true
 		if (clipState.enabled) {
 			applyClipPlane()
 		}
@@ -511,6 +518,7 @@ export async function createViewport(canvas, wrap) {
 			renderer.dispose()
 		},
 		loadModel,
+		clearModelMesh,
 		setMeshData,
 		scaleModelUniform,
 		// ── Multi-object selection API (Phase 3b) ──
@@ -780,6 +788,30 @@ export async function createViewport(canvas, wrap) {
 			wireframe = !!on
 			if (modelMesh) {
 				modelMesh.material.wireframe = wireframe
+			}
+		},
+		// Model appearance — applied to EVERY object so multi-object scenes stay
+		// consistent, and remembered so newly-loaded meshes inherit it.
+		setModelColor(hex) {
+			if (hex === undefined || hex === null) {
+				return
+			}
+			modelColor = typeof hex === 'string' ? new THREE.Color(hex).getHex() : hex
+			for (const { mesh } of objects) {
+				mesh.material.color.set(modelColor)
+				mesh.material.needsUpdate = true
+			}
+		},
+		setModelOpacity(value) {
+			const v = Math.max(0, Math.min(1, Number(value)))
+			if (!Number.isFinite(v)) {
+				return
+			}
+			modelOpacity = v
+			for (const { mesh } of objects) {
+				mesh.material.opacity = v
+				mesh.material.transparent = v < 1
+				mesh.material.needsUpdate = true
 			}
 		},
 		setSectionClip(state) {

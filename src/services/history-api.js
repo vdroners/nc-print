@@ -52,6 +52,16 @@ export async function fetchWear() {
 }
 
 /**
+ * Aggregated analytics for the Overview dashboard: totals, per-material and
+ * per-printer rollups, and a weekly time series.
+ * @returns {Promise<object>}
+ */
+export async function fetchAnalytics() {
+	const { data } = await axios.get(`${apiBase()}/analytics`, REQ)
+	return data
+}
+
+/**
  * @param {number} id
  * @returns {Promise<{ok: boolean, deleted: boolean}>}
  */

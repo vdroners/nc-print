@@ -38,8 +38,20 @@ return [
 		['name' => 'history#list', 'url' => '/api/history', 'verb' => 'GET'],
 		['name' => 'history#metrics', 'url' => '/api/history/metrics', 'verb' => 'GET'],
 		['name' => 'history#wear', 'url' => '/api/history/wear', 'verb' => 'GET'],
+		['name' => 'history#analytics', 'url' => '/api/history/analytics', 'verb' => 'GET'],
 		['name' => 'history#clear', 'url' => '/api/history', 'verb' => 'DELETE'],
 		['name' => 'history#destroy', 'url' => '/api/history/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+
+		// Overview management pillars (v1.55.0).
+		['name' => 'achievement#list', 'url' => '/api/achievements', 'verb' => 'GET'],
+
+		['name' => 'filament_inventory#list', 'url' => '/api/filament', 'verb' => 'GET'],
+		['name' => 'filament_inventory#create', 'url' => '/api/filament', 'verb' => 'POST'],
+		['name' => 'filament_inventory#update', 'url' => '/api/filament/{id}', 'verb' => 'PUT', 'requirements' => ['id' => '\d+']],
+		['name' => 'filament_inventory#destroy', 'url' => '/api/filament/{id}', 'verb' => 'DELETE', 'requirements' => ['id' => '\d+']],
+
+		['name' => 'maintenance#summary', 'url' => '/api/maintenance', 'verb' => 'GET'],
+		['name' => 'maintenance#log', 'url' => '/api/maintenance/log', 'verb' => 'POST'],
 
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'GET', 'requirements' => ['path' => '.+']],
 		['name' => 'slicer_proxy#proxy', 'url' => '/api/slicer/{path}', 'verb' => 'POST', 'requirements' => ['path' => '.+'], 'postfix' => 'slicer_post'],

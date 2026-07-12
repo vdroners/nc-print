@@ -77,6 +77,19 @@ class HistoryController extends Controller
 
 	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	public function analytics(): JSONResponse
+	{
+		$uid = $this->requireUid();
+		if ($uid instanceof JSONResponse) {
+			return $uid;
+		}
+		$price = $this->request->getParam('price_per_kg', null);
+		$pricePerKg = is_numeric($price) ? (float) $price : 25.0;
+		return new JSONResponse($this->history->analytics($uid, $pricePerKg));
+	}
+
+	#[NoCSRFRequired]
+	#[NoAdminRequired]
 	public function destroy(int $id): JSONResponse
 	{
 		$uid = $this->requireUid();
