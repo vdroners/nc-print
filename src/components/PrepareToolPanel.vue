@@ -6,6 +6,7 @@ const TITLES = {
 	move: 'Move',
 	rotate: 'Rotate',
 	scale: 'Scale',
+	autoorient: 'Auto-orient',
 	face: 'Place on face',
 	mirror: 'Mirror',
 	cut: 'Plane cut',
@@ -213,6 +214,40 @@ export default {
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('reset-rotation')">Reset</button>
 			</div>
 			<p class="nc-print-tool-panel__hint">Drag the on-screen rings to rotate; snaps to 15°.</p>
+		</div>
+
+		<!-- Auto-orient -->
+		<div v-else-if="tool === 'autoorient'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">
+				Rotate the model to an axis-aligned orientation that best fits the
+				chosen goal, then drop it to the bed.
+			</p>
+			<div class="nc-print-tool-panel__stack">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:disabled="disabled"
+					title="Balanced — lowest overhang without standing the part too tall"
+					@click="$emit('auto-orient', 'default')">
+					Default (balanced)
+				</button>
+				<button
+					type="button"
+					class="nc-print-btn"
+					:disabled="disabled"
+					title="Rotate to the orientation with the least overhang (fewest supports)"
+					@click="$emit('auto-orient', 'supports')">
+					Minimize supports
+				</button>
+				<button
+					type="button"
+					class="nc-print-btn"
+					:disabled="disabled"
+					title="Lay the part flattest — smallest height, most bed contact"
+					@click="$emit('auto-orient', 'footprint')">
+					Minimize footprint
+				</button>
+			</div>
 		</div>
 
 		<!-- Scale -->
@@ -436,6 +471,16 @@ export default {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
+}
+
+.nc-print-tool-panel__stack {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.nc-print-tool-panel__stack .nc-print-btn {
+	width: 100%;
 }
 
 .nc-print-tool-panel__slider {

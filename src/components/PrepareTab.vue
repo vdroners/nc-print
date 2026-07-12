@@ -7,6 +7,8 @@ import ProfilePicker from './ProfilePicker.vue'
 import PrepareChecklist from './PrepareChecklist.vue'
 import PrepareOverrides from './PrepareOverrides.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
+import ViewportHistoryBox from './ViewportHistoryBox.vue'
+import ViewportOrientPad from './ViewportOrientPad.vue'
 import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
 import SceneObjectList from './SceneObjectList.vue'
@@ -30,6 +32,8 @@ export default {
 		PrepareChecklist,
 		PrepareOverrides,
 		ViewportToolbar,
+		ViewportHistoryBox,
+		ViewportOrientPad,
 		MeshHealthPanel,
 		ThreeMfObjectPicker,
 		SceneObjectList,
@@ -87,9 +91,6 @@ export default {
 		window.removeEventListener('nc-print-undo-redo', this._onUndoRedo)
 	},
 	methods: {
-		onToolbarImport(file) {
-			this.printStore.setModel(file, 'import')
-		},
 		onSelectObject(id) {
 			// Drive the viewport; its selection handler mirrors back into the store.
 			this.$refs.viewport?.selectObjectInViewport?.(id)
@@ -146,8 +147,8 @@ export default {
 			this.$refs.viewport?.snapRotationToAxis?.()
 			this.refreshBounds()
 		},
-		async onAutoOrient() {
-			await this.$refs.viewport?.autoOrientMesh()
+		async onAutoOrient(mode = 'default') {
+			await this.$refs.viewport?.autoOrientMesh(mode)
 			this.refreshBounds()
 		},
 		onAnalyzeMesh() {
@@ -297,7 +298,18 @@ export default {
 			this.printStore.setActiveTab(TABS.SLICE)
 		},
 		triggerImport() {
-			this.$refs.toolbar?.onImportClick?.()
+			this.$refs.importInput?.click()
+		},
+		onImportFile(e) {
+			const file = e.target.files?.[0]
+			if (file) {
+				this.printStore.setModel(file, 'import')
+			}
+			e.target.value = ''
+		},
+		onClearModel() {
+			this.printStore.clearModel()
+			this.activeTool = ''
 		},
 		onChecklistAction(action) {
 			const scrollTo = (refName) => {
@@ -306,7 +318,8 @@ export default {
 				node?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
 			}
 			if (action === 'model') {
-				scrollTo('importCluster')
+				this.$refs.importCollapsible?.expand?.()
+				scrollTo('importCollapsible')
 				this.triggerImport()
 				return
 			}
@@ -352,6 +365,31 @@ export default {
 				Config API failed: {{ printStore.configLoadError }}
 			</p>
 		</div>
+
+		<NcPrintCollapsible id="prepare-import" ref="importCollapsible" title="Import model" icon="layers">
+			<input
+				ref="importInput"
+				type="file"
+				accept=".stl,.3mf,.obj"
+				hidden
+				aria-label="Import model file"
+				@change="onImportFile">
+			<div class="nc-print-import-section">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="triggerImport">
+					Import STL/3MF/OBJ
+				</button>
+				<button type="button" class="nc-print-btn" @click="pickFromFiles">
+					From Files
+				</button>
+				<button
+					v-if="printStore.hasModel"
+					type="button"
+					class="nc-print-btn"
+					@click="onClearModel">
+					Clear
+				</button>
+			</div>
+		</NcPrintCollapsible>
 
 		<div
 			v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
@@ -413,29 +451,36 @@ export default {
 		</template>
 
 		<template #center>
-			<div ref="importCluster" class="nc-print-import-cluster">
-				<ViewportToolbar
-					ref="toolbar"
-					:can-center="printStore.hasModel"
-					:can-transform="canTransform"
-					@import="onToolbarImport"
-					@pick-files="pickFromFiles"
-					@undo="onUndo"
-					@redo="onRedo"
-					@reset-transform="onResetTransformAll"
-					@center="onCenter"
-					@rotate="onRotate"
-					@lay-flat="onLayFlat"
-					@scale-to-fit="onScaleToFit"
-					@auto-orient="onAutoOrient"
-					@apply="onApplyMesh" />
-			</div>
-
 			<div ref="viewportWrap" class="nc-print-viewport-wrap nc-print-viewport-wrap--studio">
 				<ModelViewport
 					ref="viewport"
 					:file="printStore.model.file"
 					:build-volume="buildVolume" />
+
+				<!-- Docked info + apply chip (top-left, inboard of the side card). -->
+				<div v-if="printStore.hasModel" class="nc-print-viewport-chip">
+					<ViewportToolbar ref="toolbar" @apply="onApplyMesh" />
+				</div>
+
+				<!-- History box (top-right): undo / redo / reset. -->
+				<ViewportHistoryBox
+					v-if="printStore.hasModel"
+					class="nc-print-viewport-history"
+					@undo="onUndo"
+					@redo="onRedo"
+					@reset-transform="onResetTransformAll" />
+
+				<!-- Orient keypad (bottom-right): center / rotate / lay flat / scale. -->
+				<ViewportOrientPad
+					v-if="printStore.hasModel"
+					class="nc-print-viewport-orientpad"
+					:disabled="!canTransform"
+					:can-center="printStore.hasModel"
+					@center="onCenter"
+					@rotate="onRotate"
+					@lay-flat="onLayFlat"
+					@scale-to-fit="onScaleToFit" />
+
 				<PrepareToolRail
 					v-if="canTransform"
 					:active-tool="activeTool"
@@ -499,17 +544,33 @@ export default {
 	margin: 0;
 }
 
-.nc-print-import-cluster {
-	align-items: center;
+.nc-print-import-section {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm);
+}
+
+.nc-print-import-section .nc-print-btn {
+	flex: 1 1 auto;
+}
+
+/* ── Docked viewport controls (v1.54.0) ──────────────────────────────────────
+   In studio (column) mode they sit statically above the viewport; immersive
+   absolutely-positions them into the viewport corners (min-width:1201px below). */
+.nc-print-viewport-chip,
+.nc-print-viewport-history,
+.nc-print-viewport-orientpad {
 	margin-bottom: var(--nc-gcs-space-sm);
 }
 
-.nc-print-import-cluster :deep(.nc-print-viewport-toolbar) {
-	flex: 1 1 auto;
-	margin-bottom: 0;
+.nc-print-viewport-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--nc-gcs-space-sm);
+	padding: 4px 10px;
+	border-radius: var(--nc-gcs-radius-md, 12px);
+	background: color-mix(in srgb, var(--nc-gcs-bg-surface, var(--color-main-background)) 82%, transparent);
+	border: 1px solid var(--nc-gcs-border);
 }
 
 .nc-print-viewport-wrap--studio {
@@ -526,19 +587,35 @@ export default {
    toolbar/rail/panel over it. Only applies on wide screens (the studio layout
    reverts to columns < 1200px, where these overrides must NOT apply). ──────── */
 @media (min-width: 1201px) {
-	.nc-print-prepare--immersive .nc-print-import-cluster {
+	/* Info/apply chip — top-center, inboard of the 300px side cards. */
+	.nc-print-prepare--immersive .nc-print-viewport-chip {
 		position: absolute;
 		top: 8px;
 		left: 50%;
 		transform: translateX(-50%);
 		z-index: 6;
 		margin: 0;
-		max-width: min(680px, 60%);
-		padding: 4px 8px;
-		border-radius: var(--nc-gcs-radius-md, 12px);
-		background: color-mix(in srgb, var(--nc-gcs-bg-surface, var(--color-main-background)) 82%, transparent);
+		max-width: min(560px, calc(100% - 680px));
 		backdrop-filter: blur(8px);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+	}
+
+	/* History box — top-right corner, inboard of the right 300px card. */
+	.nc-print-prepare--immersive .nc-print-viewport-history {
+		position: absolute;
+		top: 8px;
+		right: 316px;
+		z-index: 6;
+		margin: 0;
+	}
+
+	/* Orient keypad — bottom-right corner, inboard of the right 300px card. */
+	.nc-print-prepare--immersive .nc-print-viewport-orientpad {
+		position: absolute;
+		bottom: 8px;
+		right: 316px;
+		z-index: 6;
+		margin: 0;
 	}
 
 	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio {

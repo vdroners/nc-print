@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.54.0] - 2026-07-12
+
+Prepare-tab controls overhaul — relocate the floating buttons into docked boxes,
+fix the workflow bar clipping, make Undo slice-aware, and give Auto-orient modes.
+
+### Fixed
+
+- **Workflow bar clipped behind the floating menus on scroll.** The sticky chrome
+  was `z-index:3` but the immersive side cards + tool rail are `z-index:6`, so
+  they covered it while scrolling. Chrome is now `z-index:20` (still below modals).
+- **Undo looked broken after slicing.** Undo/redo was transform-only, so pressing
+  Undo after a slice did nothing. Undo is now slice-aware: the first press clears
+  the last slice result (back to the un-sliced model), then subsequent presses
+  unwind move/rotate/scale. New `hasSliceResult` / `canUndoAny` store getters gate
+  the button so it's never enabled-but-inert.
+
+### Changed — Prepare tab layout
+
+- **Import STL/3MF/OBJ · From Files · Clear** moved off the viewport center into a
+  collapsible **Import model** section in the left panel.
+- **Undo / Redo / Reset** are now a small **History box** docked in the top-right
+  of the viewport (`ViewportHistoryBox`).
+- **Center · rotate X/Y/Z · Lay flat · Scale to fit** are now a keypad-style
+  **Orient pad** docked in the bottom-right of the viewport (`ViewportOrientPad`).
+- The old floating `ViewportToolbar` shrank to just the model-info line +
+  auto-apply/Apply, docked as a small top-center chip.
+- **Auto-orient** moved into the **Orient** rail group with three modes: Default
+  (balanced), Minimize supports (least overhang), Minimize footprint (flattest /
+  most bed contact). `autoOrient(positions, indices, {mode})` scores the six
+  axis-aligned rotations per mode.
+- Below 1200px everything falls back to the static column flow (unchanged).
+
+### Tests
+
+- vitest: `autoOrient` mode param (default/supports/footprint) + footprint lays a
+  tall box flat; store `undoTransform` clears a done slice first then unwinds,
+  `canUndoAny` true when a slice exists; immersive-layout source-regex for chrome
+  z-index > 6, import-in-left-panel, docked history/orient boxes, 3-mode
+  auto-orient panel. Full suite green (392).
+
+Plan: `docs/plans/prepare-controls-overhaul.md`.
+
 ## [1.53.1] - 2026-07-12
 
 Fix slicing failing with "unknown printer preset: 'Default Printer'" → "could not

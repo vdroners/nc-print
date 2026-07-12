@@ -219,4 +219,28 @@ describe('meshState (Sprint B)', () => {
 		expect(prefs.recentModels).toHaveLength(5)
 		expect(prefs.recentModels[0].name).toBe('m6.stl')
 	})
+
+	it('undoTransform clears a completed slice first, then unwinds transforms', () => {
+		const store = usePrintStore()
+		// A completed slice result present.
+		store.sliceJob.status = 'done'
+		store.sliceJob.jobId = 'job-xyz'
+		store.sliceJob.gcodeBlob = makeFile('out.gcode')
+		expect(store.hasSliceResult).toBe(true)
+		expect(store.canUndoAny).toBe(true)
+
+		// First undo clears the slice (does NOT touch the transform stack).
+		store.undoTransform(null)
+		expect(store.sliceJob.status).toBe('idle')
+		expect(store.sliceJob.jobId).toBeFalsy()
+		expect(store.hasSliceResult).toBe(false)
+	})
+
+	it('canUndoAny is true when a slice result exists even with an empty transform stack', () => {
+		const store = usePrintStore()
+		expect(store.canUndoAny).toBe(false) // nothing sliced, no transforms
+		store.sliceJob.status = 'error'
+		store.sliceJob.jobId = 'job-err'
+		expect(store.canUndoAny).toBe(true)
+	})
 })

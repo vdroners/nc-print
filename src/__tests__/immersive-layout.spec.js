@@ -12,6 +12,11 @@ const layout = read('../components/PrepareStudioLayout.vue')
 const prepare = read('../components/PrepareTab.vue')
 const slice = read('../components/SliceTab.vue')
 const toolpath = read('../components/Toolpath3D.vue')
+const historyBox = read('../components/ViewportHistoryBox.vue')
+const orientPad = read('../components/ViewportOrientPad.vue')
+const toolPanel = read('../components/PrepareToolPanel.vue')
+const toolRail = read('../components/PrepareToolRail.vue')
+const chromeCss = read('../../css/style.css')
 
 describe('immersive full-bleed layout', () => {
 	it('PrepareStudioLayout exposes a reversible mode prop (studio|immersive)', () => {
@@ -75,5 +80,53 @@ describe('immersive full-bleed layout', () => {
 		expect(m[1]).toMatch(/backdrop-filter/)
 		// narrow screens fall back to a static bar.
 		expect(toolpath).toMatch(/@media \(max-width:\s*1200px\)/)
+	})
+})
+
+describe('Prepare controls overhaul (v1.54.0)', () => {
+	it('sticky chrome sits above the immersive overlays (z-index > 6)', () => {
+		const m = chromeCss.match(/\.nc-print-chrome \{([^}]*)\}/)
+		expect(m).not.toBeNull()
+		expect(m[1]).toMatch(/position:\s*sticky/)
+		const z = Number((m[1].match(/z-index:\s*(\d+)/) || [])[1])
+		expect(z).toBeGreaterThan(6)
+	})
+
+	it('Import cluster lives in a left-panel collapsible, not the viewport center', () => {
+		expect(prepare).toMatch(/id="prepare-import"/)
+		expect(prepare).toMatch(/nc-print-import-section/)
+		expect(prepare).toMatch(/Import STL\/3MF\/OBJ/)
+		// The old floating center import cluster is gone.
+		expect(prepare).not.toMatch(/nc-print-import-cluster/)
+	})
+
+	it('history box (undo/redo/reset) is docked top-right in immersive', () => {
+		expect(prepare).toMatch(/ViewportHistoryBox/)
+		const m = prepare.match(/--immersive \.nc-print-viewport-history \{([^}]*)\}/)
+		expect(m).not.toBeNull()
+		expect(m[1]).toMatch(/position:\s*absolute/)
+		expect(m[1]).toMatch(/right:/)
+		// binds to the slice-aware undo gate
+		expect(historyBox).toMatch(/canUndoAny/)
+	})
+
+	it('orient keypad is docked bottom-right in immersive', () => {
+		expect(prepare).toMatch(/ViewportOrientPad/)
+		const m = prepare.match(/--immersive \.nc-print-viewport-orientpad \{([^}]*)\}/)
+		expect(m).not.toBeNull()
+		expect(m[1]).toMatch(/position:\s*absolute/)
+		expect(m[1]).toMatch(/bottom:/)
+		// keypad exposes center + per-axis rotate + lay flat + scale to fit
+		expect(orientPad).toMatch(/rotate', 'x'/)
+		expect(orientPad).toMatch(/lay-flat/)
+		expect(orientPad).toMatch(/scale-to-fit/)
+	})
+
+	it('auto-orient is a rail tool with three modes in its panel', () => {
+		expect(toolRail).toMatch(/id: 'autoorient'/)
+		expect(toolPanel).toMatch(/tool === 'autoorient'/)
+		expect(toolPanel).toMatch(/auto-orient', 'default'/)
+		expect(toolPanel).toMatch(/auto-orient', 'supports'/)
+		expect(toolPanel).toMatch(/auto-orient', 'footprint'/)
 	})
 })

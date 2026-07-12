@@ -277,13 +277,49 @@ export function applyRotationMatrix(positions, matrix) {
  */
 export function autoOrient(positions, indices, options = {}) {
 	const overhangDeg = options.overhangDeg ?? DEFAULT_OVERHANG_DEG
-	let best = null
-	for (const candidate of AXIS_ORIENTATIONS) {
-		const rotated = applyRotationMatrix(positions, candidate.matrix)
+	// mode: 'default' (balanced overhang + height) | 'supports' (least overhang)
+	//       | 'footprint' (flattest / most bed contact).
+	const mode = options.mode ?? 'default'
+
+	// Evaluate every axis-aligned candidate once (overhang + bbox), then score.
+	const cands = AXIS_ORIENTATIONS.map((c) => {
+		const rotated = applyRotationMatrix(positions, c.matrix)
 		const frac = computeOverhangFraction(rotated, indices, overhangDeg)
-		const overhangPct = Math.round(frac * 1000) / 10
-		if (!best || frac < best.frac) {
-			best = { positions: rotated, matrix: candidate.matrix, label: candidate.label, frac, overhangPct }
+		const bbox = computeBbox(rotated)
+		return {
+			positions: rotated,
+			matrix: c.matrix,
+			label: c.label,
+			frac,
+			overhangPct: Math.round(frac * 1000) / 10,
+			height: bbox.z,
+			footprint: Math.max(1e-6, bbox.x * bbox.y),
+		}
+	})
+
+	// Normalizers so height/footprint are comparable to the 0..1 overhang frac.
+	const maxHeight = Math.max(...cands.map((c) => c.height), 1e-6)
+	const maxFootprint = Math.max(...cands.map((c) => c.footprint), 1e-6)
+
+	const score = (c) => {
+		if (mode === 'supports') {
+			// Least overhang; tie-break on lower height.
+			return c.frac + (c.height / maxHeight) * 1e-3
+		}
+		if (mode === 'footprint') {
+			// Flattest / most stable: smallest height, largest bed contact;
+			// tie-break on lower overhang.
+			return (c.height / maxHeight) - (c.footprint / maxFootprint) * 0.25 + c.frac * 1e-3
+		}
+		// default: balanced — overhang dominates, height nudges the tie.
+		return c.frac + (c.height / maxHeight) * 0.35
+	}
+
+	let best = null
+	for (const c of cands) {
+		const s = score(c)
+		if (!best || s < best._score) {
+			best = { ...c, _score: s }
 		}
 	}
 	return {
@@ -291,6 +327,7 @@ export function autoOrient(positions, indices, options = {}) {
 		matrix: best.matrix,
 		label: best.label,
 		overhangPct: best.overhangPct,
+		mode,
 	}
 }
 

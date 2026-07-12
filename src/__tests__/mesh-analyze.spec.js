@@ -49,6 +49,46 @@ function makeClosedTetrahedron() {
 	return { positions, indices }
 }
 
+// Closed axis-aligned box, sizes (sx,sy,sz), 12 triangles.
+function makeBox(sx, sy, sz) {
+	const v = [
+		[0, 0, 0], [sx, 0, 0], [sx, sy, 0], [0, sy, 0],
+		[0, 0, sz], [sx, 0, sz], [sx, sy, sz], [0, sy, sz],
+	]
+	const faces = [
+		[0, 1, 2], [0, 2, 3], // bottom
+		[4, 6, 5], [4, 7, 6], // top
+		[0, 4, 5], [0, 5, 1], // -Y
+		[1, 5, 6], [1, 6, 2], // +X
+		[2, 6, 7], [2, 7, 3], // +Y
+		[3, 7, 4], [3, 4, 0], // -X
+	]
+	const positions = new Float32Array(faces.length * 9)
+	const indices = new Uint32Array(faces.length * 3)
+	let p = 0
+	let i = 0
+	for (const f of faces) {
+		for (const idx of f) {
+			positions[p++] = v[idx][0]
+			positions[p++] = v[idx][1]
+			positions[p++] = v[idx][2]
+			indices[i] = i
+			i++
+		}
+	}
+	return { positions, indices }
+}
+
+function bboxHeight(positions) {
+	let minZ = Infinity
+	let maxZ = -Infinity
+	for (let i = 2; i < positions.length; i += 3) {
+		minZ = Math.min(minZ, positions[i])
+		maxZ = Math.max(maxZ, positions[i])
+	}
+	return maxZ - minZ
+}
+
 describe('mesh-analyze', () => {
 	it('computeBbox returns axis sizes', () => {
 		const { positions } = makeClosedTetrahedron()
@@ -80,6 +120,26 @@ describe('mesh-analyze', () => {
 		expect(oriented.positions.length).toBe(positions.length)
 		expect(oriented.label).toBeTruthy()
 		expect(oriented.overhangPct).toBeGreaterThanOrEqual(0)
+	})
+
+	it('autoOrient accepts a mode and echoes it back', () => {
+		const { positions, indices } = makeClosedTetrahedron()
+		for (const mode of ['default', 'supports', 'footprint']) {
+			const oriented = autoOrient(positions, indices, { mode })
+			expect(oriented.mode).toBe(mode)
+			expect(oriented.positions.length).toBe(positions.length)
+			expect(oriented.label).toBeTruthy()
+		}
+	})
+
+	it('autoOrient footprint mode picks the flattest orientation of a tall box', () => {
+		// A box that is tall in Z (10) and thin in X/Y (2×2). Footprint mode must
+		// lay it down (a 90° rotation), giving a shorter bbox height than identity.
+		const box = makeBox(2, 2, 10)
+		const foot = autoOrient(box.positions, box.indices, { mode: 'footprint' })
+		const footH = bboxHeight(foot.positions)
+		const identH = bboxHeight(box.positions)
+		expect(footH).toBeLessThan(identH)
 	})
 
 	it('layFlat rotates mesh without dropping triangles', () => {

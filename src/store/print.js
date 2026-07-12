@@ -653,6 +653,18 @@ export const usePrintStore = defineStore('print', {
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done' && !!state.sliceJob.gcodeBlob
 		},
+		/** A slice result is present (done or errored) and can be cleared by Undo. */
+		hasSliceResult(state) {
+			return (state.sliceJob.status === 'done' || state.sliceJob.status === 'error')
+				&& !!state.sliceJob.jobId
+		},
+		/**
+		 * Undo is available when there's a transform to unwind OR a slice result
+		 * to clear (Undo clears the slice first, then unwinds transforms).
+		 */
+		canUndoAny(state) {
+			return state.meshCanUndo || this.hasSliceResult
+		},
 		// WS4/WS5: filament + time rollup from the last completed slice in this
 		// session. Null until a slice finishes.
 		lastCompletedSliceStats(state) {
@@ -1196,6 +1208,15 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		undoTransform(viewport) {
+			// Undo clears the last slice result first — a slice is the most recent
+			// "action" after slicing, so the first Undo press returns you to the
+			// un-sliced model (matches the user's mental model), and subsequent
+			// presses unwind mesh transforms.
+			if (this.hasSliceResult) {
+				this.resetSliceJob()
+				toastInfo('Cleared last slice')
+				return
+			}
 			const snap = meshUndo.undo()
 			if (snap) {
 				this._applyTransformSnapshot(snap, viewport)

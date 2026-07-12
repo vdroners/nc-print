@@ -595,7 +595,10 @@
 .nc-print-chrome {
 	position: sticky;
 	top: 0;
-	z-index: 3;
+	/* Above the immersive floating overlays (side cards + tool rail stack at
+	 * layer six) so the workflow bar never clips behind them while scrolling.
+	 * Stays well below modals. */
+	z-index: 20;
 	background: var(--nc-gcs-bg-app);
 	/* full-bleed across the body's --nc-gcs-space-lg padding */
 	margin: calc(-1 * var(--nc-gcs-space-lg)) calc(-1 * var(--nc-gcs-space-lg)) 0;

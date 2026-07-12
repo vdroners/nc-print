@@ -13,6 +13,7 @@ const GROUPS = [
 	{
 		label: 'Orient',
 		tools: [
+			{ id: 'autoorient', icon: 'rotate', label: 'Auto-orient' },
 			{ id: 'face', icon: 'target', label: 'Place on face' },
 			{ id: 'mirror', icon: 'mirror', label: 'Mirror' },
 		],

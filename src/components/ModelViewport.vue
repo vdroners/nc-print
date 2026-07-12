@@ -381,7 +381,7 @@ export default {
 			}
 			return true
 		},
-		async autoOrientMesh() {
+		async autoOrientMesh(mode = 'default') {
 			const mesh = await this.getMeshSnapshot()
 			if (!mesh) {
 				return false
@@ -389,11 +389,12 @@ export default {
 			const before = this.printStore.meshHealth.analyzed
 				? this.printStore.meshHealth.overhangPct
 				: analyzeMesh(mesh.positions, mesh.indices).overhangPct
-			const oriented = autoOrient(mesh.positions, mesh.indices)
+			const oriented = autoOrient(mesh.positions, mesh.indices, { mode })
 			await this.applyMeshSnapshot({ positions: oriented.positions, indices: mesh.indices })
 			const result = analyzeMesh(oriented.positions, mesh.indices)
 			this.printStore.setMeshHealth(result)
-			toastSuccess(`Auto-orient (${oriented.label}): overhang ${before}% → ${result.overhangPct}%`)
+			const modeLabel = { default: 'balanced', supports: 'min supports', footprint: 'min footprint' }[mode] || mode
+			toastSuccess(`Auto-orient (${modeLabel}): overhang ${before}% → ${result.overhangPct}%`)
 			return true
 		},
 		async scaleToFitMesh() {
