@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.59.0] - 2026-07-12
+
+Slicer-GUI alignment — Workflow (3rd of the multi-part round).
+
+### Added — Prepare tab
+
+- **Persistent print estimate** on the Slice-input card: print time / filament /
+  est. cost from the last completed slice, or a rough pre-slice time band
+  (`estimatePrintTimeBand`) when nothing's been sliced yet — so the estimate no
+  longer hides behind the Slice tab, matching every desktop slicer's always-on
+  readout.
+- **One-click "Slice now"** on Prepare — runs the EXISTING store slice action
+  (single-sourced SSE/progress/ETA; not a re-implementation), with a live
+  Cancel (%) while slicing. No forced tab hop.
+
+### Tests
+
+- vitest `workflow-alignment`: SliceSummaryCard surfaces the estimate
+  (lastCompletedSliceStats + estimatePrintTimeBand + formatPrintTime) and the
+  Slice-now button reuses `sliceOnly` + AbortController + cancel/disabled gating.
+  Full suite green (429).
+
 ## [1.58.0] - 2026-07-12
 
 Slicer-GUI alignment — Viewport (2nd of the multi-part round).

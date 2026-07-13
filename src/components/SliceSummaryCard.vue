@@ -1,13 +1,53 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import { formatPrintTime, estimatePrintTimeBand, resolveFilamentPricePerKg, estimateFilamentCost } from '@/services/slicer-utils.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
 export default {
 	name: 'SliceSummaryCard',
 	components: { NcPrintIcon },
+	data() {
+		return { abortController: null }
+	},
 	computed: {
 		...mapStores(usePrintStore),
+		slicing() {
+			return this.printStore.sliceJob.status === 'running'
+		},
+		sliceBlockReason() {
+			return this.printStore.sliceBlockReason
+		},
+		sliceDisabled() {
+			return this.slicing || !this.printStore.slicerReady || !!this.sliceBlockReason
+		},
+		sliceDisabledTitle() {
+			if (this.slicing) return 'Slicing…'
+			if (this.sliceBlockReason) return this.sliceBlockReason
+			if (!this.printStore.slicerReady) return 'Slicer offline'
+			return 'Slice this model'
+		},
+		// Live estimate: the last completed slice if present, else a rough band.
+		estimate() {
+			const stats = this.printStore.lastCompletedSliceStats
+			if (stats) {
+				const price = resolveFilamentPricePerKg(this.printStore.config, {})
+				const cost = estimateFilamentCost(stats.filamentUsedG, price)
+				return {
+					exact: true,
+					time: formatPrintTime(stats.estimatedTimeS),
+					filament: `${Math.round(stats.filamentUsedG)} g`,
+					cost: cost != null ? cost.toFixed(2) : null,
+				}
+			}
+			const bbox = this.printStore.modelMeta.bbox
+			const lh = Number(this.printStore.overrides.layerHeight) || 0.2
+			if (!bbox) {
+				return null
+			}
+			const band = estimatePrintTimeBand(bbox, lh)
+			return band ? { exact: false, time: band, filament: null, cost: null } : null
+		},
 		sliceFilename() {
 			const blob = this.printStore.meshState.sliceBlob
 			if (blob?.name) {
@@ -58,6 +98,31 @@ export default {
 			}
 		},
 	},
+	methods: {
+		async sliceNow() {
+			if (this.sliceDisabled) {
+				return
+			}
+			this.abortController = new AbortController()
+			try {
+				await this.printStore.sliceOnly({ signal: this.abortController.signal })
+			} catch (e) {
+				// store toasts on failure; AbortError is a user cancel
+			} finally {
+				this.abortController = null
+			}
+		},
+		cancelSlice() {
+			this.printStore.cancelSlice(this.abortController)
+			this.abortController = null
+		},
+	},
+	beforeUnmount() {
+		if (this.abortController) {
+			this.printStore.cancelSlice(this.abortController)
+			this.abortController = null
+		}
+	},
 }
 </script>
 
@@ -98,6 +163,45 @@ export default {
 		<p v-if="appliedLabel && !showDirtyBadge" class="nc-print-slice-summary__applied">
 			<span class="nc-print-badge nc-print-badge--ok">{{ appliedLabel }}</span>
 		</p>
+
+		<!-- Persistent estimate (last slice, or a rough pre-slice band) + one-click
+		     Slice — so print time/filament/cost don't hide behind the Slice tab. -->
+		<div v-if="estimate" class="nc-print-slice-summary__estimate">
+			<div class="nc-print-slice-summary__est-row">
+				<span class="nc-print-slice-summary__est-label">Print time</span>
+				<span class="nc-print-slice-summary__est-value">{{ estimate.time }}</span>
+			</div>
+			<div v-if="estimate.filament" class="nc-print-slice-summary__est-row">
+				<span class="nc-print-slice-summary__est-label">Filament</span>
+				<span class="nc-print-slice-summary__est-value">{{ estimate.filament }}</span>
+			</div>
+			<div v-if="estimate.cost" class="nc-print-slice-summary__est-row">
+				<span class="nc-print-slice-summary__est-label">Est. cost</span>
+				<span class="nc-print-slice-summary__est-value">{{ estimate.cost }}</span>
+			</div>
+			<p v-if="!estimate.exact" class="nc-print-slice-summary__est-hint">
+				Rough estimate — slice for exact figures.
+			</p>
+		</div>
+
+		<div class="nc-print-slice-summary__actions">
+			<button
+				v-if="!slicing"
+				type="button"
+				class="nc-print-btn nc-print-btn--primary"
+				:disabled="sliceDisabled"
+				:title="sliceDisabledTitle"
+				@click="sliceNow">
+				Slice now
+			</button>
+			<button
+				v-else
+				type="button"
+				class="nc-print-btn nc-print-btn--danger"
+				@click="cancelSlice">
+				Cancel ({{ printStore.sliceJob.pct }}%)
+			</button>
+		</div>
 	</div>
 </template>
 
@@ -131,5 +235,35 @@ export default {
 
 .nc-print-slice-summary__applied {
 	margin: var(--nc-gcs-space-sm) 0 0;
+}
+
+.nc-print-slice-summary__estimate {
+	border-top: 1px solid var(--nc-gcs-border);
+	margin-top: var(--nc-gcs-space-sm);
+	padding-top: var(--nc-gcs-space-sm);
+}
+.nc-print-slice-summary__est-row {
+	display: flex;
+	justify-content: space-between;
+	font-size: var(--nc-gcs-text-sm);
+	padding: 2px 0;
+}
+.nc-print-slice-summary__est-label {
+	color: var(--nc-gcs-text-muted);
+}
+.nc-print-slice-summary__est-value {
+	font-variant-numeric: tabular-nums;
+	font-weight: 600;
+}
+.nc-print-slice-summary__est-hint {
+	color: var(--nc-gcs-text-muted);
+	font-size: 11px;
+	margin: 4px 0 0;
+}
+.nc-print-slice-summary__actions {
+	margin-top: var(--nc-gcs-space-sm);
+}
+.nc-print-slice-summary__actions .nc-print-btn {
+	width: 100%;
 }
 </style>
