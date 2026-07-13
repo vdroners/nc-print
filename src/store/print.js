@@ -4,6 +4,7 @@ import {
 	buildSliceOverrides,
 	mergeProfileSettings,
 	mergedToOverrideForm,
+	mergedToOverrideFormFull,
 	pickDefaultProfileId,
 	parseStlMetadata,
 	mapSliceStageLabel,
@@ -667,6 +668,14 @@ export const usePrintStore = defineStore('print', {
 		},
 		prepareComplete(state) {
 			return isPrepareComplete(state)
+		},
+		/**
+		 * Full-coverage profile baseline for the override form — the value each
+		 * field would take from the selected printer/filament/process presets.
+		 * Drives modified-value highlight + reset-to-default in the Prepare panels.
+		 */
+		overrideDefaults(state) {
+			return mergedToOverrideFormFull(mergeProfileSettings(state.profiles, state.selection))
 		},
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done' && !!state.sliceJob.gcodeBlob
@@ -1849,6 +1858,40 @@ export const usePrintStore = defineStore('print', {
 		applyProfileDefaults() {
 			const merged = mergeProfileSettings(this.profiles, this.selection)
 			this.overrides = mergedToOverrideForm(merged)
+		},
+
+		/** Reset one override field back to the selected profile's value. */
+		resetOverrideField(key) {
+			if (!(key in this.overrides)) {
+				return
+			}
+			const baseline = this.overrideDefaults
+			// Empty string = "use profile default" (nothing sent to the slicer),
+			// which is the cleanest reset — the engine falls back to the preset.
+			this.overrides = { ...this.overrides, [key]: '' }
+			// If the profile has a concrete baseline, surface it in the field so the
+			// user sees the value they reverted to (numeric/string; bools → false).
+			const b = baseline[key]
+			if (b !== '' && b !== undefined && b !== null) {
+				this.overrides = { ...this.overrides, [key]: b }
+			}
+			this._persistOverrides()
+		},
+
+		/** Reset ALL overrides to the selected profile defaults. */
+		resetAllOverrides() {
+			this.applyProfileDefaults()
+			this._persistOverrides()
+		},
+
+		/** Apply a quality tier (Draft/Standard/Fine) → sets layer height. */
+		setQualityTier(layerHeight) {
+			const n = Number(layerHeight)
+			if (!Number.isFinite(n) || n <= 0) {
+				return
+			}
+			this.overrides = { ...this.overrides, layerHeight: n }
+			this._persistOverrides()
 		},
 
 		async onProfileChange() {

@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.57.0] - 2026-07-12
+
+Settings-UX alignment with mainstream slicers (1st of a multi-part GUI-alignment
+round; see docs/plans/slicer-gui-alignment.md for the full ~15-item gap report).
+
+### Added — Prepare override panel
+
+- **Quality preset row** — a one-click Draft / Standard / Fine selector above the
+  overrides (sets layer height 0.28 / 0.20 / 0.12), the way Cura/OrcaSlicer lead
+  with a quality pick before any advanced settings.
+- **Modified-value highlight + reset-to-default** — any override that differs from
+  the selected profile is highlighted (accent label + border) with a per-field ⟲
+  reset button; a "Reset all to profile" action and a "modified" dot on the
+  Override-settings toggle. Covers ALL ~55 fields (basic + advanced), keyed to the
+  engine settings via a new `mergedToOverrideFormFull` (source of truth:
+  `overrides.py _MAP`), so the highlight reflects the real profile baseline.
+
+### Changed
+
+- `slicer-utils.js`: `OVERRIDE_FIELD_DEFS` now carries each field's `engineKey` +
+  `type`; new `mergedToOverrideFormFull`, `isOverrideModified`, `QUALITY_TIERS`
+  (the existing `mergedToOverrideForm` is untouched — kept the basic mapping +
+  its tests green). Store: `overrideDefaults` getter + `resetOverrideField`,
+  `resetAllOverrides`, `setQualityTier` actions (reuse `applyProfileDefaults`).
+
+### Tests
+
+- vitest: `mergedToOverrideFormFull` (advanced keys + pct/bool/str normalize),
+  `isOverrideModified` (empty=not-modified, diff=modified), `QUALITY_TIERS`; store
+  reset/quality actions revert to the profile baseline. Full suite green (423).
+
 ## [1.56.0] - 2026-07-12
 
 Prepare-tab tool expansion — CSG mesh tools, multiple build plates, and a

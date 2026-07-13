@@ -215,62 +215,67 @@ export function mergeProfileSettings(profiles, selection) {
  * @param {object} merged
  */
 /** @type {Array<{ key: string, label: string, format?: (v: unknown) => string }>} */
+// `engineKey` = the OrcaSlicer-fork resolved-settings key this override maps to
+// (source of truth: slicer/adapter/overrides.py _MAP). `type` drives how the
+// profile-baseline value is normalized for display/diff: 'num' | 'pct' (0-1→%) |
+// 'bool' | 'str'. Used by mergedToOverrideFormFull() so modified-highlight +
+// reset-to-default cover ALL fields, not just the basic handful.
 export const OVERRIDE_FIELD_DEFS = [
-	{ key: 'layerHeight', label: 'Layer height (mm)' },
-	{ key: 'lineWidth', label: 'Line width (mm)' },
-	{ key: 'perimeters', label: 'Perimeters' },
-	{ key: 'infillDensity', label: 'Infill density (%)' },
-	{ key: 'printSpeed', label: 'Print speed (mm/s)' },
-	{ key: 'firstLayerSpeed', label: 'First layer speed (mm/s)' },
-	{ key: 'nozzleTemp', label: 'Nozzle temp (°C)' },
-	{ key: 'bedTemp', label: 'Bed temp (°C)' },
-	{ key: 'fanSpeed', label: 'Fan speed (%)' },
-	{ key: 'retractionLength', label: 'Retraction (mm)' },
-	{ key: 'retractionSpeed', label: 'Retraction speed (mm/s)' },
-	{ key: 'enableSupport', label: 'Supports', format: v => (v ? 'On' : 'Off') },
-	{ key: 'supportType', label: 'Support type' },
-	{ key: 'supportThreshold', label: 'Support threshold (°)' },
-	{ key: 'brimWidth', label: 'Brim width (mm)' },
-	{ key: 'raftLayers', label: 'Raft layers' },
-	{ key: 'skirtLoops', label: 'Skirt loops' },
-	{ key: 'adaptiveLayerHeight', label: 'Adaptive layers', format: v => (v ? 'On' : 'Off') },
-	{ key: 'ironingType', label: 'Ironing' },
-	{ key: 'fuzzySkin', label: 'Fuzzy skin' },
-	{ key: 'seamPosition', label: 'Seam position' },
-	{ key: 'firstLayerHeight', label: 'First layer height (mm)' },
-	{ key: 'infillPattern', label: 'Infill pattern' },
-	{ key: 'topSurfacePattern', label: 'Top surface pattern' },
-	{ key: 'bottomSurfacePattern', label: 'Bottom surface pattern' },
-	{ key: 'infillSpeed', label: 'Infill speed (mm/s)' },
-	{ key: 'solidInfillSpeed', label: 'Solid infill speed (mm/s)' },
-	{ key: 'supportTopGap', label: 'Support top gap (mm)' },
-	{ key: 'supportInterfaceLayers', label: 'Support interface layers' },
-	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)' },
-	{ key: 'enablePrimeTower', label: 'Prime tower', format: v => (v ? 'On' : 'Off') },
-	{ key: 'primeTowerWidth', label: 'Prime tower width (mm)' },
-	{ key: 'primeTowerBrimWidth', label: 'Prime tower brim (mm)' },
-	{ key: 'primeVolume', label: 'Prime volume (mm³)' },
-	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)' },
-	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)' },
-	{ key: 'overhangSpeed1', label: 'Overhang speed 0–25% (mm/s)' },
-	{ key: 'overhangSpeed2', label: 'Overhang speed 25–50% (mm/s)' },
-	{ key: 'overhangSpeed3', label: 'Overhang speed 50–75% (mm/s)' },
-	{ key: 'overhangSpeed4', label: 'Overhang speed 75–100% (mm/s)' },
-	{ key: 'topShellLayers', label: 'Top shell layers' },
-	{ key: 'bottomShellLayers', label: 'Bottom shell layers' },
-	{ key: 'bridgeSpeed', label: 'Bridge speed (mm/s)' },
-	{ key: 'bridgeFlow', label: 'Bridge flow (ratio)' },
-	{ key: 'bridgeNoSupport', label: 'Bridges without support', format: v => (v ? 'On' : 'Off') },
-	{ key: 'elephantFoot', label: 'Elephant foot compensation (mm)' },
-	{ key: 'infillWallOverlap', label: 'Infill/wall overlap (%)' },
-	{ key: 'ironingFlow', label: 'Ironing flow (%)' },
-	{ key: 'ironingSpacing', label: 'Ironing spacing (mm)' },
-	{ key: 'ironingSpeed', label: 'Ironing speed (mm/s)' },
-	{ key: 'supportInterfaceBottomLayers', label: 'Support interface bottom layers' },
-	{ key: 'supportBasePattern', label: 'Support base pattern' },
-	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)' },
-	{ key: 'draftShield', label: 'Draft shield' },
-	{ key: 'bedType', label: 'Build plate' },
+	{ key: 'layerHeight', label: 'Layer height (mm)', engineKey: 'layer_height', type: 'num' },
+	{ key: 'lineWidth', label: 'Line width (mm)', engineKey: 'line_width', type: 'num' },
+	{ key: 'perimeters', label: 'Perimeters', engineKey: 'wall_loops', type: 'num' },
+	{ key: 'infillDensity', label: 'Infill density (%)', engineKey: 'sparse_infill_density', type: 'pct' },
+	{ key: 'printSpeed', label: 'Print speed (mm/s)', engineKey: 'outer_wall_speed', type: 'num' },
+	{ key: 'firstLayerSpeed', label: 'First layer speed (mm/s)', engineKey: 'initial_layer_speed', type: 'num' },
+	{ key: 'nozzleTemp', label: 'Nozzle temp (°C)', engineKey: 'nozzle_temperature', type: 'num' },
+	{ key: 'bedTemp', label: 'Bed temp (°C)', engineKey: 'hot_plate_temp', type: 'num' },
+	{ key: 'fanSpeed', label: 'Fan speed (%)', engineKey: 'fan_max_speed', type: 'num' },
+	{ key: 'retractionLength', label: 'Retraction (mm)', engineKey: 'retraction_length', type: 'num' },
+	{ key: 'retractionSpeed', label: 'Retraction speed (mm/s)', engineKey: 'retraction_speed', type: 'num' },
+	{ key: 'enableSupport', label: 'Supports', engineKey: 'enable_support', type: 'bool', format: v => (v ? 'On' : 'Off') },
+	{ key: 'supportType', label: 'Support type', engineKey: 'support_type', type: 'str' },
+	{ key: 'supportThreshold', label: 'Support threshold (°)', engineKey: 'support_threshold_angle', type: 'num' },
+	{ key: 'brimWidth', label: 'Brim width (mm)', engineKey: 'brim_width', type: 'num' },
+	{ key: 'raftLayers', label: 'Raft layers', engineKey: 'raft_layers', type: 'num' },
+	{ key: 'skirtLoops', label: 'Skirt loops', engineKey: 'skirt_loops', type: 'num' },
+	{ key: 'adaptiveLayerHeight', label: 'Adaptive layers', engineKey: 'adaptive_layer_height', type: 'bool', format: v => (v ? 'On' : 'Off') },
+	{ key: 'ironingType', label: 'Ironing', engineKey: 'ironing_type', type: 'str' },
+	{ key: 'fuzzySkin', label: 'Fuzzy skin', engineKey: 'fuzzy_skin', type: 'str' },
+	{ key: 'seamPosition', label: 'Seam position', engineKey: 'seam_position', type: 'str' },
+	{ key: 'firstLayerHeight', label: 'First layer height (mm)', engineKey: 'initial_layer_print_height', type: 'num' },
+	{ key: 'infillPattern', label: 'Infill pattern', engineKey: 'sparse_infill_pattern', type: 'str' },
+	{ key: 'topSurfacePattern', label: 'Top surface pattern', engineKey: 'top_surface_pattern', type: 'str' },
+	{ key: 'bottomSurfacePattern', label: 'Bottom surface pattern', engineKey: 'bottom_surface_pattern', type: 'str' },
+	{ key: 'infillSpeed', label: 'Infill speed (mm/s)', engineKey: 'sparse_infill_speed', type: 'num' },
+	{ key: 'solidInfillSpeed', label: 'Solid infill speed (mm/s)', engineKey: 'internal_solid_infill_speed', type: 'num' },
+	{ key: 'supportTopGap', label: 'Support top gap (mm)', engineKey: 'support_top_z_distance', type: 'num' },
+	{ key: 'supportInterfaceLayers', label: 'Support interface layers', engineKey: 'support_interface_top_layers', type: 'num' },
+	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)', engineKey: 'support_interface_spacing', type: 'num' },
+	{ key: 'enablePrimeTower', label: 'Prime tower', engineKey: 'enable_prime_tower', type: 'bool', format: v => (v ? 'On' : 'Off') },
+	{ key: 'primeTowerWidth', label: 'Prime tower width (mm)', engineKey: 'prime_tower_width', type: 'num' },
+	{ key: 'primeTowerBrimWidth', label: 'Prime tower brim (mm)', engineKey: 'prime_tower_brim_width', type: 'num' },
+	{ key: 'primeVolume', label: 'Prime volume (mm³)', engineKey: 'prime_volume', type: 'num' },
+	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)', engineKey: 'wipe_tower_rotation_angle', type: 'num' },
+	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)', engineKey: 'wipe_tower_extra_spacing', type: 'pct' },
+	{ key: 'overhangSpeed1', label: 'Overhang speed 0–25% (mm/s)', engineKey: 'overhang_1_4_speed', type: 'num' },
+	{ key: 'overhangSpeed2', label: 'Overhang speed 25–50% (mm/s)', engineKey: 'overhang_2_4_speed', type: 'num' },
+	{ key: 'overhangSpeed3', label: 'Overhang speed 50–75% (mm/s)', engineKey: 'overhang_3_4_speed', type: 'num' },
+	{ key: 'overhangSpeed4', label: 'Overhang speed 75–100% (mm/s)', engineKey: 'overhang_4_4_speed', type: 'num' },
+	{ key: 'topShellLayers', label: 'Top shell layers', engineKey: 'top_shell_layers', type: 'num' },
+	{ key: 'bottomShellLayers', label: 'Bottom shell layers', engineKey: 'bottom_shell_layers', type: 'num' },
+	{ key: 'bridgeSpeed', label: 'Bridge speed (mm/s)', engineKey: 'bridge_speed', type: 'num' },
+	{ key: 'bridgeFlow', label: 'Bridge flow (ratio)', engineKey: 'bridge_flow', type: 'num' },
+	{ key: 'bridgeNoSupport', label: 'Bridges without support', engineKey: 'bridge_no_support', type: 'bool', format: v => (v ? 'On' : 'Off') },
+	{ key: 'elephantFoot', label: 'Elephant foot compensation (mm)', engineKey: 'elefant_foot_compensation', type: 'num' },
+	{ key: 'infillWallOverlap', label: 'Infill/wall overlap (%)', engineKey: 'infill_wall_overlap', type: 'pct' },
+	{ key: 'ironingFlow', label: 'Ironing flow (%)', engineKey: 'ironing_flow', type: 'pct' },
+	{ key: 'ironingSpacing', label: 'Ironing spacing (mm)', engineKey: 'ironing_spacing', type: 'num' },
+	{ key: 'ironingSpeed', label: 'Ironing speed (mm/s)', engineKey: 'ironing_speed', type: 'num' },
+	{ key: 'supportInterfaceBottomLayers', label: 'Support interface bottom layers', engineKey: 'support_interface_bottom_layers', type: 'num' },
+	{ key: 'supportBasePattern', label: 'Support base pattern', engineKey: 'support_base_pattern', type: 'str' },
+	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)', engineKey: 'tree_support_branch_angle', type: 'num' },
+	{ key: 'draftShield', label: 'Draft shield', engineKey: 'draft_shield', type: 'str' },
+	{ key: 'bedType', label: 'Build plate', engineKey: 'curr_bed_type', type: 'str' },
 ]
 
 /**
@@ -339,6 +344,68 @@ export function mergedToOverrideForm(merged = {}) {
 		bedType: merged.bedType ?? merged.curr_bed_type ?? merged.default_bed_type ?? '',
 	}
 }
+
+/**
+ * Full-coverage profile-baseline for EVERY override field (not just the ~19 in
+ * mergedToOverrideForm). Reads each field's `engineKey` from the merged resolved
+ * settings and normalizes by `type`. Used for modified-value highlight +
+ * reset-to-default across the whole advanced panel. Kept separate from
+ * mergedToOverrideForm so the existing (tested) basic mapping is untouched.
+ * @param {object} merged output of mergeProfileSettings (engine-key settings)
+ * @returns {Record<string, string|number|boolean>}
+ */
+export function mergedToOverrideFormFull(merged = {}) {
+	const out = {}
+	for (const { key, engineKey, type } of OVERRIDE_FIELD_DEFS) {
+		if (!engineKey) {
+			out[key] = ''
+			continue
+		}
+		const raw = merged[engineKey]
+		if (raw === undefined || raw === null || raw === '') {
+			out[key] = type === 'bool' ? false : ''
+			continue
+		}
+		if (type === 'bool') {
+			out[key] = raw === true || raw === 1 || raw === '1' || raw === 'true'
+		} else if (type === 'pct') {
+			const n = Number(raw)
+			out[key] = Number.isNaN(n) ? '' : (n <= 1 ? Math.round(n * 100) : Math.round(n))
+		} else if (type === 'num') {
+			const n = Number(raw)
+			out[key] = Number.isNaN(n) ? '' : n
+		} else {
+			out[key] = String(raw)
+		}
+	}
+	return out
+}
+
+/**
+ * Is a single override field currently modified vs the profile baseline?
+ * @param {string} key override field key
+ * @param {object} form current override form (store `overrides`)
+ * @param {object} baseline output of mergedToOverrideFormFull
+ * @returns {boolean}
+ */
+export function isOverrideModified(key, form = {}, baseline = {}) {
+	const def = OVERRIDE_FIELD_DEFS.find((d) => d.key === key)
+	const v = form[key]
+	// An empty/unset field means "use profile default" → never modified.
+	if (v === '' || v === null || v === undefined) {
+		return false
+	}
+	const o = formatOverrideValue(v, def?.format)
+	const d = formatOverrideValue(baseline[key], def?.format)
+	return o !== '' && o !== d
+}
+
+/** Quality tiers → layer-height (mm), the way Cura/Orca lead with a quality pick. */
+export const QUALITY_TIERS = Object.freeze([
+	{ id: 'draft', label: 'Draft', layerHeight: 0.28 },
+	{ id: 'standard', label: 'Standard', layerHeight: 0.2 },
+	{ id: 'fine', label: 'Fine', layerHeight: 0.12 },
+])
 
 /**
  * @param {object} profiles

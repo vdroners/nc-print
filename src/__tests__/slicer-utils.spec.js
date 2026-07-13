@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest'
 import {
 	buildSliceOverrides,
 	mergedToOverrideForm,
+	mergedToOverrideFormFull,
+	isOverrideModified,
+	QUALITY_TIERS,
 	mergeProfileSettings,
 	formatPrintTime,
 	parseStlMetadata,
@@ -178,6 +181,42 @@ describe('slicer-utils', () => {
 		expect(mergedToOverrideForm({ curr_bed_type: 'Cool Plate' }).bedType).toBe('Cool Plate')
 		expect(mergedToOverrideForm({ default_bed_type: 'Smooth PEI Plate' }).bedType).toBe('Smooth PEI Plate')
 		expect(mergedToOverrideForm({}).bedType).toBe('')
+	})
+
+	it('mergedToOverrideFormFull maps advanced engine keys (not just basics)', () => {
+		const full = mergedToOverrideFormFull({
+			outer_wall_speed: 120,
+			sparse_infill_speed: 200,        // advanced (not in the basic map)
+			overhang_1_4_speed: 50,          // advanced
+			sparse_infill_density: 0.15,     // pct → 15
+			enable_support: 1,               // bool
+			ironing_type: 'top',             // str
+			infill_wall_overlap: 0.25,       // pct fraction → 25
+		})
+		expect(full.printSpeed).toBe(120)
+		expect(full.infillSpeed).toBe(200)
+		expect(full.overhangSpeed1).toBe(50)
+		expect(full.infillDensity).toBe(15)
+		expect(full.enableSupport).toBe(true)
+		expect(full.ironingType).toBe('top')
+		expect(full.infillWallOverlap).toBe(25)
+	})
+
+	it('isOverrideModified: empty field = not modified; different value = modified', () => {
+		const baseline = mergedToOverrideFormFull({ layer_height: 0.2, sparse_infill_speed: 200 })
+		// unset override → not modified
+		expect(isOverrideModified('layerHeight', { layerHeight: '' }, baseline)).toBe(false)
+		// same as baseline → not modified
+		expect(isOverrideModified('layerHeight', { layerHeight: 0.2 }, baseline)).toBe(false)
+		// different → modified
+		expect(isOverrideModified('layerHeight', { layerHeight: 0.3 }, baseline)).toBe(true)
+		expect(isOverrideModified('infillSpeed', { infillSpeed: 250 }, baseline)).toBe(true)
+	})
+
+	it('QUALITY_TIERS expose draft/standard/fine layer heights', () => {
+		const ids = QUALITY_TIERS.map((t) => t.id)
+		expect(ids).toEqual(['draft', 'standard', 'fine'])
+		expect(QUALITY_TIERS.find((t) => t.id === 'standard').layerHeight).toBe(0.2)
 	})
 
 	it('formatPrintTime', () => {

@@ -327,4 +327,26 @@ describe('meshState (Sprint B)', () => {
 		store.removePlate('plate-1')
 		expect(store.plates.length).toBeGreaterThanOrEqual(1)
 	})
+
+	it('setQualityTier sets layer height; resetOverrideField/resetAllOverrides revert to profile', () => {
+		const store = usePrintStore()
+		// Seed a selected profile trio with a resolved layer_height baseline.
+		store.profiles.printers = [{ id: 'K1', name: 'K1', kind: 'printer', settings_json: {} }]
+		store.profiles.filaments = [{ id: 'PLA', name: 'PLA', kind: 'filament', settings_json: {} }]
+		store.profiles.processes = [{ id: 'std', name: 'std', kind: 'process', settings_json: { layer_height: 0.2 } }]
+		store.selection = { printerId: 'K1', filamentId: 'PLA', processId: 'std' }
+
+		// Quality tier writes layerHeight.
+		store.setQualityTier(0.28)
+		expect(Number(store.overrides.layerHeight)).toBe(0.28)
+
+		// resetOverrideField reverts to the profile baseline (0.2).
+		store.resetOverrideField('layerHeight')
+		expect(Number(store.overrides.layerHeight)).toBe(0.2)
+
+		// A modified field, then resetAll restores the whole form to defaults.
+		store.overrides = { ...store.overrides, printSpeed: 999 }
+		store.resetAllOverrides()
+		expect(store.overrides.printSpeed === '' || store.overrides.printSpeed == null).toBe(true)
+	})
 })
