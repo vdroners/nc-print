@@ -597,6 +597,7 @@ def test_calibration_generators_all_emit_valid_gcode():
     assert set(ids) == {
         "temp-tower", "retract-tower", "flow-test", "pressure-advance",
         "pressure-advance-pattern", "first-layer", "single-line",
+        "tolerance", "input-shaping",
     }
     for cid in ids:
         r = generate(cid)
@@ -633,6 +634,26 @@ def test_calibration_generate_validates():
     except ValueError:
         raised2 = True
     assert raised2
+
+
+def test_tolerance_and_input_shaping_generators():
+    from calibration_gcode import generate
+    tol = generate("tolerance", {"clearanceStart": 0.0, "clearanceEnd": 0.4, "blocks": 5})
+    assert "; CALIBRATION:tolerance" in tol["gcode"]
+    assert "CALIBRATION_END" in tol["gcode"]
+    assert tol["filament_g"] > 0 and tol["expected_minutes"] >= 1
+    ish = generate("input-shaping", {"speedStart": 50, "speedEnd": 150, "firmware": "klipper"})
+    assert "; CALIBRATION:input-shaping" in ish["gcode"]
+    assert "SET_VELOCITY_LIMIT" in ish["gcode"]  # klipper limits ramp
+    ish_m = generate("input-shaping", {"firmware": "marlin"})
+    assert "M201" in ish_m["gcode"] and "M203" in ish_m["gcode"]
+    # range validation still bites
+    raised = False
+    try:
+        generate("tolerance", {"clearanceStart": 0.5, "clearanceEnd": 0.1})
+    except ValueError:
+        raised = True
+    assert raised
 
 
 def test_filament_materials_catalog():

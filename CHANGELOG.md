@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.60.1] - 2026-07-13
+
+Slicer-GUI alignment — deferred tier, part 1: calibration suite (verify + two
+new generators). Adapter-only (needs a sidecar rebuild); the Overview →
+Calibration panel is data-driven and picks the new tests up automatically.
+
+### Added — calibration generators
+
+- **Tolerance / fit test** — a strip of stepped-clearance square holes sized for
+  a peg. Print it, drop your peg (or part) in, and read off the tightest cell it
+  fits — that clearance is the fit your printer actually holds, for press/slip/
+  free fits on functional parts.
+- **Input shaping / ringing tower** — a wall printed with speed and acceleration
+  ramping up its height (Klipper `SET_VELOCITY_LIMIT` / Marlin `M201`/`M203`).
+  Ghosting past the sharp corner reveals resonance; re-run with the input shaper
+  enabled to confirm the tuning. Visual ringing tower, not an ADXL sweep.
+
+Both emit the standard `; CALIBRATION:<type>` header + `CALIBRATION_END` marker
+so the print tracker recognises them, and expose their tunable params in the
+existing Calibration panel form. The seven prior generators (temp tower,
+retraction, flow, pressure-advance tower + line pattern, first-layer, max-flow
+speed) are unchanged.
+
+### Tests
+
+- adapter `test_adapter.py`: catalog now lists nine generators; new
+  `test_tolerance_and_input_shaping_generators` smoke-tests both (header + end
+  marker + positive filament/time, Klipper vs Marlin limit commands, range
+  validation). Full adapter suite green (58).
+
 ## [1.60.0] - 2026-07-13
 
 Slicer-GUI alignment — Preview (4th/final of the multi-part round). Adapter +

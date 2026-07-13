@@ -1,7 +1,7 @@
 """Procedural calibration G-code generators (ported from 3dprintforge
 src/server/calibration-generator.js).
 
-Seven tuning prints that emit Marlin/Klipper-compatible G-code directly — no
+Nine tuning prints that emit Marlin/Klipper-compatible G-code directly — no
 slice engine needed. Each generator is a pure function over numeric params and
 returns {name, description, gcode, expected_minutes, filament_g, type}. All emit
 a `; CALIBRATION:<type>` header so the print tracker can recognise calibration
@@ -9,8 +9,8 @@ runs.
 
 This complements the engine-sliced calibration in calibration.py (temp tower via
 3MF + shipped flow models): these are lighter (string-built, no engine exec) and
-cover retraction, flow, pressure-advance (tower + line pattern), first-layer, and
-max-flow speed tests.
+cover retraction, flow, pressure-advance (tower + line pattern), first-layer,
+max-flow speed, tolerance/fit, and input-shaping/ringing tests.
 """
 from __future__ import annotations
 
@@ -439,6 +439,142 @@ def generate_single_line_test(params=None) -> dict:
     }
 
 
+def generate_tolerance_test(params=None) -> dict:
+    """Fit/clearance test: a strip of square holes at stepped nominal-to-actual
+    clearances. Print, then check which hole a fixed peg (or your own part) drops
+    into cleanly — that clearance is the fit your printer holds. Handy for press,
+    slip, and free fits on functional parts.
+    """
+    p = _merge({
+        "bedTemp": 60, "hotendTemp": 215, "clearanceStart": 0.0, "clearanceEnd": 0.5,
+        "blocks": 6, "pegSize": 10, "wall": 3, "height": 6,
+        "layerHeight": 0.2, "lineWidth": 0.45, "feed": 1500, "gap": 4,
+    }, params)
+    _validate_range(p["clearanceStart"], p["clearanceEnd"], "clearance", 0, 2)
+    if p["blocks"] < 2 or p["blocks"] > 12:
+        raise ValueError("blocks 2..12")
+    if p["pegSize"] < 3 or p["pegSize"] > 40:
+        raise ValueError("pegSize 3..40")
+    step = (p["clearanceEnd"] - p["clearanceStart"]) / (p["blocks"] - 1)
+    xsec = _xsec(p["lineWidth"], p["layerHeight"])
+    layers = max(1, round(p["height"] / p["layerHeight"]))
+    # Each cell is a hollow square: outer = peg + 2*wall + clearance, inner = peg + clearance.
+    outer = p["pegSize"] + 2 * p["wall"] + p["clearanceEnd"]
+    pitch = outer + p["gap"]
+    total_w = pitch * p["blocks"]
+    x0 = 125 - total_w / 2
+    cy = 100
+
+    g = _header("tolerance", p) + _prelude(p["bedTemp"], p["hotendTemp"])
+    z = 0.0
+    e_total = 0.0
+    for layer in range(layers):
+        z += p["layerHeight"]
+        g += _layer_header(layer, z)
+        for b in range(p["blocks"]):
+            clearance = round(p["clearanceStart"] + b * step, 3)
+            hole = p["pegSize"] + clearance
+            outer_b = hole + 2 * p["wall"]
+            ox = x0 + b * pitch
+            # outer square
+            ohx, ohy = ox + outer_b, cy + outer_b
+            perim_o = 4 * outer_b * xsec
+            g += f"G1 X{ox:.2f} Y{cy:.2f} F4500\n"
+            g += f"G1 X{ohx:.2f} Y{cy:.2f} E{e_total + perim_o / 4:.4f} F{p['feed']}\n"
+            g += f"G1 X{ohx:.2f} Y{ohy:.2f} E{e_total + perim_o / 2:.4f}\n"
+            g += f"G1 X{ox:.2f} Y{ohy:.2f} E{e_total + 3 * perim_o / 4:.4f}\n"
+            g += f"G1 X{ox:.2f} Y{cy:.2f} E{e_total + perim_o:.4f}\n"
+            e_total += perim_o
+            # inner square (the hole wall)
+            ix, iy = ox + p["wall"], cy + p["wall"]
+            ihx, ihy = ix + hole, iy + hole
+            perim_i = 4 * hole * xsec
+            g += f"G1 X{ix:.2f} Y{iy:.2f} F4500\n"
+            g += f"G1 X{ihx:.2f} Y{iy:.2f} E{e_total + perim_i / 4:.4f} F{p['feed']}\n"
+            g += f"G1 X{ihx:.2f} Y{ihy:.2f} E{e_total + perim_i / 2:.4f}\n"
+            g += f"G1 X{ix:.2f} Y{ihy:.2f} E{e_total + 3 * perim_i / 4:.4f}\n"
+            g += f"G1 X{ix:.2f} Y{iy:.2f} E{e_total + perim_i:.4f}\n"
+            e_total += perim_i
+    g += _POSTLUDE
+    return {
+        "name": f"Tolerance Test {p['clearanceStart']}-{p['clearanceEnd']}mm",
+        "description": (
+            f"{p['blocks']} square holes for a {p['pegSize']}mm peg, clearance stepped "
+            f"{step:.3f}mm each. The tightest cell your peg drops into = your printer's fit clearance."
+        ),
+        "gcode": g,
+        "expected_minutes": max(1, round(layers * p["blocks"] * (8 * outer) / p["feed"] * 1.2)),
+        "filament_g": round(e_total * _PLA_DENSITY, 1),
+        "type": "tolerance",
+    }
+
+
+def generate_input_shaping_test(params=None) -> dict:
+    """Ringing / input-shaping test: a thin vertical wall printed at increasing
+    speed up its height. On firmware that supports it (Klipper SET_VELOCITY_LIMIT
+    or Marlin) the ghosting past sharp corners reveals resonance; use it to sanity
+    -check input-shaper tuning. This is a visual ringing tower, NOT an ADXL sweep.
+    """
+    p = _merge({
+        "bedTemp": 60, "hotendTemp": 215, "speedStart": 50, "speedEnd": 200,
+        "accelStart": 1000, "accelEnd": 8000, "size": 60, "notchDepth": 5,
+        "height": 40, "layerHeight": 0.2, "lineWidth": 0.45, "firmware": "klipper",
+    }, params)
+    _validate_range(p["speedStart"], p["speedEnd"], "speed", 10, 500)
+    _validate_range(p["accelStart"], p["accelEnd"], "accel", 100, 30000)
+    if p["firmware"] not in ("klipper", "marlin"):
+        raise ValueError("firmware: klipper|marlin")
+    cx, cy = 100, 100
+    half = p["size"] / 2
+    layers = max(2, round(p["height"] / p["layerHeight"]))
+    xsec = _xsec(p["lineWidth"], p["layerHeight"])
+    sp_step = (p["speedEnd"] - p["speedStart"]) / (layers - 1)
+    ac_step = (p["accelEnd"] - p["accelStart"]) / (layers - 1)
+    # An L-shaped wall with a sharp corner + a notch spike to provoke ringing.
+    perim_e = (2 * p["size"] + p["notchDepth"]) * xsec
+
+    g = _header("input-shaping", p) + _prelude(p["bedTemp"], p["hotendTemp"])
+    g += "; Ringing tower: speed + accel ramp up with height. Ghosting past the\n"
+    g += "; sharp corner shows resonance; compare with input-shaper enabled.\n"
+    z = 0.0
+    for layer in range(layers):
+        z += p["layerHeight"]
+        speed = round(p["speedStart"] + layer * sp_step)
+        accel = round(p["accelStart"] + layer * ac_step)
+        g += _layer_header(layer, z)
+        if p["firmware"] == "klipper":
+            g += f"SET_VELOCITY_LIMIT VELOCITY={speed} ACCEL={accel}\n"
+        else:
+            g += f"M203 X{speed} Y{speed}\nM201 X{accel} Y{accel}\n"
+        f = speed * 60
+        # L-wall with a notch spike at the corner
+        g += f"G1 X{cx - half:.2f} Y{cy - half:.2f} F4500\n"
+        e = perim_e / 4
+        g += f"G1 X{cx + half:.2f} Y{cy - half:.2f} E{e:.4f} F{f}\n"
+        # notch spike inward then back — forces a fast direction reversal
+        e += (p["notchDepth"] / 2) * xsec
+        g += f"G1 X{cx + half:.2f} Y{cy - half + p['notchDepth']:.2f} E{e:.4f}\n"
+        e += (2 * half - p["notchDepth"]) * xsec + (p["notchDepth"] / 2) * xsec
+        g += f"G1 X{cx + half:.2f} Y{cy + half:.2f} E{e:.4f}\n"
+        e += (2 * half) * xsec
+        g += f"G1 X{cx - half:.2f} Y{cy + half:.2f} E{e:.4f}\n"
+        g += "G92 E0\n"
+    if p["firmware"] == "klipper":
+        g += "SET_VELOCITY_LIMIT VELOCITY=100 ACCEL=3000 ; restore defaults\n"
+    g += _POSTLUDE
+    return {
+        "name": f"Input Shaping Tower ({p['firmware']})",
+        "description": (
+            f"Speed {p['speedStart']}->{p['speedEnd']}mm/s, accel {p['accelStart']}->{p['accelEnd']} "
+            f"ramped over {p['height']}mm. Inspect ghosting past the corner; re-run with input-shaper on."
+        ),
+        "gcode": g,
+        "expected_minutes": max(1, round(layers * (2 * p["size"]) / ((p["speedStart"] + p["speedEnd"]) / 2 * 60) * 1.3)),
+        "filament_g": round(perim_e * layers * _PLA_DENSITY, 1),
+        "type": "input-shaping",
+    }
+
+
 # ── Dispatch + catalog ──────────────────────────────────────────────────
 
 _GENERATORS = {
@@ -449,6 +585,8 @@ _GENERATORS = {
     "pressure-advance-pattern": generate_pressure_advance_pattern,
     "first-layer": generate_first_layer_test,
     "single-line": generate_single_line_test,
+    "tolerance": generate_tolerance_test,
+    "input-shaping": generate_input_shaping_test,
 }
 
 # UI catalog: id, label, help + the tunable params each accepts (for form gen).
@@ -474,6 +612,12 @@ CATALOG = [
     {"id": "single-line", "name": "Max-flow speed test", "kind": "gcode",
      "help": "Single lines at stepped speeds — find max consistent volumetric flow.",
      "params": {"speedStart": 30, "speedEnd": 200, "lines": 8, "hotendTemp": 215, "bedTemp": 60}},
+    {"id": "tolerance", "name": "Tolerance / fit test", "kind": "gcode",
+     "help": "Stepped-clearance holes for a peg — find the fit your printer holds.",
+     "params": {"clearanceStart": 0.0, "clearanceEnd": 0.5, "blocks": 6, "pegSize": 10, "hotendTemp": 215, "bedTemp": 60}},
+    {"id": "input-shaping", "name": "Input shaping / ringing tower", "kind": "gcode",
+     "help": "Speed+accel ramp up a wall — ghosting past the corner shows resonance.",
+     "params": {"speedStart": 50, "speedEnd": 200, "accelStart": 1000, "accelEnd": 8000, "firmware": "klipper", "hotendTemp": 215, "bedTemp": 60}},
 ]
 
 
