@@ -1,5 +1,28 @@
 # Changelog
 
+## [1.58.0] - 2026-07-12
+
+Slicer-GUI alignment — Viewport (2nd of the multi-part round).
+
+### Added — Prepare viewport
+
+- **Persistent camera view-cube** — an always-visible corner cluster
+  (Iso / Top / Front / Right / Fit), the standard slicer nav affordance. The
+  camera presets already existed end-to-end but were buried inside the transient
+  "View & section" tool; now they're one click away any time. New
+  `ViewportCameraCube.vue` → `@camera` → existing `onCamera` →
+  `viewport.setCameraPreset`.
+- **Scene-tree right-click context menu** — right-click any object in the Objects
+  list for Select / Duplicate / Center on bed / Rename… / Delete, matching every
+  desktop slicer's object-list. Reuses the existing duplicate/delete emits +
+  store `renameObject`; delete guards the last object.
+
+### Tests
+
+- vitest `viewport-alignment`: camera-cube presets + `@camera` wiring + immersive
+  docking; scene-list context menu actions + rename/guard; PrepareTab `@center`
+  handler. Full suite green (427).
+
 ## [1.57.0] - 2026-07-12
 
 Settings-UX alignment with mainstream slicers (1st of a multi-part GUI-alignment

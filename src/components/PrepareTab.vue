@@ -9,6 +9,7 @@ import PrepareOverrides from './PrepareOverrides.vue'
 import ViewportToolbar from './ViewportToolbar.vue'
 import ViewportHistoryBox from './ViewportHistoryBox.vue'
 import ViewportOrientPad from './ViewportOrientPad.vue'
+import ViewportCameraCube from './ViewportCameraCube.vue'
 import PlateTabs from './PlateTabs.vue'
 import MeshHealthPanel from './MeshHealthPanel.vue'
 import ThreeMfObjectPicker from './ThreeMfObjectPicker.vue'
@@ -36,6 +37,7 @@ export default {
 		ViewportToolbar,
 		ViewportHistoryBox,
 		ViewportOrientPad,
+		ViewportCameraCube,
 		PlateTabs,
 		MeshHealthPanel,
 		ThreeMfObjectPicker,
@@ -106,6 +108,11 @@ export default {
 		onSelectObject(id) {
 			// Drive the viewport; its selection handler mirrors back into the store.
 			this.$refs.viewport?.selectObjectInViewport?.(id)
+		},
+		onCenterObject(id) {
+			// Context-menu "Center on bed": select then recenter that object.
+			this.$refs.viewport?.selectObjectInViewport?.(id)
+			this.onCenter()
 		},
 		onDuplicateObject(id) {
 			// Select the source, clone geometry in the viewport; the viewport
@@ -526,7 +533,8 @@ export default {
 				<SceneObjectList
 					@select="onSelectObject"
 					@duplicate="onDuplicateObject"
-					@delete="onDeleteObject" />
+					@delete="onDeleteObject"
+					@center="onCenterObject" />
 			</NcPrintCollapsible>
 
 			<NcPrintCollapsible id="prepare-mesh-health" title="Mesh & health" icon="cube">
@@ -575,6 +583,12 @@ export default {
 					@rotate="onRotate"
 					@lay-flat="onLayFlat"
 					@scale-to-fit="onScaleToFit" />
+
+				<!-- Persistent camera views (right edge, mid). -->
+				<ViewportCameraCube
+					v-if="printStore.hasModel"
+					class="nc-print-viewport-camcube"
+					@camera="onCamera" />
 
 				<PrepareToolRail
 					v-if="canTransform"
@@ -664,7 +678,8 @@ export default {
 .nc-print-viewport-chip,
 .nc-print-viewport-history,
 .nc-print-viewport-orientpad,
-.nc-print-viewport-plates {
+.nc-print-viewport-plates,
+.nc-print-viewport-camcube {
 	margin-bottom: var(--nc-gcs-space-sm);
 }
 
@@ -728,6 +743,16 @@ export default {
 		position: absolute;
 		bottom: 8px;
 		left: 316px;
+		z-index: 6;
+		margin: 0;
+	}
+
+	/* Camera views — right edge, vertically centered (clear of history/orientpad). */
+	.nc-print-prepare--immersive .nc-print-viewport-camcube {
+		position: absolute;
+		top: 50%;
+		transform: translateY(-50%);
+		right: 276px;
 		z-index: 6;
 		margin: 0;
 	}

@@ -22,6 +22,20 @@ export default {
 			return this.printStore.selectedObjectId
 		},
 	},
+	data() {
+		return {
+			menu: { open: false, id: null, x: 0, y: 0 },
+		}
+	},
+	mounted() {
+		this._closeMenu = () => { this.menu.open = false }
+		window.addEventListener('click', this._closeMenu)
+		window.addEventListener('scroll', this._closeMenu, true)
+	},
+	beforeDestroy() {
+		window.removeEventListener('click', this._closeMenu)
+		window.removeEventListener('scroll', this._closeMenu, true)
+	},
 	methods: {
 		select(id) {
 			this.$emit('select', id)
@@ -31,6 +45,35 @@ export default {
 		},
 		remove(id) {
 			this.$emit('delete', id)
+		},
+		openMenu(e, id) {
+			this.select(id)
+			this.menu = { open: true, id, x: e.clientX, y: e.clientY }
+		},
+		menuAction(action) {
+			const id = this.menu.id
+			this.menu.open = false
+			if (!id) {
+				return
+			}
+			if (action === 'select') {
+				this.select(id)
+			} else if (action === 'duplicate') {
+				this.duplicate(id)
+			} else if (action === 'delete') {
+				if (this.objects.length > 1) {
+					this.remove(id)
+				}
+			} else if (action === 'center') {
+				this.select(id)
+				this.$emit('center', id)
+			} else if (action === 'rename') {
+				const obj = this.objects.find((o) => o.id === id)
+				const name = window.prompt('Rename object', obj?.name || '')
+				if (name && name.trim()) {
+					this.printStore.renameObject(id, name.trim())
+				}
+			}
 		},
 	},
 }
@@ -47,7 +90,8 @@ export default {
 				:key="obj.id"
 				class="nc-print-scene-list__row"
 				:class="{ 'is-selected': obj.id === selectedId }"
-				@click="select(obj.id)">
+				@click="select(obj.id)"
+				@contextmenu.prevent="openMenu($event, obj.id)">
 				<span class="nc-print-scene-list__name" :title="obj.name">{{ obj.name }}</span>
 				<span class="nc-print-scene-list__actions">
 					<button
@@ -68,6 +112,21 @@ export default {
 						<NcPrintIcon name="close" :size="13" />
 					</button>
 				</span>
+			</li>
+		</ul>
+
+		<!-- Right-click context menu (fixed-positioned at the cursor). -->
+		<ul
+			v-if="menu.open"
+			class="nc-print-ctxmenu"
+			:style="{ top: menu.y + 'px', left: menu.x + 'px' }"
+			@click.stop>
+			<li><button type="button" @click="menuAction('select')">Select</button></li>
+			<li><button type="button" @click="menuAction('duplicate')">Duplicate</button></li>
+			<li><button type="button" @click="menuAction('center')">Center on bed</button></li>
+			<li><button type="button" @click="menuAction('rename')">Rename…</button></li>
+			<li>
+				<button type="button" class="nc-print-ctxmenu__danger" :disabled="objects.length <= 1" @click="menuAction('delete')">Delete</button>
 			</li>
 		</ul>
 	</div>
@@ -152,5 +211,42 @@ export default {
 .nc-print-scene-list__btn:disabled {
 	cursor: not-allowed;
 	opacity: 0.35;
+}
+
+.nc-print-ctxmenu {
+	position: fixed;
+	z-index: 50;
+	min-width: 150px;
+	margin: 0;
+	padding: 4px;
+	list-style: none;
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: var(--nc-gcs-radius-sm);
+	background: var(--nc-gcs-bg-elevated, var(--color-main-background));
+	box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+.nc-print-ctxmenu button {
+	appearance: none;
+	background: none;
+	border: none;
+	border-radius: 4px;
+	color: var(--nc-gcs-text-primary);
+	cursor: pointer;
+	display: block;
+	font: inherit;
+	font-size: var(--nc-gcs-text-sm);
+	padding: 6px 10px;
+	text-align: left;
+	width: 100%;
+}
+.nc-print-ctxmenu button:hover {
+	background: var(--color-background-hover);
+}
+.nc-print-ctxmenu__danger {
+	color: var(--color-error, #c33);
+}
+.nc-print-ctxmenu button:disabled {
+	cursor: not-allowed;
+	opacity: 0.4;
 }
 </style>
