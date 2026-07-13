@@ -2,6 +2,7 @@
  * Lazy-loaded Three.js viewport helpers (webpack chunk nc-print-three).
  * Uses Z-up coordinates to match slicer / Orca convention (bed in XY at z=0).
  */
+import { colorForSpeed } from '@/services/toolpath-3d.js'
 
 let _threePromise = null
 
@@ -915,7 +916,7 @@ export async function createViewport(canvas, wrap) {
 		 * @param {object} toolpath { layers: [{ z, features: { key: Float32Array }}], ... }
 		 * @param {Record<string, number>} colorMap feature key -> hex colour
 		 */
-		showToolpath(toolpath, colorMap = {}) {
+		showToolpath(toolpath, colorMap = {}, colorMode = 'feature') {
 			this.disposeToolpath()
 			if (!toolpath?.layers?.length) {
 				return
@@ -927,28 +928,40 @@ export async function createViewport(canvas, wrap) {
 			}
 			toolpathLayerCount = toolpath.layers.length
 			toolpathGroup = new THREE.Group()
+			const range = toolpath.speedRange || null
+			// Only use speed mode if we actually have a speed range + per-seg speeds.
+			const useSpeed = colorMode === 'speed' && range && range.max > range.min
 
 			// Concatenate each feature's segments across all layers into one buffer,
-			// tracking the source layer index per vertex so a range slider can
-			// show/hide layers via BufferGeometry draw ranges without rebuilds.
+			// tracking the source layer index per vertex (for the layer slider) and
+			// a per-vertex speed color when in speed mode.
 			const byFeature = new Map()
 			toolpath.layers.forEach((layer, li) => {
+				const layerSpeeds = layer.speeds || {}
 				for (const [feat, arr] of Object.entries(layer.features || {})) {
 					if (!arr?.length) {
 						continue
 					}
 					let acc = byFeature.get(feat)
 					if (!acc) {
-						acc = { positions: [], layerOfVertex: [] }
+						acc = { positions: [], layerOfVertex: [], colors: [] }
 						byFeature.set(feat, acc)
 					}
 					for (let i = 0; i < arr.length; i++) {
 						acc.positions.push(arr[i])
 					}
-					// two vertices per segment -> 6 floats
 					const verts = arr.length / 3
 					for (let v = 0; v < verts; v++) {
 						acc.layerOfVertex.push(li)
+					}
+					if (useSpeed) {
+						const spd = layerSpeeds[feat]
+						const segCount = verts / 2 // 2 verts per segment
+						for (let s = 0; s < segCount; s++) {
+							const [r, g, b] = colorForSpeed(spd ? spd[s] : range.min, range.min, range.max)
+							// same color for both vertices of the segment
+							acc.colors.push(r, g, b, r, g, b)
+						}
 					}
 				}
 			})
@@ -957,11 +970,17 @@ export async function createViewport(canvas, wrap) {
 				const geom = new THREE.BufferGeometry()
 				const pos = new Float32Array(acc.positions)
 				geom.setAttribute('position', new THREE.BufferAttribute(pos, 3))
-				const mat = new THREE.LineBasicMaterial({
-					color: colorMap[feat] ?? 0x8b949e,
-					transparent: feat === 'travel',
-					opacity: feat === 'travel' ? 0.35 : 1,
-				})
+				let mat
+				if (useSpeed && feat !== 'travel' && acc.colors.length === pos.length) {
+					geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(acc.colors), 3))
+					mat = new THREE.LineBasicMaterial({ vertexColors: true })
+				} else {
+					mat = new THREE.LineBasicMaterial({
+						color: colorMap[feat] ?? 0x8b949e,
+						transparent: feat === 'travel',
+						opacity: feat === 'travel' ? 0.35 : 1,
+					})
+				}
 				const line = new THREE.LineSegments(geom, mat)
 				line.visible = feat !== 'travel' // travel hidden by default
 				toolpathGroup.add(line)
@@ -1007,6 +1026,36 @@ export async function createViewport(canvas, wrap) {
 					}
 				}
 				line.geometry.setDrawRange(0, count)
+			}
+		},
+		/**
+		 * Show all layers below `topLayer`, plus only the first `moveCount` segments
+		 * of `topLayer` — the in-layer "sequential moves" scrubber. Cheap draw-range
+		 * math over the same layerOfVertex map (2 verts/segment).
+		 * @param {number} topLayer
+		 * @param {number} moveCount segments to reveal within the top layer
+		 */
+		setToolpathMoveRange(topLayer, moveCount) {
+			if (!toolpathGroup) {
+				return
+			}
+			const cap = Number.isFinite(topLayer) ? topLayer : toolpathLayerCount
+			for (const { line, layerOfVertex } of toolpathLines.values()) {
+				// vertices below the top layer are always shown; within the top layer
+				// reveal only the first moveCount segments (moveCount*2 vertices).
+				let belowCount = layerOfVertex.length
+				let topStart = layerOfVertex.length
+				for (let i = 0; i < layerOfVertex.length; i++) {
+					if (layerOfVertex[i] >= cap && topStart === layerOfVertex.length) {
+						topStart = i
+					}
+					if (layerOfVertex[i] > cap) {
+						belowCount = i
+						break
+					}
+				}
+				const inTop = Math.min(Math.max(0, moveCount) * 2, belowCount - topStart)
+				line.geometry.setDrawRange(0, topStart + inTop)
 			}
 		},
 		setToolpathFeatureVisible(feature, visible) {

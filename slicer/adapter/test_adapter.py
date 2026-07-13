@@ -227,17 +227,17 @@ _SAMPLE_GCODE = """; header
 ;Z:0.2
 ;HEIGHT:0.2
 ;TYPE:Outer wall
-G1 X0 Y0 Z0.2 E0
+G1 X0 Y0 Z0.2 E0 F1800
 G1 X10 Y0 E1
 G1 X10 Y10 E2
 ;TYPE:Sparse infill
-G1 X5 Y5 E3
-G0 X0 Y0
+G1 X5 Y5 E3 F7200
+G0 X0 Y0 F9000
 ;LAYER_CHANGE
 ;Z:0.4
 ;HEIGHT:0.2
 ;TYPE:Outer wall
-G1 X0 Y0 Z0.4 E4
+G1 X0 Y0 Z0.4 E4 F1800
 G1 X10 Y0 E5
 """
 
@@ -262,6 +262,14 @@ def test_toolpath_parser_layers_and_features():
     # positions are flat [x0,y0,z0,x1,y1,z1,...] — multiple of 6
     ow = l0["segments"]["outer_wall"]["positions"]
     assert len(ow) % 6 == 0 and len(ow) >= 6
+    # one speed per SEGMENT (per 6 position floats) for color-by-speed
+    ows = l0["segments"]["outer_wall"]["speeds"]
+    assert len(ows) * 6 == len(ow)
+    # F1800 mm/min → 30 mm/s (sticky across the following moves)
+    assert ows[0] == 30.0
+    # speed range excludes travel; outer-wall 30, sparse-infill 120 mm/s
+    assert tp["meta"]["speed_min"] == 30.0
+    assert tp["meta"]["speed_max"] == 120.0
     # bbox spans the moves
     assert tp["bbox"]["min"][2] == 0.2
     assert tp["bbox"]["max"][2] == 0.4

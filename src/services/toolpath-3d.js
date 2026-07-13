@@ -71,20 +71,57 @@ export async function fetchToolpath(jobId) {
 	const data = await res.json()
 	const layers = (data.layers || []).map((layer) => {
 		const features = {}
+		const speeds = {}
 		for (const [feat, seg] of Object.entries(layer.segments || {})) {
 			const pos = seg?.positions
 			if (Array.isArray(pos) && pos.length >= 6) {
 				features[feat] = new Float32Array(pos)
+				// One speed per segment (parallel array; may be absent on an
+				// un-rebuilt sidecar → color-by-speed falls back to feature mode).
+				if (Array.isArray(seg.speeds) && seg.speeds.length) {
+					speeds[feat] = new Float32Array(seg.speeds)
+				}
 			}
 		}
-		return { z: layer.z, height: layer.height, features }
+		return { z: layer.z, height: layer.height, features, speeds }
 	})
+	const meta = data.meta || {}
 	return {
 		layers,
 		bbox: data.bbox || null,
 		featureTypes: data.feature_types || Object.keys(FEATURE_COLORS),
-		layerCount: data.meta?.layer_count ?? layers.length,
+		layerCount: meta.layer_count ?? layers.length,
+		speedRange: (meta.speed_min != null && meta.speed_max != null)
+			? { min: meta.speed_min, max: meta.speed_max }
+			: null,
 	}
+}
+
+/**
+ * Map a speed (mm/s) to an RGB color across a blue→green→yellow→red ramp,
+ * normalized to [min,max]. Used for the color-by-speed toolpath mode.
+ * @param {number} v speed mm/s
+ * @param {number} min
+ * @param {number} max
+ * @returns {[number, number, number]} rgb 0..1
+ */
+export function colorForSpeed(v, min, max) {
+	const span = max - min
+	let t = span > 0 ? (v - min) / span : 0.5
+	t = Math.max(0, Math.min(1, t))
+	// 4-stop ramp: blue(0) → cyan(.33) → yellow(.66) → red(1)
+	const stops = [
+		[0.13, 0.42, 0.99], // blue
+		[0.18, 0.80, 0.78], // cyan/green
+		[0.96, 0.83, 0.18], // yellow
+		[0.90, 0.24, 0.20], // red
+	]
+	const scaled = t * (stops.length - 1)
+	const i = Math.min(stops.length - 2, Math.floor(scaled))
+	const f = scaled - i
+	const a = stops[i]
+	const b = stops[i + 1]
+	return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]
 }
 
 /**

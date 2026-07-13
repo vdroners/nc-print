@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.60.0] - 2026-07-13
+
+Slicer-GUI alignment — Preview (4th/final of the multi-part round). Adapter +
+frontend (needs a sidecar rebuild).
+
+### Added — g-code preview (Slice tab)
+
+- **Color-by-speed** — a "Color by: Feature | Speed" toggle on the toolpath
+  viewer. Speed mode recolors every extrusion by print speed across a
+  blue→cyan→yellow→red ramp with a min–max mm/s legend, matching OrcaSlicer/
+  PrusaSlicer/Bambu. The sidecar (`gcode_toolpath.py`) now captures the sticky
+  feedrate and emits a per-segment `speeds[]` array + a `speed_min/max` range;
+  `viewport.showToolpath` gains a `colorMode` and builds a per-vertex color buffer
+  in speed mode (feature mode is unchanged and stays the default). If an older
+  sidecar returns no speeds, the toggle disables and it falls back to feature
+  color — so a frontend deploy can't break against an un-rebuilt adapter.
+- **In-layer "moves" slider** — a second scrubber that reveals extrusion segments
+  one at a time within the current top layer (viewport `setToolpathMoveRange`,
+  extending the layer draw-range), like the sequential slider in desktop slicers.
+
+### Tests
+
+- adapter `test_adapter.py`: per-segment `speeds` (len×6 == positions), F→mm/s
+  conversion, `speed_min/max` range excluding travel.
+- vitest: `colorForSpeed` ramp (blue↔red ends, clamp, zero-span), `fetchToolpath`
+  carries speeds + range (and omits range on an old build); `preview-alignment`
+  source-regex for the color-by control, move slider, viewport colorMode, adapter
+  speeds. Full suite green (437).
+
 ## [1.59.0] - 2026-07-12
 
 Slicer-GUI alignment — Workflow (3rd of the multi-part round).

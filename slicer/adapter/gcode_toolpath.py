@@ -69,22 +69,32 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
     cur_feature = "other"
     x = y = z = 0.0
     e = 0.0
+    feed_mm_s = 0.0  # sticky feedrate (gcode F is mm/min → /60)
     absolute_e = True
     minx = miny = minz = float("inf")
     maxx = maxy = maxz = float("-inf")
+    speed_min = float("inf")
+    speed_max = float("-inf")
     move_count = 0
     truncated = False
 
     def _new_layer(zval: float, height: float | None) -> dict:
         return {"z": zval, "height": height, "segments": {}}
 
-    def _push(feat: str, x0, y0, z0, x1, y1, z1) -> None:
-        nonlocal minx, miny, minz, maxx, maxy, maxz, move_count
+    def _push(feat: str, x0, y0, z0, x1, y1, z1, spd) -> None:
+        nonlocal minx, miny, minz, maxx, maxy, maxz, move_count, speed_min, speed_max
         if cur_layer is None:
             return
-        seg = cur_layer["segments"].setdefault(feat, {"positions": []})
+        seg = cur_layer["segments"].setdefault(feat, {"positions": [], "speeds": []})
         seg["positions"].extend((x0, y0, z0, x1, y1, z1))
+        # One speed per SEGMENT (per 6 position floats) → the frontend builds a
+        # per-vertex colour ramp without altering the positions contract.
+        seg["speeds"].append(spd)
         move_count += 1
+        # Speed range over EXTRUDING moves only (travel skews the scale).
+        if feat != "travel" and spd > 0:
+            speed_min = min(speed_min, spd)
+            speed_max = max(speed_max, spd)
         for vx, vy, vz in ((x0, y0, z0), (x1, y1, z1)):
             minx = min(minx, vx); miny = min(miny, vy); minz = min(minz, vz)
             maxx = max(maxx, vx); maxy = max(maxy, vy); maxz = max(maxz, vz)
@@ -137,6 +147,8 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
                     elif au == "E":
                         ne = v
                         has_e = True
+                    elif au == "F":
+                        feed_mm_s = v / 60.0  # F is mm/min in gcode
                 moved = (nx != x) or (ny != y) or (nz != z)
                 if moved:
                     if cur_layer is None:
@@ -144,7 +156,7 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
                         layers.append(cur_layer)
                     extruding = has_e and ((ne > e) if absolute_e else (ne > 0))
                     feat = cur_feature if extruding else "travel"
-                    _push(feat, x, y, z, nx, ny, nz)
+                    _push(feat, x, y, z, nx, ny, nz, round(feed_mm_s, 1))
                 x, y, z = nx, ny, nz
                 if has_e:
                     e = ne
@@ -176,11 +188,15 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
         "max": [maxx, maxy, maxz],
     } if minx != float("inf") else None
 
+    spd_min = 0.0 if speed_min == float("inf") else round(speed_min, 1)
+    spd_max = 0.0 if speed_max == float("-inf") else round(speed_max, 1)
+
     return {
         "units": "mm",
         "bbox": bbox,
         "feature_types": FEATURE_TYPES,
         "layers": layers,
         "meta": {"layer_count": len(layers), "moves": move_count,
-                 "truncated": truncated},
+                 "truncated": truncated,
+                 "speed_min": spd_min, "speed_max": spd_max},
     }

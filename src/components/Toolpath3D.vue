@@ -20,7 +20,43 @@
 					@input="onLayer($event.target.value)">
 				<span class="tp3d__layernum">{{ currentLayer + 1 }} / {{ layerCount }}</span>
 			</div>
-			<div class="tp3d__legend">
+			<div class="tp3d__layerrow">
+				<label class="tp3d__label" :for="moveId">Moves</label>
+				<input
+					:id="moveId"
+					class="tp3d__slider"
+					type="range"
+					min="0"
+					:max="topLayerMoves"
+					:value="currentMove"
+					@input="onMove($event.target.value)">
+				<span class="tp3d__layernum">{{ currentMove }} / {{ topLayerMoves }}</span>
+			</div>
+			<!-- Color-by: Feature | Speed (speed only when the sidecar emits it). -->
+			<div class="tp3d__colorrow">
+				<span class="tp3d__label">Color by</span>
+				<button
+					type="button"
+					class="tp3d__modebtn"
+					:class="{ 'tp3d__modebtn--on': colorMode === 'feature' }"
+					@click="setColorMode('feature')">Feature</button>
+				<button
+					type="button"
+					class="tp3d__modebtn"
+					:class="{ 'tp3d__modebtn--on': colorMode === 'speed' }"
+					:disabled="!speedRange"
+					:title="speedRange ? 'Colour by print speed' : 'Speed data unavailable — re-slice'"
+					@click="setColorMode('speed')">Speed</button>
+				<span v-if="colorMode === 'speed' && speedRange" class="tp3d__gradient">
+					<span
+						v-for="(s, i) in speedLegendStops()"
+						:key="i"
+						class="tp3d__gradstop"
+						:style="{ background: s.color }">{{ s.label }}</span>
+					<span class="tp3d__gradunit">mm/s</span>
+				</span>
+			</div>
+			<div v-show="colorMode === 'feature'" class="tp3d__legend">
 				<button
 					v-for="feat in features"
 					:key="feat"
@@ -41,6 +77,7 @@ import { createViewport } from '@/three/viewport.js'
 import {
 	fetchToolpath,
 	presentFeatures,
+	colorForSpeed,
 	FEATURE_COLORS,
 	FEATURE_LABELS,
 } from '@/services/toolpath-3d.js'
@@ -79,6 +116,12 @@ export default {
 			features: [],
 			visible: {},
 			sliderId: `tp3d-layer-${++_uid}`,
+			moveId: `tp3d-move-${++_uid}`,
+			colorMode: 'feature', // 'feature' | 'speed'
+			speedRange: null, // { min, max } when the sidecar emits speeds
+			tp: null, // last fetched toolpath (for re-render on colorMode switch)
+			topLayerMoves: 0, // segment count in the current top layer (move slider max)
+			currentMove: 0,
 		}
 	},
 	watch: {
@@ -113,8 +156,14 @@ export default {
 			this.ready = false
 			try {
 				const tp = await fetchToolpath(this.jobId)
+				this.tp = tp
+				this.speedRange = tp.speedRange || null
+				// If the sidecar didn't emit speeds, force feature mode.
+				if (!this.speedRange) {
+					this.colorMode = 'feature'
+				}
 				this.viewport.disposeToolpath?.()
-				this.viewport.showToolpath?.(tp, FEATURE_COLORS)
+				this.viewport.showToolpath?.(tp, FEATURE_COLORS, this.colorMode)
 				this.layerCount = tp.layerCount || tp.layers.length
 				this.currentLayer = this.layerCount - 1
 				this.features = presentFeatures(tp)
@@ -124,6 +173,8 @@ export default {
 				}
 				this.visible = vis
 				this.viewport.setToolpathLayerRange?.(this.currentLayer)
+				this._recomputeTopLayerMoves()
+				this.currentMove = this.topLayerMoves
 				this.ready = true
 			} catch (e) {
 				this.error = e?.message || 'Toolpath preview unavailable'
@@ -134,6 +185,49 @@ export default {
 		onLayer(val) {
 			this.currentLayer = Number(val)
 			this.viewport?.setToolpathLayerRange?.(this.currentLayer)
+			this._recomputeTopLayerMoves()
+			this.currentMove = this.topLayerMoves
+			this.viewport?.setToolpathMoveRange?.(this.currentLayer, this.currentMove)
+		},
+		onMove(val) {
+			this.currentMove = Number(val)
+			this.viewport?.setToolpathMoveRange?.(this.currentLayer, this.currentMove)
+		},
+		setColorMode(mode) {
+			if (mode === this.colorMode || (mode === 'speed' && !this.speedRange)) {
+				return
+			}
+			this.colorMode = mode
+			if (this.tp && this.viewport) {
+				// Rebuild the lines with the new color scheme, preserving the layer view.
+				this.viewport.showToolpath?.(this.tp, FEATURE_COLORS, this.colorMode)
+				for (const f of this.features) {
+					this.viewport.setToolpathFeatureVisible?.(f, this.visible[f])
+				}
+				this.viewport.setToolpathLayerRange?.(this.currentLayer)
+			}
+		},
+		// The move slider caps the segment count in the current TOP layer.
+		_recomputeTopLayerMoves() {
+			const layer = this.tp?.layers?.[this.currentLayer]
+			let segs = 0
+			if (layer) {
+				for (const arr of Object.values(layer.features || {})) {
+					segs += (arr.length / 3) / 2 // 2 verts/segment
+				}
+			}
+			this.topLayerMoves = Math.max(0, Math.round(segs))
+		},
+		speedLegendStops() {
+			if (!this.speedRange) {
+				return []
+			}
+			const { min, max } = this.speedRange
+			return [0, 0.5, 1].map((t) => {
+				const v = min + (max - min) * t
+				const [r, g, b] = colorForSpeed(v, min, max)
+				return { color: `rgb(${Math.round(r * 255)},${Math.round(g * 255)},${Math.round(b * 255)})`, label: `${Math.round(v)}` }
+			})
 		},
 		toggleFeature(feat) {
 			this.visible = { ...this.visible, [feat]: !this.visible[feat] }
@@ -200,6 +294,52 @@ export default {
 	font-size: 0.8rem;
 	min-width: 68px;
 	text-align: right;
+}
+.tp3d__colorrow {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	gap: 6px;
+}
+.tp3d__modebtn {
+	appearance: none;
+	background: var(--color-background-hover, #21262d);
+	border: 1px solid var(--color-border, #30363d);
+	border-radius: 999px;
+	color: inherit;
+	cursor: pointer;
+	font-size: 0.78rem;
+	padding: 3px 10px;
+}
+.tp3d__modebtn--on {
+	background: color-mix(in srgb, var(--nc-app-accent, #22c55e) 22%, transparent);
+	border-color: var(--nc-app-accent, #22c55e);
+}
+.tp3d__modebtn:disabled {
+	cursor: default;
+	opacity: 0.4;
+}
+.tp3d__gradient {
+	display: inline-flex;
+	align-items: stretch;
+	border-radius: 4px;
+	overflow: hidden;
+	height: 16px;
+	margin-left: 4px;
+}
+.tp3d__gradstop {
+	display: inline-flex;
+	align-items: center;
+	color: #000;
+	font-size: 9px;
+	font-weight: 700;
+	padding: 0 6px;
+}
+.tp3d__gradunit {
+	align-self: center;
+	font-size: 9px;
+	margin-left: 4px;
+	opacity: 0.7;
 }
 .tp3d__legend {
 	display: flex;
