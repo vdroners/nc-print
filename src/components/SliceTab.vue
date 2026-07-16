@@ -16,6 +16,7 @@ import ErrorRecoveryCard from './ErrorRecoveryCard.vue'
 import ArrangePlate from './ArrangePlate.vue'
 import ColorOrderPanel from './ColorOrderPanel.vue'
 import PausePlanner from './PausePlanner.vue'
+import SliceWarningsPanel from './SliceWarningsPanel.vue'
 
 export default {
 	name: 'SliceTab',
@@ -34,6 +35,7 @@ export default {
 		ArrangePlate,
 		ColorOrderPanel,
 		PausePlanner,
+		SliceWarningsPanel,
 	},
 	data() {
 		return {
@@ -294,6 +296,8 @@ export default {
 
 		<!-- ── Right: slice results + review + history float on the far side. ── -->
 		<template #right>
+			<SliceWarningsPanel />
+
 			<SliceReviewPanel />
 
 			<SliceResultTabs />

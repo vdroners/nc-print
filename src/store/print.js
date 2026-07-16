@@ -235,6 +235,10 @@ function defaultSliceJob() {
 		sentTo: '',
 		printing: false,
 		error: '',
+		// Slice-time warnings from the adapter (profile repairs, empty layers, …),
+		// collected from the SSE stage:'warning' events. Surfaced in the warnings
+		// panel on the Slice tab. Cleared on each new slice.
+		warnings: [],
 		// Multi-plate results (4d): one entry per plate when slicing several
 		// plates. Empty for a normal single-plate slice.
 		plates: [],
@@ -713,6 +717,55 @@ export const usePrintStore = defineStore('print', {
 		},
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done' && !!state.sliceJob.gcodeBlob
+		},
+		/**
+		 * Consolidated slice-warning list for the warnings panel (v1.67). Merges
+		 * three existing signals into one shape { id, severity, message, hint,
+		 * objectId? }: out-of-bed objects, mesh-health issues (open edges /
+		 * non-watertight / low printability), and adapter slice-time warnings.
+		 * objectId (when set) lets the panel jump-to-select that object.
+		 */
+		sliceWarnings(state) {
+			const out = []
+			// Out-of-bed objects — the loudest, most actionable warning.
+			for (const id of state.outOfBedIds || []) {
+				const obj = state.objects.find((o) => o.id === id)
+				out.push({
+					id: `offbed-${id}`,
+					severity: 'error',
+					message: `${obj?.name || 'An object'} exceeds the build volume`,
+					hint: 'Move, scale, or reorient it to fit the bed.',
+					objectId: id,
+				})
+			}
+			// Mesh health — non-watertight / open edges (advisory).
+			if (state.meshHealth.analyzed && !state.meshHealth.watertight) {
+				out.push({
+					id: 'mesh-open-edges',
+					severity: 'warning',
+					message: `Mesh not watertight — ${state.meshHealth.openEdgeCount} open edges`,
+					hint: 'Try Repair on the mesh health panel; the slice may have gaps.',
+				})
+			}
+			const printability = state.meshHealth.printability
+			if (printability && typeof printability.overhang_pct === 'number' && printability.overhang_pct >= 40) {
+				out.push({
+					id: 'mesh-overhang',
+					severity: 'warning',
+					message: `Steep overhangs (${Math.round(printability.overhang_pct)}%)`,
+					hint: 'Enable supports or reorient to reduce overhangs.',
+				})
+			}
+			// Adapter slice-time warnings (profile repairs, etc.).
+			for (let i = 0; i < (state.sliceJob.warnings || []).length; i++) {
+				out.push({
+					id: `slice-${i}`,
+					severity: 'warning',
+					message: state.sliceJob.warnings[i],
+					hint: '',
+				})
+			}
+			return out
 		},
 		/** A slice result is present (done or errored) and can be cleared by Undo. */
 		hasSliceResult(state) {
@@ -2950,8 +3003,17 @@ export const usePrintStore = defineStore('print', {
 			try {
 				const onEvent = ({ event, parsed }) => {
 					if (event === 'progress' && parsed) {
-						this.sliceJob.stage = parsed.stage || ''
-						this.sliceJob.pct = parsed.pct ?? 0
+						// The adapter surfaces non-fatal warnings as progress events
+						// with stage:'warning' (profile repairs, etc.) — collect their
+						// messages for the warnings panel instead of overwriting stage.
+						if (parsed.stage === 'warning') {
+							if (parsed.message && !this.sliceJob.warnings.includes(parsed.message)) {
+								this.sliceJob.warnings.push(parsed.message)
+							}
+						} else {
+							this.sliceJob.stage = parsed.stage || ''
+							this.sliceJob.pct = parsed.pct ?? 0
+						}
 						if (parsed.job_id) {
 							jobIdForCancel = parsed.job_id
 							this.sliceJob.jobId = parsed.job_id

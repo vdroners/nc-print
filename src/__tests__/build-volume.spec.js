@@ -153,3 +153,47 @@ describe('settings mode + preset dirty (v1.65)', () => {
 		expect(store.overrides.infillDensity).toBe('15')
 	})
 })
+
+describe('slice warnings (v1.67)', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('is empty by default', () => {
+		const store = usePrintStore()
+		expect(store.sliceWarnings).toEqual([])
+	})
+
+	it('surfaces out-of-bed objects with a jump-to objectId', () => {
+		const store = usePrintStore()
+		store.objects = [{ id: 'o1', name: 'Widget' }]
+		store.outOfBedIds = ['o1']
+		const w = store.sliceWarnings
+		expect(w).toHaveLength(1)
+		expect(w[0].severity).toBe('error')
+		expect(w[0].objectId).toBe('o1')
+		expect(w[0].message).toMatch(/Widget/)
+	})
+
+	it('surfaces a non-watertight mesh as an advisory warning', () => {
+		const store = usePrintStore()
+		store.meshHealth = { ...store.meshHealth, analyzed: true, watertight: false, openEdgeCount: 12 }
+		const w = store.sliceWarnings
+		expect(w.some((x) => x.severity === 'warning' && /open edges/.test(x.message))).toBe(true)
+	})
+
+	it('collects adapter slice-time warning messages (deduped)', () => {
+		const store = usePrintStore()
+		store.sliceJob.warnings = ['Profile auto-repaired: bed too small']
+		const w = store.sliceWarnings
+		expect(w.some((x) => /auto-repaired/.test(x.message))).toBe(true)
+	})
+
+	it('resetSliceJob clears collected warnings', () => {
+		const store = usePrintStore()
+		store.sliceJob.warnings = ['x']
+		store.resetSliceJob()
+		expect(store.sliceJob.warnings).toEqual([])
+	})
+})

@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.60.7] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 7: the slice-warnings surface.
+Frontend-only (the adapter already emits warnings).
+
+### Added — slice warnings (Slice tab)
+
+- **Warnings panel** — a single panel on the Slice tab consolidates the problems
+  that were previously scattered or silent: objects that exceed the build volume,
+  a non-watertight mesh (open edges) or steep overhangs from the mesh-health
+  analysis, and non-fatal warnings the slicer emits during a slice (e.g. profile
+  auto-repairs). Out-of-bed rows are errors (red); the rest are advisories
+  (amber). The panel self-hides when everything is clean.
+- **Jump to object** — a warning tied to a specific object (out-of-bed) is
+  clickable and selects that object, so you can go straight to fixing it.
+
+### Changed — internal
+
+- `defaultSliceJob` seeds a `warnings: []` array; the slice SSE handler now routes
+  `stage:'warning'` progress events into it (deduped) instead of overwriting the
+  progress stage. New `sliceWarnings` getter merges out-of-bed, mesh-health, and
+  slice-time signals into one `{ id, severity, message, hint, objectId? }` shape.
+
+### Tests
+
+- vitest `build-volume.spec.js`: `sliceWarnings` empty by default; surfaces
+  out-of-bed with a jump objectId, non-watertight mesh, and deduped adapter
+  warnings; `resetSliceJob` clears them.
+- vitest `slice-warnings.spec.js` (new): store collects `stage:'warning'` events +
+  exposes the consolidated getter; SliceWarningsPanel renders it + jumps to the
+  object + self-hides; SliceTab hosts the panel. Full suite green (486).
+
 ## [1.60.6] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 6: per-object settings. Frontend-only
