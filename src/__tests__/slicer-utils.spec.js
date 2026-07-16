@@ -11,6 +11,10 @@ import {
 	diffOverrides,
 	estimateFilamentCost,
 	resolveFilamentPricePerKg,
+	groupsForMode,
+	levelVisible,
+	matchesSearch,
+	OVERRIDE_FIELD_DEFS,
 } from '@/services/slicer-utils.js'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -295,5 +299,62 @@ describe('slicer-utils', () => {
 		expect(estimateFilamentCost(50, 20)).toBeCloseTo(1)
 		expect(estimateFilamentCost(0, 20)).toBeNull()
 		expect(estimateFilamentCost(50, null)).toBeNull()
+	})
+})
+
+describe('settings tree (v1.65)', () => {
+	it('every override def carries a level + group tag', () => {
+		for (const d of OVERRIDE_FIELD_DEFS) {
+			expect(['basic', 'advanced', 'expert'], `${d.key} level`).toContain(d.level)
+			expect(typeof d.group, `${d.key} group`).toBe('string')
+			expect(d.group.length).toBeGreaterThan(0)
+		}
+	})
+
+	it('levelVisible is cumulative: expert ⊇ advanced ⊇ basic', () => {
+		expect(levelVisible('basic', 'basic')).toBe(true)
+		expect(levelVisible('advanced', 'basic')).toBe(false)
+		expect(levelVisible('expert', 'basic')).toBe(false)
+		expect(levelVisible('basic', 'advanced')).toBe(true)
+		expect(levelVisible('advanced', 'advanced')).toBe(true)
+		expect(levelVisible('expert', 'advanced')).toBe(false)
+		expect(levelVisible('basic', 'expert')).toBe(true)
+		expect(levelVisible('expert', 'expert')).toBe(true)
+	})
+
+	it('groupsForMode returns fewer fields in Simple than Expert', () => {
+		const count = (groups) => groups.reduce((n, g) => n + g.fields.length, 0)
+		const simple = count(groupsForMode('basic'))
+		const advanced = count(groupsForMode('advanced'))
+		const expert = count(groupsForMode('expert'))
+		expect(simple).toBeGreaterThan(0)
+		expect(advanced).toBeGreaterThan(simple)
+		expect(expert).toBeGreaterThan(advanced)
+		// Expert shows everything.
+		expect(expert).toBe(OVERRIDE_FIELD_DEFS.length)
+	})
+
+	it('groupsForMode preserves group order + drops empty groups', () => {
+		const groups = groupsForMode('expert')
+		expect(groups[0].group).toBe('Quality') // first def is a Quality field
+		for (const g of groups) {
+			expect(g.fields.length).toBeGreaterThan(0)
+		}
+	})
+
+	it('matchesSearch filters by label, key, or group (case-insensitive)', () => {
+		const layerDef = OVERRIDE_FIELD_DEFS.find((d) => d.key === 'layerHeight')
+		expect(matchesSearch(layerDef, '')).toBe(true) // empty matches all
+		expect(matchesSearch(layerDef, 'LAYER')).toBe(true) // label
+		expect(matchesSearch(layerDef, 'layerHeight')).toBe(true) // key
+		expect(matchesSearch(layerDef, 'quality')).toBe(true) // group
+		expect(matchesSearch(layerDef, 'zzz-nope')).toBe(false)
+	})
+
+	it('groupsForMode + search narrows to matching fields', () => {
+		const groups = groupsForMode('expert', 'ironing')
+		const keys = groups.flatMap((g) => g.fields.map((f) => f.key))
+		expect(keys).toContain('ironingType')
+		expect(keys).not.toContain('layerHeight')
 	})
 })

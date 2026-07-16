@@ -387,6 +387,12 @@ export const usePrintStore = defineStore('print', {
 		// model/OS), cached for the session. { [id]: {..} | null (=fetched, none) }
 		printerCapabilities: {},
 		savedPresets: {},
+		// Settings-tree mode (v1.65): basic | advanced | expert. Persisted per user.
+		settingsMode: 'basic',
+		// The last loaded/saved preset name + a snapshot of overrides at that moment,
+		// so the UI can show an "unsaved changes vs preset" dot. Null = no preset base.
+		activePresetName: null,
+		activePresetSnapshot: null,
 		overrides: {
 			layerHeight: '',
 			lineWidth: '',
@@ -685,6 +691,24 @@ export const usePrintStore = defineStore('print', {
 		 */
 		overrideDefaults(state) {
 			return mergedToOverrideFormFull(mergeProfileSettings(state.profiles, state.selection))
+		},
+		/**
+		 * True when a preset is the active baseline AND the current overrides differ
+		 * from the snapshot taken when it was loaded/saved — drives the "unsaved
+		 * changes" dot next to the preset name.
+		 */
+		presetDirty(state) {
+			if (!state.activePresetName || !state.activePresetSnapshot) {
+				return false
+			}
+			const snap = state.activePresetSnapshot
+			const keys = new Set([...Object.keys(snap), ...Object.keys(state.overrides)])
+			for (const k of keys) {
+				if (String(snap[k] ?? '') !== String(state.overrides[k] ?? '')) {
+					return true
+				}
+			}
+			return false
 		},
 		sliceComplete(state) {
 			return state.sliceJob.status === 'done' && !!state.sliceJob.gcodeBlob
@@ -2355,6 +2379,9 @@ export const usePrintStore = defineStore('print', {
 			const all = { ...loadPresets(), [label]: { ...this.overrides } }
 			savePresets(all)
 			this.savedPresets = all
+			// Saving makes THIS preset the clean baseline for the unsaved-changes dot.
+			this.activePresetName = label
+			this.activePresetSnapshot = { ...this.overrides }
 			toastSuccess(`Preset "${label}" saved`)
 			return true
 		},
@@ -2367,8 +2394,19 @@ export const usePrintStore = defineStore('print', {
 			}
 			this.overrides = { ...this.overrides, ...preset }
 			this._persistOverrides()
+			// Snapshot the loaded preset as the clean baseline for the dot.
+			this.activePresetName = name
+			this.activePresetSnapshot = { ...this.overrides }
 			toastInfo(`Loaded preset "${name}"`)
 			return true
+		},
+
+		/** Settings-tree mode: basic | advanced | expert (persisted). */
+		setSettingsMode(mode) {
+			if (['basic', 'advanced', 'expert'].includes(mode)) {
+				this.settingsMode = mode
+				savePrefs({ settingsMode: mode })
+			}
 		},
 
 		setMeshAutoApply(enabled) {
@@ -2393,6 +2431,9 @@ export const usePrintStore = defineStore('print', {
 			this._validateSelectedPrinterId()
 			if (typeof prefs.overridesCollapsed === 'boolean') {
 				this.overridesCollapsed = prefs.overridesCollapsed
+			}
+			if (['basic', 'advanced', 'expert'].includes(prefs.settingsMode)) {
+				this.settingsMode = prefs.settingsMode
 			}
 			if (prefs.viewPrefs && typeof prefs.viewPrefs === 'object') {
 				if (typeof prefs.viewPrefs.modelColor === 'string') {

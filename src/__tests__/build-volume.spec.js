@@ -114,3 +114,42 @@ describe('fitsBed includes the Z (height) axis', () => {
 		expect(store.modelMeta.fitsBed).toBe(true)
 	})
 })
+
+describe('settings mode + preset dirty (v1.65)', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('defaults to basic mode and setSettingsMode persists a valid mode', () => {
+		const store = usePrintStore()
+		expect(store.settingsMode).toBe('basic')
+		store.setSettingsMode('expert')
+		expect(store.settingsMode).toBe('expert')
+		expect(JSON.parse(localStorage.getItem('nc_print_prefs_v1') || '{}').settingsMode).toBe('expert')
+		store.setSettingsMode('nonsense') // ignored
+		expect(store.settingsMode).toBe('expert')
+	})
+
+	it('presetDirty is false with no active preset, true after an edit', () => {
+		const store = usePrintStore()
+		expect(store.presetDirty).toBe(false)
+		store.overrides.layerHeight = '0.2'
+		store.saveOverridePreset('Mine')
+		expect(store.activePresetName).toBe('Mine')
+		expect(store.presetDirty).toBe(false) // just saved = clean
+		store.overrides.layerHeight = '0.3' // diverge from the snapshot
+		expect(store.presetDirty).toBe(true)
+	})
+
+	it('loading a preset resets the clean baseline', () => {
+		const store = usePrintStore()
+		store.overrides.infillDensity = '15'
+		store.saveOverridePreset('A')
+		store.overrides.infillDensity = '80'
+		expect(store.presetDirty).toBe(true)
+		store.loadOverridePreset('A')
+		expect(store.presetDirty).toBe(false)
+		expect(store.overrides.infillDensity).toBe('15')
+	})
+})

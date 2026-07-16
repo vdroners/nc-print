@@ -148,6 +148,14 @@ export default {
 
 			<ProfileQuickEdit @change="onOverrideChange" />
 
+			<p v-if="printStore.activePresetName" class="nc-print-preset-status">
+				<span
+					class="nc-print-preset-status__dot"
+					:class="{ 'is-dirty': printStore.presetDirty }" />
+				Preset: <strong>{{ printStore.activePresetName }}</strong>
+				<span v-if="printStore.presetDirty" class="nc-print-preset-status__unsaved">— unsaved changes</span>
+			</p>
+
 			<div class="nc-print-preset-row">
 				<div class="nc-print-field nc-print-preset-row__save">
 					<label>Save preset</label>
@@ -210,6 +218,31 @@ export default {
 	gap: var(--nc-gcs-space-sm);
 	grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
 	margin-top: var(--nc-gcs-space-sm);
+}
+
+.nc-print-preset-status {
+	align-items: center;
+	color: var(--nc-gcs-text-muted);
+	display: flex;
+	font-size: var(--nc-gcs-text-sm);
+	gap: 6px;
+	margin: var(--nc-gcs-space-md) 0 0;
+}
+
+.nc-print-preset-status__dot {
+	background: var(--color-success, #46ba61);
+	border-radius: 50%;
+	flex: 0 0 auto;
+	height: 8px;
+	width: 8px;
+}
+
+.nc-print-preset-status__dot.is-dirty {
+	background: var(--nc-app-accent, var(--color-warning, #e0a800));
+}
+
+.nc-print-preset-status__unsaved {
+	color: var(--nc-app-accent, var(--color-warning, #e0a800));
 }
 
 .nc-print-preset-row {

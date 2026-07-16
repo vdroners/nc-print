@@ -220,63 +220,124 @@ export function mergeProfileSettings(profiles, selection) {
 // profile-baseline value is normalized for display/diff: 'num' | 'pct' (0-1→%) |
 // 'bool' | 'str'. Used by mergedToOverrideFormFull() so modified-highlight +
 // reset-to-default cover ALL fields, not just the basic handful.
+// Each entry also carries `level` (basic | advanced | expert) and `group` for the
+// Simple/Advanced/Expert settings tree (v1.65). `level` is additive & cumulative:
+// Simple shows basic; Advanced shows basic+advanced; Expert shows everything.
+// `group` clusters fields under a section header. These are PURE metadata — they
+// don't touch the diff/reset logic (isOverrideModified/mergedToOverrideFormFull).
 export const OVERRIDE_FIELD_DEFS = [
-	{ key: 'layerHeight', label: 'Layer height (mm)', engineKey: 'layer_height', type: 'num' },
-	{ key: 'lineWidth', label: 'Line width (mm)', engineKey: 'line_width', type: 'num' },
-	{ key: 'perimeters', label: 'Perimeters', engineKey: 'wall_loops', type: 'num' },
-	{ key: 'infillDensity', label: 'Infill density (%)', engineKey: 'sparse_infill_density', type: 'pct' },
-	{ key: 'printSpeed', label: 'Print speed (mm/s)', engineKey: 'outer_wall_speed', type: 'num' },
-	{ key: 'firstLayerSpeed', label: 'First layer speed (mm/s)', engineKey: 'initial_layer_speed', type: 'num' },
-	{ key: 'nozzleTemp', label: 'Nozzle temp (°C)', engineKey: 'nozzle_temperature', type: 'num' },
-	{ key: 'bedTemp', label: 'Bed temp (°C)', engineKey: 'hot_plate_temp', type: 'num' },
-	{ key: 'fanSpeed', label: 'Fan speed (%)', engineKey: 'fan_max_speed', type: 'num' },
-	{ key: 'retractionLength', label: 'Retraction (mm)', engineKey: 'retraction_length', type: 'num' },
-	{ key: 'retractionSpeed', label: 'Retraction speed (mm/s)', engineKey: 'retraction_speed', type: 'num' },
-	{ key: 'enableSupport', label: 'Supports', engineKey: 'enable_support', type: 'bool', format: v => (v ? 'On' : 'Off') },
-	{ key: 'supportType', label: 'Support type', engineKey: 'support_type', type: 'str' },
-	{ key: 'supportThreshold', label: 'Support threshold (°)', engineKey: 'support_threshold_angle', type: 'num' },
-	{ key: 'brimWidth', label: 'Brim width (mm)', engineKey: 'brim_width', type: 'num' },
-	{ key: 'raftLayers', label: 'Raft layers', engineKey: 'raft_layers', type: 'num' },
-	{ key: 'skirtLoops', label: 'Skirt loops', engineKey: 'skirt_loops', type: 'num' },
-	{ key: 'adaptiveLayerHeight', label: 'Adaptive layers', engineKey: 'adaptive_layer_height', type: 'bool', format: v => (v ? 'On' : 'Off') },
-	{ key: 'ironingType', label: 'Ironing', engineKey: 'ironing_type', type: 'str' },
-	{ key: 'fuzzySkin', label: 'Fuzzy skin', engineKey: 'fuzzy_skin', type: 'str' },
-	{ key: 'seamPosition', label: 'Seam position', engineKey: 'seam_position', type: 'str' },
-	{ key: 'firstLayerHeight', label: 'First layer height (mm)', engineKey: 'initial_layer_print_height', type: 'num' },
-	{ key: 'infillPattern', label: 'Infill pattern', engineKey: 'sparse_infill_pattern', type: 'str' },
-	{ key: 'topSurfacePattern', label: 'Top surface pattern', engineKey: 'top_surface_pattern', type: 'str' },
-	{ key: 'bottomSurfacePattern', label: 'Bottom surface pattern', engineKey: 'bottom_surface_pattern', type: 'str' },
-	{ key: 'infillSpeed', label: 'Infill speed (mm/s)', engineKey: 'sparse_infill_speed', type: 'num' },
-	{ key: 'solidInfillSpeed', label: 'Solid infill speed (mm/s)', engineKey: 'internal_solid_infill_speed', type: 'num' },
-	{ key: 'supportTopGap', label: 'Support top gap (mm)', engineKey: 'support_top_z_distance', type: 'num' },
-	{ key: 'supportInterfaceLayers', label: 'Support interface layers', engineKey: 'support_interface_top_layers', type: 'num' },
-	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)', engineKey: 'support_interface_spacing', type: 'num' },
-	{ key: 'enablePrimeTower', label: 'Prime tower', engineKey: 'enable_prime_tower', type: 'bool', format: v => (v ? 'On' : 'Off') },
-	{ key: 'primeTowerWidth', label: 'Prime tower width (mm)', engineKey: 'prime_tower_width', type: 'num' },
-	{ key: 'primeTowerBrimWidth', label: 'Prime tower brim (mm)', engineKey: 'prime_tower_brim_width', type: 'num' },
-	{ key: 'primeVolume', label: 'Prime volume (mm³)', engineKey: 'prime_volume', type: 'num' },
-	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)', engineKey: 'wipe_tower_rotation_angle', type: 'num' },
-	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)', engineKey: 'wipe_tower_extra_spacing', type: 'pct' },
-	{ key: 'overhangSpeed1', label: 'Overhang speed 0–25% (mm/s)', engineKey: 'overhang_1_4_speed', type: 'num' },
-	{ key: 'overhangSpeed2', label: 'Overhang speed 25–50% (mm/s)', engineKey: 'overhang_2_4_speed', type: 'num' },
-	{ key: 'overhangSpeed3', label: 'Overhang speed 50–75% (mm/s)', engineKey: 'overhang_3_4_speed', type: 'num' },
-	{ key: 'overhangSpeed4', label: 'Overhang speed 75–100% (mm/s)', engineKey: 'overhang_4_4_speed', type: 'num' },
-	{ key: 'topShellLayers', label: 'Top shell layers', engineKey: 'top_shell_layers', type: 'num' },
-	{ key: 'bottomShellLayers', label: 'Bottom shell layers', engineKey: 'bottom_shell_layers', type: 'num' },
-	{ key: 'bridgeSpeed', label: 'Bridge speed (mm/s)', engineKey: 'bridge_speed', type: 'num' },
-	{ key: 'bridgeFlow', label: 'Bridge flow (ratio)', engineKey: 'bridge_flow', type: 'num' },
-	{ key: 'bridgeNoSupport', label: 'Bridges without support', engineKey: 'bridge_no_support', type: 'bool', format: v => (v ? 'On' : 'Off') },
-	{ key: 'elephantFoot', label: 'Elephant foot compensation (mm)', engineKey: 'elefant_foot_compensation', type: 'num' },
-	{ key: 'infillWallOverlap', label: 'Infill/wall overlap (%)', engineKey: 'infill_wall_overlap', type: 'pct' },
-	{ key: 'ironingFlow', label: 'Ironing flow (%)', engineKey: 'ironing_flow', type: 'pct' },
-	{ key: 'ironingSpacing', label: 'Ironing spacing (mm)', engineKey: 'ironing_spacing', type: 'num' },
-	{ key: 'ironingSpeed', label: 'Ironing speed (mm/s)', engineKey: 'ironing_speed', type: 'num' },
-	{ key: 'supportInterfaceBottomLayers', label: 'Support interface bottom layers', engineKey: 'support_interface_bottom_layers', type: 'num' },
-	{ key: 'supportBasePattern', label: 'Support base pattern', engineKey: 'support_base_pattern', type: 'str' },
-	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)', engineKey: 'tree_support_branch_angle', type: 'num' },
-	{ key: 'draftShield', label: 'Draft shield', engineKey: 'draft_shield', type: 'str' },
-	{ key: 'bedType', label: 'Build plate', engineKey: 'curr_bed_type', type: 'str' },
+	{ key: 'layerHeight', label: 'Layer height (mm)', engineKey: 'layer_height', type: 'num', level: 'basic', group: 'Quality' },
+	{ key: 'firstLayerHeight', label: 'First layer height (mm)', engineKey: 'initial_layer_print_height', type: 'num', level: 'basic', group: 'Quality' },
+	{ key: 'lineWidth', label: 'Line width (mm)', engineKey: 'line_width', type: 'num', level: 'advanced', group: 'Quality' },
+	{ key: 'adaptiveLayerHeight', label: 'Adaptive layers', engineKey: 'adaptive_layer_height', type: 'bool', format: v => (v ? 'On' : 'Off'), level: 'expert', group: 'Quality' },
+	{ key: 'elephantFoot', label: 'Elephant foot compensation (mm)', engineKey: 'elefant_foot_compensation', type: 'num', level: 'expert', group: 'Quality' },
+
+	{ key: 'perimeters', label: 'Perimeters', engineKey: 'wall_loops', type: 'num', level: 'basic', group: 'Walls & shells' },
+	{ key: 'topShellLayers', label: 'Top shell layers', engineKey: 'top_shell_layers', type: 'num', level: 'advanced', group: 'Walls & shells' },
+	{ key: 'bottomShellLayers', label: 'Bottom shell layers', engineKey: 'bottom_shell_layers', type: 'num', level: 'advanced', group: 'Walls & shells' },
+	{ key: 'seamPosition', label: 'Seam position', engineKey: 'seam_position', type: 'str', level: 'advanced', group: 'Walls & shells' },
+	{ key: 'fuzzySkin', label: 'Fuzzy skin', engineKey: 'fuzzy_skin', type: 'str', level: 'expert', group: 'Walls & shells' },
+
+	{ key: 'infillDensity', label: 'Infill density (%)', engineKey: 'sparse_infill_density', type: 'pct', level: 'basic', group: 'Infill' },
+	{ key: 'infillPattern', label: 'Infill pattern', engineKey: 'sparse_infill_pattern', type: 'str', level: 'basic', group: 'Infill' },
+	{ key: 'topSurfacePattern', label: 'Top surface pattern', engineKey: 'top_surface_pattern', type: 'str', level: 'advanced', group: 'Infill' },
+	{ key: 'bottomSurfacePattern', label: 'Bottom surface pattern', engineKey: 'bottom_surface_pattern', type: 'str', level: 'advanced', group: 'Infill' },
+	{ key: 'infillWallOverlap', label: 'Infill/wall overlap (%)', engineKey: 'infill_wall_overlap', type: 'pct', level: 'expert', group: 'Infill' },
+
+	{ key: 'printSpeed', label: 'Print speed (mm/s)', engineKey: 'outer_wall_speed', type: 'num', level: 'basic', group: 'Speed' },
+	{ key: 'firstLayerSpeed', label: 'First layer speed (mm/s)', engineKey: 'initial_layer_speed', type: 'num', level: 'basic', group: 'Speed' },
+	{ key: 'infillSpeed', label: 'Infill speed (mm/s)', engineKey: 'sparse_infill_speed', type: 'num', level: 'advanced', group: 'Speed' },
+	{ key: 'solidInfillSpeed', label: 'Solid infill speed (mm/s)', engineKey: 'internal_solid_infill_speed', type: 'num', level: 'advanced', group: 'Speed' },
+	{ key: 'bridgeSpeed', label: 'Bridge speed (mm/s)', engineKey: 'bridge_speed', type: 'num', level: 'advanced', group: 'Speed' },
+	{ key: 'overhangSpeed1', label: 'Overhang speed 0–25% (mm/s)', engineKey: 'overhang_1_4_speed', type: 'num', level: 'expert', group: 'Speed' },
+	{ key: 'overhangSpeed2', label: 'Overhang speed 25–50% (mm/s)', engineKey: 'overhang_2_4_speed', type: 'num', level: 'expert', group: 'Speed' },
+	{ key: 'overhangSpeed3', label: 'Overhang speed 50–75% (mm/s)', engineKey: 'overhang_3_4_speed', type: 'num', level: 'expert', group: 'Speed' },
+	{ key: 'overhangSpeed4', label: 'Overhang speed 75–100% (mm/s)', engineKey: 'overhang_4_4_speed', type: 'num', level: 'expert', group: 'Speed' },
+
+	{ key: 'nozzleTemp', label: 'Nozzle temp (°C)', engineKey: 'nozzle_temperature', type: 'num', level: 'basic', group: 'Temperature' },
+	{ key: 'bedTemp', label: 'Bed temp (°C)', engineKey: 'hot_plate_temp', type: 'num', level: 'basic', group: 'Temperature' },
+
+	{ key: 'fanSpeed', label: 'Fan speed (%)', engineKey: 'fan_max_speed', type: 'num', level: 'basic', group: 'Cooling' },
+
+	{ key: 'retractionLength', label: 'Retraction (mm)', engineKey: 'retraction_length', type: 'num', level: 'basic', group: 'Retraction' },
+	{ key: 'retractionSpeed', label: 'Retraction speed (mm/s)', engineKey: 'retraction_speed', type: 'num', level: 'advanced', group: 'Retraction' },
+
+	{ key: 'enableSupport', label: 'Supports', engineKey: 'enable_support', type: 'bool', format: v => (v ? 'On' : 'Off'), level: 'basic', group: 'Support' },
+	{ key: 'supportType', label: 'Support type', engineKey: 'support_type', type: 'str', level: 'basic', group: 'Support' },
+	{ key: 'supportThreshold', label: 'Support threshold (°)', engineKey: 'support_threshold_angle', type: 'num', level: 'advanced', group: 'Support' },
+	{ key: 'supportTopGap', label: 'Support top gap (mm)', engineKey: 'support_top_z_distance', type: 'num', level: 'advanced', group: 'Support' },
+	{ key: 'supportInterfaceLayers', label: 'Support interface layers', engineKey: 'support_interface_top_layers', type: 'num', level: 'advanced', group: 'Support' },
+	{ key: 'supportInterfaceBottomLayers', label: 'Support interface bottom layers', engineKey: 'support_interface_bottom_layers', type: 'num', level: 'expert', group: 'Support' },
+	{ key: 'supportInterfaceSpacing', label: 'Support interface spacing (mm)', engineKey: 'support_interface_spacing', type: 'num', level: 'advanced', group: 'Support' },
+	{ key: 'supportBasePattern', label: 'Support base pattern', engineKey: 'support_base_pattern', type: 'str', level: 'expert', group: 'Support' },
+	{ key: 'treeSupportBranchAngle', label: 'Tree support branch angle (°)', engineKey: 'tree_support_branch_angle', type: 'num', level: 'expert', group: 'Support' },
+	{ key: 'bridgeFlow', label: 'Bridge flow (ratio)', engineKey: 'bridge_flow', type: 'num', level: 'expert', group: 'Support' },
+	{ key: 'bridgeNoSupport', label: 'Bridges without support', engineKey: 'bridge_no_support', type: 'bool', format: v => (v ? 'On' : 'Off'), level: 'expert', group: 'Support' },
+
+	{ key: 'bedType', label: 'Build plate', engineKey: 'curr_bed_type', type: 'str', level: 'basic', group: 'Adhesion' },
+	{ key: 'brimWidth', label: 'Brim width (mm)', engineKey: 'brim_width', type: 'num', level: 'basic', group: 'Adhesion' },
+	{ key: 'skirtLoops', label: 'Skirt loops', engineKey: 'skirt_loops', type: 'num', level: 'advanced', group: 'Adhesion' },
+	{ key: 'raftLayers', label: 'Raft layers', engineKey: 'raft_layers', type: 'num', level: 'advanced', group: 'Adhesion' },
+	{ key: 'draftShield', label: 'Draft shield', engineKey: 'draft_shield', type: 'str', level: 'expert', group: 'Adhesion' },
+
+	{ key: 'ironingType', label: 'Ironing', engineKey: 'ironing_type', type: 'str', level: 'advanced', group: 'Ironing' },
+	{ key: 'ironingFlow', label: 'Ironing flow (%)', engineKey: 'ironing_flow', type: 'pct', level: 'expert', group: 'Ironing' },
+	{ key: 'ironingSpacing', label: 'Ironing spacing (mm)', engineKey: 'ironing_spacing', type: 'num', level: 'expert', group: 'Ironing' },
+	{ key: 'ironingSpeed', label: 'Ironing speed (mm/s)', engineKey: 'ironing_speed', type: 'num', level: 'expert', group: 'Ironing' },
+
+	{ key: 'enablePrimeTower', label: 'Prime tower', engineKey: 'enable_prime_tower', type: 'bool', format: v => (v ? 'On' : 'Off'), level: 'expert', group: 'Prime tower' },
+	{ key: 'primeTowerWidth', label: 'Prime tower width (mm)', engineKey: 'prime_tower_width', type: 'num', level: 'expert', group: 'Prime tower' },
+	{ key: 'primeTowerBrimWidth', label: 'Prime tower brim (mm)', engineKey: 'prime_tower_brim_width', type: 'num', level: 'expert', group: 'Prime tower' },
+	{ key: 'primeVolume', label: 'Prime volume (mm³)', engineKey: 'prime_volume', type: 'num', level: 'expert', group: 'Prime tower' },
+	{ key: 'wipeTowerRotation', label: 'Prime tower rotation (°)', engineKey: 'wipe_tower_rotation_angle', type: 'num', level: 'expert', group: 'Prime tower' },
+	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)', engineKey: 'wipe_tower_extra_spacing', type: 'pct', level: 'expert', group: 'Prime tower' },
 ]
+
+// Cumulative visibility: Simple ⊂ Advanced ⊂ Expert.
+export const SETTINGS_LEVELS = ['basic', 'advanced', 'expert']
+
+/** Whether a field's level is visible in the given mode (cumulative). */
+export function levelVisible(fieldLevel, mode) {
+	const fi = SETTINGS_LEVELS.indexOf(fieldLevel || 'basic')
+	const mi = SETTINGS_LEVELS.indexOf(mode || 'basic')
+	return fi <= (mi < 0 ? 0 : mi)
+}
+
+/** Case-insensitive label/key search match (empty query matches everything). */
+export function matchesSearch(def, query) {
+	const q = String(query || '').trim().toLowerCase()
+	if (!q) {
+		return true
+	}
+	return String(def.label || '').toLowerCase().includes(q)
+		|| String(def.key || '').toLowerCase().includes(q)
+		|| String(def.group || '').toLowerCase().includes(q)
+}
+
+/**
+ * Group the override defs for a given mode + search query into ordered sections.
+ * Returns [{ group, fields: [def, ...] }] preserving first-seen group order and
+ * intra-group def order. A group with no visible fields is dropped.
+ * @param {string} mode basic | advanced | expert
+ * @param {string} query search text
+ * @returns {Array<{ group: string, fields: object[] }>}
+ */
+export function groupsForMode(mode, query = '') {
+	const order = []
+	const byGroup = new Map()
+	for (const def of OVERRIDE_FIELD_DEFS) {
+		if (!levelVisible(def.level, mode) || !matchesSearch(def, query)) {
+			continue
+		}
+		const g = def.group || 'Other'
+		if (!byGroup.has(g)) {
+			byGroup.set(g, [])
+			order.push(g)
+		}
+		byGroup.get(g).push(def)
+	}
+	return order.map((g) => ({ group: g, fields: byGroup.get(g) }))
+}
 
 /**
  * Rows where operator overrides differ from merged profile defaults.

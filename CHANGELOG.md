@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.60.5] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 5: the settings tree. Frontend-only
+(no sidecar rebuild).
+
+### Added — settings panel (Prepare)
+
+- **Simple / Advanced / Expert modes** — the advanced settings panel now has a
+  three-way detail toggle, matching OrcaSlicer/PrusaSlicer. Simple shows the
+  everyday fields; Advanced adds per-feature speeds, shells, support detail;
+  Expert reveals everything (overhang speeds, prime tower, bridge, ironing, tree
+  support, …). The choice is remembered per user. Simple stays the default, so
+  the panel isn't more crowded than before unless you ask for it.
+- **Settings search** — a search box filters every field by name (or its group)
+  across whatever mode is active, so you can jump straight to "retraction" or
+  "ironing" without hunting.
+- **Unsaved-vs-preset indicator** — once you load or save a named preset, a dot
+  next to its name shows green when your settings match the preset and amber
+  ("unsaved changes") once you've edited away from it.
+
+### Changed — internal
+
+- Every override field now carries `level` (basic/advanced/expert) + `group`
+  metadata in `OVERRIDE_FIELD_DEFS`. `ProfileQuickEdit.vue` was rewritten from
+  ~15 hand-maintained sections into a data-driven list that renders a new
+  `OverrideField.vue` per field — the modified-highlight + ⟲ reset chrome that was
+  copy-pasted ~55 times now lives in one place. No engine keys or slice behaviour
+  changed; the modified/reset logic is untouched.
+
+### Tests
+
+- vitest `slicer-utils.spec.js`: every def has a level+group; `levelVisible` is
+  cumulative (expert ⊇ advanced ⊇ basic); `groupsForMode` grows Simple→Expert to
+  the full set, preserves group order, drops empty groups; `matchesSearch` by
+  label/key/group.
+- vitest `build-volume.spec.js`: `settingsMode` defaults to basic + persists +
+  rejects junk; `presetDirty` false→true across an edit and resets on load.
+- vitest `settings-tree.spec.js` (new): ProfileQuickEdit is data-driven via
+  `groupsForMode`/`OverrideField`, has the mode toggle + search, keeps the
+  prime-tower group multi-material-gated; OverrideField owns the modified/reset
+  chrome; PrepareOverrides shows the unsaved dot. Full suite green (468).
+
 ## [1.60.4] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 4: seam + retraction in the g-code
