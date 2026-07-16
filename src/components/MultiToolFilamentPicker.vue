@@ -1,9 +1,11 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import FlushMatrixPanel from './FlushMatrixPanel.vue'
 
 export default {
 	name: 'MultiToolFilamentPicker',
+	components: { FlushMatrixPanel },
 	computed: {
 		...mapStores(usePrintStore),
 		extruderCount() {
@@ -44,6 +46,7 @@ export default {
 				</option>
 			</select>
 		</div>
+		<FlushMatrixPanel />
 	</div>
 </template>
 

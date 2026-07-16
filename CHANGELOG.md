@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.60.9] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 9 (final): AMS flush matrix. Adapter
++ frontend (needs a sidecar rebuild). Multi-material only.
+
+### Added — AMS flush matrix (multi-tool filament picker)
+
+- **Flush matrix** — for a printer profile with more than one extruder, the
+  multi-tool filament picker now shows an AMS flush matrix: set each slot's
+  colour and compute the purge needed to change from every colour to every other
+  (in mm³ or grams), rendered as a green→red heatmap so expensive transitions are
+  obvious at a glance. Uses the OrcaSlicer HSV flush model already in the sidecar
+  (`color_order.build_matrix`) via a thin new `POST /api/flush/matrix` endpoint —
+  no new purge math. The whole panel is gated behind `extruderCount > 1`, so a
+  single-extruder printer (e.g. the K1 Max) never sees it — zero regression. If an
+  older sidecar lacks the endpoint, the panel shows a rebuild hint instead of
+  erroring.
+
+This completes the deferred slicer-GUI alignment tier (parts 1–9, 1.60.1–1.60.9).
+
+### Changed — internal
+
+- Adapter: `POST /api/flush/matrix` returns `{ colors, names, matrix, grams }`
+  over `build_matrix` + `flush_grams` (allowlisted as `api/flush`).
+- Frontend: `fetchFlushMatrix` in `color-order-api.js`; new `FlushMatrixPanel.vue`
+  folded into `MultiToolFilamentPicker`.
+
+### Tests
+
+- adapter `test_adapter.py`: `build_matrix` is NxN with a zero diagonal +
+  positive off-diagonals; grams tracks volume.
+- vitest `color-order-api.spec.js`: `fetchFlushMatrix` posts to `/flush/matrix`;
+  `flush-matrix.spec.js`: adapter endpoint over `build_matrix` + allowlist, panel
+  gated behind `extruderCount > 1` with 404 degrade, picker hosts it. Full vitest
+  suite green (496); adapter green (61); phpunit green (107).
+
 ## [1.60.8] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 8: `.3mf` project save/load

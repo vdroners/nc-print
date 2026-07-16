@@ -10,7 +10,7 @@ vi.mock('@nextcloud/axios', () => ({
 
 global.window = global.window || {}
 
-import { optimizeColorOrder } from '@/services/color-order-api.js'
+import { optimizeColorOrder, fetchFlushMatrix } from '@/services/color-order-api.js'
 import axios from '@nextcloud/axios'
 
 describe('color-order-api', () => {
@@ -33,6 +33,19 @@ describe('color-order-api', () => {
 		expect(axios.post).toHaveBeenCalledWith(
 			'https://cloud.example/apps/nc_print/api/slicer/color-order',
 			{ colors: ['#111111', '#222222'], density: 1.04 },
+		)
+	})
+
+	it('fetchFlushMatrix posts colors to the flush endpoint (v1.69)', async () => {
+		axios.post.mockResolvedValueOnce({
+			data: { colors: ['#000000', '#FFFFFF'], names: ['Black', 'White'], matrix: [[0, 700], [280, 0]], grams: [[0, 0.87], [0.35, 0]] },
+		})
+		const res = await fetchFlushMatrix({ colors: ['#000000', '#FFFFFF'] })
+		expect(res.matrix[0][1]).toBe(700)
+		expect(res.grams[1][0]).toBe(0.35)
+		expect(axios.post).toHaveBeenCalledWith(
+			'https://cloud.example/apps/nc_print/api/slicer/flush/matrix',
+			{ colors: ['#000000', '#FFFFFF'] },
 		)
 	})
 })

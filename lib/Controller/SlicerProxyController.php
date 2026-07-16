@@ -221,6 +221,7 @@ class SlicerProxyController extends Controller
 		'api/calibration',  // covers list + calibration/{id}/slice + calibration/generate
 		'api/materials',    // filament material reference DB (list + by-id)
 		'api/color-order',  // multi-color purge/flush order optimizer
+		'api/flush',        // filament-change flush/purge matrix (AMS multi-material)
 		'api/gcode',        // g-code linter (POST /lint) + reference (GET /reference)
 		'api/printer-presets', // static printer model preset lookup
 		'api/project/',     // pack a project .3mf (geometry + nc_print_project.json)

@@ -49,7 +49,7 @@ from filament_materials import (
     get_material_by_id,
     get_materials_by_category,
 )
-from color_order import optimize_color_order, basic_color_name
+from color_order import optimize_color_order, basic_color_name, build_matrix, flush_grams
 from gcode_linter import lint_gcode
 from gcode_postprocess import inject_pauses
 from gcode_reference import get_reference, list_reference, search_reference
@@ -746,6 +746,44 @@ async def color_order(request: Request) -> JSONResponse:
     result = optimize_color_order(colors, density)
     result["names"] = [basic_color_name(c) for c in result["orderedColors"]]
     return JSONResponse(result)
+
+
+@app.post("/api/flush/matrix")
+async def flush_matrix(request: Request) -> JSONResponse:
+    """Filament-change flush/purge matrix for a set of loaded colors.
+
+    Body: {colors: ["#RRGGBB", ...], density?: g/cm3}. Returns matrix[i][j] = the
+    purge VOLUME (mm³) to change from colour i to colour j, a parallel grams[i][j]
+    (at the given density), and the basic colour names — for the AMS flush-matrix
+    UI. Pure math over the same OrcaSlicer HSV flush model the color-order
+    optimiser uses; no slicing, no side effects.
+    """
+    try:
+        payload = await request.json()
+    except Exception:  # noqa: BLE001
+        payload = {}
+    colors = payload.get("colors")
+    if not isinstance(colors, list) or len(colors) < 2:
+        return JSONResponse({"error": "bad_request",
+                             "message": "colors must be an array of >=2 #RRGGBB strings"}, 400)
+    colors = [str(c) for c in colors]
+    if len(colors) > 16:
+        return JSONResponse({"error": "too_many_colors",
+                             "message": "at most 16 colors"}, 400)
+    density = payload.get("density")
+    try:
+        density = float(density) if density is not None else 1.24
+    except (TypeError, ValueError):
+        density = 1.24
+    volume = build_matrix(colors)
+    grams = [[round(flush_grams(colors[i], colors[j], density), 3) if i != j else 0.0
+              for j in range(len(colors))] for i in range(len(colors))]
+    return JSONResponse({
+        "colors": colors,
+        "names": [basic_color_name(c) for c in colors],
+        "matrix": [[round(v, 2) for v in row] for row in volume],
+        "grams": grams,
+    })
 
 
 @app.post("/api/gcode/lint")

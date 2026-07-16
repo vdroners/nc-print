@@ -762,6 +762,21 @@ def test_optimize_color_order_reduces_purge():
     )
 
 
+def test_flush_matrix_shape_and_diagonal():
+    from color_order import build_matrix, flush_grams
+    colors = ["#FF0000", "#00FF00", "#0000FF"]
+    m = build_matrix(colors)
+    assert len(m) == 3 and all(len(row) == 3 for row in m)
+    # diagonal is zero (no change to the same colour); off-diagonal is positive
+    for i in range(3):
+        assert m[i][i] == 0
+        for j in range(3):
+            if i != j:
+                assert m[i][j] > 0
+    # grams tracks volume * density (monotonic with volume)
+    assert flush_grams("#000000", "#FFFFFF") > flush_grams("#808080", "#808080")
+
+
 def test_optimize_color_order_trivial_cases():
     from color_order import optimize_color_order
     assert optimize_color_order([])["order"] == []
