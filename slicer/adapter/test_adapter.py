@@ -275,6 +275,53 @@ def test_toolpath_parser_layers_and_features():
     assert tp["bbox"]["max"][2] == 0.4
 
 
+_SEAM_RETRACT_GCODE = """; header
+;LAYER_CHANGE
+;Z:0.2
+;HEIGHT:0.2
+;TYPE:Outer wall
+G1 X0 Y0 Z0.2 E0 F1800
+;SEAM outer
+G1 X10 Y0 E1
+G1 X10 Y10 E2
+G1 E1.5 F2400
+G1 X0 Y0 F9000
+"""
+
+
+def test_toolpath_detects_seam_and_retraction():
+    import tempfile as tf
+    from gcode_toolpath import parse_toolpath, FEATURE_TYPES
+    # seam + retraction are declared canonical feature types
+    assert "seam" in FEATURE_TYPES
+    assert "retraction" in FEATURE_TYPES
+    with tf.NamedTemporaryFile("w", suffix=".gcode", delete=False) as f:
+        f.write(_SEAM_RETRACT_GCODE)
+        path = f.name
+    try:
+        tp = parse_toolpath(path)
+    finally:
+        os.unlink(path)
+    segs = tp["layers"][0]["segments"]
+    # A ;SEAM before the first extruding move drops a seam dot at its start (0,0).
+    assert "seam" in segs
+    seam = segs["seam"]["positions"]
+    assert len(seam) == 6 and seam[:3] == seam[3:]  # degenerate 2-vert dot
+    assert seam[0] == 0.0 and seam[1] == 0.0
+    # The pure E-reversal (G1 E1.5 after E2, no XYZ) is a retraction dot.
+    assert "retraction" in segs
+    ret = segs["retraction"]["positions"]
+    assert len(ret) == 6 and ret[:3] == ret[3:]
+    # Dots keep the positions%6==0 invariant + one speed per segment.
+    for feat in ("seam", "retraction"):
+        p = segs[feat]["positions"]
+        assert len(p) % 6 == 0
+        assert len(segs[feat]["speeds"]) * 6 == len(p)
+    # Seam/retraction must NOT skew the extrusion speed range (outer wall only).
+    assert tp["meta"]["speed_min"] == 30.0
+    assert tp["meta"]["speed_max"] == 30.0
+
+
 def test_mesh_too_large_rejected():
     import struct
     from mesh3mf import stl_bytes_to_3mf, MAX_TRIANGLES

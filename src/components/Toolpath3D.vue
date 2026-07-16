@@ -183,8 +183,11 @@ export default {
 				this.minLayer = 0
 				this.features = presentFeatures(tp)
 				const vis = {}
+				// Travel + retractions are noisy — hidden by default; seams stay on
+				// (they're the useful marker). Everything else is visible.
+				const HIDDEN_BY_DEFAULT = new Set(['travel', 'retraction'])
 				for (const f of this.features) {
-					vis[f] = f !== 'travel'
+					vis[f] = !HIDDEN_BY_DEFAULT.has(f)
 				}
 				this.visible = vis
 				this._recomputeTopLayerMoves()

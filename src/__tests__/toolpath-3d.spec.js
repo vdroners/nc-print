@@ -4,7 +4,7 @@ vi.mock('@nextcloud/router', () => ({
 	generateUrl: (p) => p,
 }))
 
-import { fetchToolpath, presentFeatures, colorForSpeed, FEATURE_COLORS } from '@/services/toolpath-3d.js'
+import { fetchToolpath, presentFeatures, colorForSpeed, FEATURE_COLORS, FEATURE_LABELS } from '@/services/toolpath-3d.js'
 
 const SAMPLE = {
 	units: 'mm',
@@ -93,6 +93,14 @@ describe('FEATURE_COLORS', () => {
 		for (const f of SAMPLE.feature_types) {
 			expect(FEATURE_COLORS[f]).toBeTypeOf('number')
 		}
+	})
+
+	it('has distinct colours + labels for seam and retraction (v1.64)', () => {
+		expect(FEATURE_COLORS.seam).toBeTypeOf('number')
+		expect(FEATURE_COLORS.retraction).toBeTypeOf('number')
+		expect(FEATURE_COLORS.seam).not.toBe(FEATURE_COLORS.retraction)
+		expect(FEATURE_LABELS.seam).toBe('Seams')
+		expect(FEATURE_LABELS.retraction).toBe('Retractions')
 	})
 })
 

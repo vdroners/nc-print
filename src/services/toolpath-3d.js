@@ -33,6 +33,8 @@ export const FEATURE_COLORS = {
 	gap_infill: 0xa3e635,
 	custom: 0x8b949e,
 	other: 0x8b949e,
+	seam: 0xff1e5a, // hot pink dot at each layer seam
+	retraction: 0x00e0d0, // cyan dot at each retraction
 	travel: 0x556070,
 }
 
@@ -54,6 +56,8 @@ export const FEATURE_LABELS = {
 	gap_infill: 'Gap fill',
 	custom: 'Custom',
 	other: 'Other',
+	seam: 'Seams',
+	retraction: 'Retractions',
 	travel: 'Travel',
 }
 

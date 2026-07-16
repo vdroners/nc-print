@@ -1016,14 +1016,26 @@ export async function createViewport(canvas, wrap) {
 				}
 			})
 
+			// Seam + retraction are degenerate (zero-length) segments — a LineSegments
+			// would render them invisible, so draw those as Points instead.
+			const POINT_FEATURES = new Set(['seam', 'retraction'])
+			// Hidden by default: travel (noisy) + retraction (noisy). Seam stays on.
+			const HIDDEN_BY_DEFAULT = new Set(['travel', 'retraction'])
 			for (const [feat, acc] of byFeature.entries()) {
 				const geom = new THREE.BufferGeometry()
 				const pos = new Float32Array(acc.positions)
 				geom.setAttribute('position', new THREE.BufferAttribute(pos, 3))
+				const asPoints = POINT_FEATURES.has(feat)
 				let mat
-				if (useSpeed && feat !== 'travel' && acc.colors.length === pos.length) {
+				if (!asPoints && useSpeed && feat !== 'travel' && acc.colors.length === pos.length) {
 					geom.setAttribute('color', new THREE.BufferAttribute(new Float32Array(acc.colors), 3))
 					mat = new THREE.LineBasicMaterial({ vertexColors: true })
+				} else if (asPoints) {
+					mat = new THREE.PointsMaterial({
+						color: colorMap[feat] ?? 0x8b949e,
+						size: feat === 'seam' ? 3.2 : 2.4,
+						sizeAttenuation: false,
+					})
 				} else {
 					mat = new THREE.LineBasicMaterial({
 						color: colorMap[feat] ?? 0x8b949e,
@@ -1031,8 +1043,8 @@ export async function createViewport(canvas, wrap) {
 						opacity: feat === 'travel' ? 0.35 : 1,
 					})
 				}
-				const line = new THREE.LineSegments(geom, mat)
-				line.visible = feat !== 'travel' // travel hidden by default
+				const line = asPoints ? new THREE.Points(geom, mat) : new THREE.LineSegments(geom, mat)
+				line.visible = !HIDDEN_BY_DEFAULT.has(feat)
 				toolpathGroup.add(line)
 				toolpathLines.set(feat, {
 					line,

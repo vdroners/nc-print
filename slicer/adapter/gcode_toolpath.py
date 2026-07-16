@@ -44,11 +44,15 @@ _FEATURE_MAP = {
 }
 
 # Order defines the frontend legend order; unknown types fall back to "other".
+# `seam` and `retraction` are DEGENERATE point markers (both segment verts at the
+# same spot → a dot), not extrusion paths — they still obey the 2-verts/segment
+# (positions % 6 == 0) contract. Old sidecars simply omit these keys, so the
+# frontend legend/colours degrade gracefully (same posture as color-by-speed).
 FEATURE_TYPES = [
     "outer_wall", "inner_wall", "overhang_wall", "sparse_infill", "solid_infill",
     "top_surface", "bottom_surface", "bridge", "support", "support_iface",
     "skirt_brim", "prime_tower", "ironing", "gap_infill", "custom", "other",
-    "travel",
+    "seam", "retraction", "travel",
 ]
 
 _MOVE_RE = re.compile(r"([XYZEF])(-?\d*\.?\d+(?:[eE][+-]?\d+)?)")
@@ -67,6 +71,7 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
     layers: list[dict] = []
     cur_layer: dict | None = None
     cur_feature = "other"
+    seam_pending = False  # a ;SEAM comment marks the NEXT extruding move's start
     x = y = z = 0.0
     e = 0.0
     feed_mm_s = 0.0  # sticky feedrate (gcode F is mm/min → /60)
@@ -91,8 +96,9 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
         # per-vertex colour ramp without altering the positions contract.
         seg["speeds"].append(spd)
         move_count += 1
-        # Speed range over EXTRUDING moves only (travel skews the scale).
-        if feat != "travel" and spd > 0:
+        # Speed range over EXTRUDING PATHS only. Travel skews the scale; seam +
+        # retraction are degenerate dot-markers, not extrusion speed samples.
+        if feat not in ("travel", "seam", "retraction") and spd > 0:
             speed_min = min(speed_min, spd)
             speed_max = max(speed_max, spd)
         for vx, vy, vz in ((x0, y0, z0), (x1, y1, z1)):
@@ -126,6 +132,10 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
                         pass
                 elif low.startswith(";type:"):
                     cur_feature = _canonical(line[6:])
+                elif low.startswith(";seam"):
+                    # OrcaSlicer/PrusaSlicer emit a ;SEAM marker at the seam point;
+                    # flag the next extruding move so we drop a seam dot at its start.
+                    seam_pending = True
                 continue
 
             head = line[:3].upper()
@@ -150,13 +160,25 @@ def parse_toolpath(path: str, max_layers: int = 100000) -> dict:
                     elif au == "F":
                         feed_mm_s = v / 60.0  # F is mm/min in gcode
                 moved = (nx != x) or (ny != y) or (nz != z)
+                delta_e = (ne - e) if absolute_e else ne
                 if moved:
                     if cur_layer is None:
                         cur_layer = _new_layer(nz, None)
                         layers.append(cur_layer)
-                    extruding = has_e and ((ne > e) if absolute_e else (ne > 0))
+                    extruding = has_e and delta_e > 0
                     feat = cur_feature if extruding else "travel"
+                    # Seam marker: a degenerate dot at the extrusion start point.
+                    if extruding and seam_pending:
+                        _push("seam", x, y, z, x, y, z, round(feed_mm_s, 1))
+                    seam_pending = False
                     _push(feat, x, y, z, nx, ny, nz, round(feed_mm_s, 1))
+                elif has_e and delta_e < 0:
+                    # Pure retraction (E reverses with no XYZ move) → a dot at the
+                    # current head position. Kept as a 2-vert degenerate segment.
+                    if cur_layer is None:
+                        cur_layer = _new_layer(z, None)
+                        layers.append(cur_layer)
+                    _push("retraction", x, y, z, x, y, z, round(feed_mm_s, 1))
                 x, y, z = nx, ny, nz
                 if has_e:
                     e = ne

@@ -1,5 +1,37 @@
 # Changelog
 
+## [1.60.4] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 4: seam + retraction in the g-code
+preview. Adapter + frontend (needs a sidecar rebuild).
+
+### Added — g-code preview (Slice tab)
+
+- **Seam markers** — the toolpath parser now recognises the `;SEAM` comment
+  slicers emit and drops a marker dot at each layer's seam start. Seams render as
+  hot-pink points and are shown by default, so you can see where the nozzle
+  starts each perimeter (and judge seam placement) — matching the seam overlay in
+  OrcaSlicer/PrusaSlicer.
+- **Retraction markers** — pure extruder reversals (negative E with no XYZ move,
+  previously discarded) are now captured as cyan marker dots, hidden by default
+  (toggle them on from the legend). Handy for spotting retraction-heavy regions.
+
+Both are degenerate two-vertex "dot" segments rendered as `THREE.Points`, so the
+positions-are-a-multiple-of-6 contract and the one-speed-per-segment parallel
+array are preserved. They're excluded from the color-by-speed range (they're
+markers, not extrusion samples). An older sidecar simply omits the keys and the
+legend degrades gracefully — same posture as the color-by-speed rollout.
+
+### Tests
+
+- adapter `test_adapter.py`: `seam`/`retraction` are declared feature types; a
+  fixture with a `;SEAM` comment + an E-reversal yields degenerate dots at the
+  right coordinates, keeps positions%6==0 + one-speed-per-segment, and does not
+  skew the extrusion speed range.
+- vitest `toolpath-3d.spec.js`: distinct colours + labels for seam/retraction;
+  `preview-alignment.spec.js`: adapter detection source + viewport renders them
+  as Points with the correct default-hidden set. Full suite green (455).
+
 ## [1.60.3] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 3: multi-select in the scene list.

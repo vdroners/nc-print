@@ -65,3 +65,20 @@ describe('preview/viewport A (v1.62)', () => {
 		expect(viewport).toMatch(/box\.max\.z <= bz \+ 0\.5/)
 	})
 })
+
+describe('seam/retraction features (v1.64)', () => {
+	it('adapter declares seam + retraction feature types and detects them', () => {
+		expect(adapter).toMatch(/"seam", "retraction", "travel"/)
+		expect(adapter).toMatch(/seam_pending/)
+		// retraction = negative delta-E with no XYZ move → a dot
+		expect(adapter).toMatch(/elif has_e and delta_e < 0/)
+		expect(adapter).toMatch(/_push\("retraction"/)
+		expect(adapter).toMatch(/_push\("seam"/)
+	})
+
+	it('viewport renders seam/retraction as Points (degenerate dots), hidden set right', () => {
+		expect(viewport).toMatch(/POINT_FEATURES = new Set\(\['seam', 'retraction'\]\)/)
+		expect(viewport).toMatch(/new THREE\.Points\(geom, mat\)/)
+		expect(viewport).toMatch(/HIDDEN_BY_DEFAULT = new Set\(\['travel', 'retraction'\]\)/)
+	})
+})
