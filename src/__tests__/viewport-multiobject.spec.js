@@ -48,3 +48,31 @@ describe('viewport multi-object (3b) — source invariants', () => {
 		expect(modelViewport).toMatch(/pickObjectAt/)
 	})
 })
+
+describe('viewport multi-select tint (v1.63) — source invariants', () => {
+	it('exposes setMultiSelection but the gizmo still routes through single-select', () => {
+		expect(viewport).toMatch(/setMultiSelection\(ids\)/)
+		expect(viewport).toMatch(/const multiIds = new Set/)
+		// gizmo attach is NEVER wired to a group — still only in selectObjectById.
+		expect(viewport).not.toMatch(/setMultiSelection[\s\S]{0,200}gizmo\.attach/)
+	})
+
+	it('applyHighlight precedence is out-of-bed > anchor > multi > flat', () => {
+		const fn = viewport.match(/function applyHighlight[\s\S]*?\n\t\}/)
+		expect(fn).not.toBeNull()
+		const body = fn[0]
+		const iOut = body.indexOf('outOfBedIds.has(id)')
+		const iSel = body.indexOf('id === selectedId')
+		const iMulti = body.indexOf('multiIds.has(id)')
+		expect(iOut).toBeGreaterThanOrEqual(0)
+		expect(iSel).toBeGreaterThan(iOut) // out-of-bed checked first
+		expect(iMulti).toBeGreaterThan(iSel) // multi checked after the anchor
+	})
+
+	it('ModelViewport mirrors the store multi-selection into the viewport tint', () => {
+		expect(modelViewport).toMatch(/multiSelectionIds/)
+		expect(modelViewport).toMatch(/setMultiSelection/)
+		// batch-delete cleanup: sync prunes selectedObjectIds to live ids
+		expect(modelViewport).toMatch(/selectedObjectIds = this\.printStore\.selectedObjectIds\.filter/)
+	})
+})

@@ -69,6 +69,11 @@ export default {
 		bedLegendWarn() {
 			return !!this.printStore.modelMeta.bbox && !this.printStore.modelMeta.fitsBed
 		},
+		// Passthrough for the multiSelectionIds watcher (a computed reference is the
+		// reliable trigger when the store replaces the array in place).
+		multiSelectionIds() {
+			return this.printStore.selectedObjectIds
+		},
 	},
 	watch: {
 		file: {
@@ -81,6 +86,13 @@ export default {
 			deep: true,
 			handler(vol) {
 				this.viewport?.setBedVolume(vol)
+			},
+		},
+		// Mirror the scene-list multi-selection into the viewport tint (the gizmo
+		// anchor is driven separately by selectObject → selectionChange).
+		multiSelectionIds: {
+			handler(ids) {
+				this.viewport?.setMultiSelection?.(ids)
 			},
 		},
 	},
@@ -249,6 +261,9 @@ export default {
 			})
 			// Mirror the viewport's current selection.
 			this.printStore.selectedObjectId = this.viewport?.getSelectedId?.() ?? null
+			// Prune the multi-selection to ids that still exist (batch-delete cleanup).
+			const liveIds = new Set(this.printStore.objects.map((o) => o.id))
+			this.printStore.selectedObjectIds = this.printStore.selectedObjectIds.filter((id) => liveIds.has(id))
 			// Refresh out-of-bed tinting + flag list (viewport recomputes bounds and
 			// re-applies the red highlight as a side effect).
 			this.printStore.outOfBedIds = this.viewport?.objectsOutOfBed?.() || []

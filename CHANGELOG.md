@@ -1,5 +1,39 @@
 # Changelog
 
+## [1.60.3] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 3: multi-select in the scene list.
+Frontend-only (no sidecar rebuild).
+
+### Added — scene object list (Prepare)
+
+- **Multi-select** — Ctrl/Cmd-click toggles objects in and out of a selection,
+  Shift-click selects a contiguous range, and a plain click still single-selects
+  (which drives the transform gizmo). Selected rows are highlighted; the matching
+  meshes are tinted in the 3D view (the gizmo anchor bright, other members dim).
+  A "Delete N" button appears in the list header when more than one object is
+  selected.
+- **Batch delete** — removes every selected object at once, but never the last
+  one standing (the scene always keeps at least one object). The viewport remains
+  the source of truth: each mesh is removed there and the store scene re-syncs,
+  which also prunes the selection.
+- **Off-bed marker in the list** — rows for objects that exceed the build volume
+  now show a red left edge, mirroring the v1.60.2 viewport tint.
+
+The transform gizmo still attaches to a single object only (multi-object
+move/rotate/scale is intentionally out of scope for this round).
+
+### Tests
+
+- vitest `scene-objects.spec.js`: single-select syncs `selectedObjectIds` as
+  `[id]`; ctrl-toggle add/remove moves the anchor; shift-range selects the
+  inclusive span; `removeObjects` never deletes the last object; `removeObject`
+  prunes the multi-selection.
+- vitest `viewport-multiobject.spec.js`: viewport exposes `setMultiSelection`
+  without wiring the gizmo to a group; `applyHighlight` precedence is
+  out-of-bed > anchor > multi > flat; ModelViewport mirrors the selection + prunes
+  on sync. Full suite green (452).
+
 ## [1.60.2] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 2: preview + viewport polish.

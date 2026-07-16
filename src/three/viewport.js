@@ -67,6 +67,7 @@ export async function createViewport(canvas, wrap) {
 	// what keeps the gizmo lifecycle safe.
 	const objects = [] // [{ id, mesh }]
 	let selectedId = null
+	const multiIds = new Set() // scene-list multi-selection (gizmo anchor stays selectedId)
 	const outOfBedIds = new Set() // ids whose bounds exceed the build volume (any axis)
 	let objSeq = 0
 	let modelMesh = null
@@ -149,19 +150,22 @@ export async function createViewport(canvas, wrap) {
 		return objects.find((o) => o.id === selectedId) || null
 	}
 
-	// Subtle emissive tint marks object state. Precedence: selection (green) wins
-	// over out-of-bed (red); everything else reverts to flat. The out-of-bed set is
-	// refreshed by refreshOutOfBed() whenever geometry/transforms/bed change.
+	// Subtle emissive tint marks object state. Precedence: out-of-bed (red) is the
+	// loudest warning and wins; then the gizmo anchor (bright green); then a
+	// multi-selected member (dim green); everything else reverts to flat. Sets are
+	// refreshed by refreshOutOfBed()/setMultiSelection() as state changes.
 	function applyHighlight() {
 		for (const { id, mesh } of objects) {
 			const mat = mesh.material
 			if (!mat?.emissive) {
 				continue
 			}
-			if (id === selectedId) {
-				mat.emissive.setHex(0x1e6b3a)
-			} else if (outOfBedIds.has(id)) {
+			if (outOfBedIds.has(id)) {
 				mat.emissive.setHex(0x8a1c1c)
+			} else if (id === selectedId) {
+				mat.emissive.setHex(0x1e6b3a)
+			} else if (multiIds.has(id)) {
+				mat.emissive.setHex(0x0f3d22)
 			} else {
 				mat.emissive.setHex(0x000000)
 			}
@@ -800,6 +804,18 @@ export async function createViewport(canvas, wrap) {
 		 */
 		objectsOutOfBed() {
 			return refreshOutOfBed()
+		},
+		/**
+		 * Set the scene-list multi-selection tint set. The gizmo anchor is unchanged
+		 * (still driven by selectObjectById) — this only recolours the members.
+		 * @param {string[]} ids
+		 */
+		setMultiSelection(ids) {
+			multiIds.clear()
+			for (const id of ids || []) {
+				multiIds.add(id)
+			}
+			applyHighlight()
 		},
 		pickFaceNormal(clientX, clientY) {
 			if (!modelMesh) {

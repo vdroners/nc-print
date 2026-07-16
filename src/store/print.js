@@ -333,6 +333,11 @@ export const usePrintStore = defineStore('print', {
 		//     scale:[x,y,z], bbox|null, triangleCount, visible }
 		objects: [],
 		selectedObjectId: null,
+		// Multi-selection superset (scene-list checkboxing). selectedObjectId stays
+		// the SINGLE gizmo anchor (the gizmo never attaches to a group); this array
+		// is the set the scene list tints + batch-deletes. Single-select keeps it in
+		// sync as [id] (or []). See toggleObjectInSelection / selectObjectRangeTo.
+		selectedObjectIds: [],
 		// Ids of objects whose bounds exceed the build volume (any axis, incl. Z
 		// height). Authored by the viewport bridge (_syncSceneFromViewport →
 		// viewport.objectsOutOfBed) so the scene list + summary can flag them.
@@ -1402,11 +1407,53 @@ export const usePrintStore = defineStore('print', {
 		selectObject(id) {
 			if (id === null || this.objects.some((o) => o.id === id)) {
 				this.selectedObjectId = id
+				// A plain (single) select collapses any multi-selection to this one.
+				this.selectedObjectIds = id === null ? [] : [id]
 			}
 		},
 
 		clearSelection() {
 			this.selectedObjectId = null
+			this.selectedObjectIds = []
+		},
+
+		/**
+		 * Ctrl/Cmd-click: toggle an object in/out of the multi-selection. The gizmo
+		 * anchor (selectedObjectId) follows the most-recently-affected object; it
+		 * NEVER attaches to a group (single-gizmo invariant).
+		 * @param {string} id
+		 */
+		toggleObjectInSelection(id) {
+			if (!this.objects.some((o) => o.id === id)) {
+				return
+			}
+			const set = new Set(this.selectedObjectIds.length ? this.selectedObjectIds : (this.selectedObjectId ? [this.selectedObjectId] : []))
+			if (set.has(id)) {
+				set.delete(id)
+			} else {
+				set.add(id)
+			}
+			this.selectedObjectIds = [...set]
+			// Anchor: the toggled id if still selected, else the last remaining one.
+			this.selectedObjectId = set.has(id) ? id : (this.selectedObjectIds[this.selectedObjectIds.length - 1] ?? null)
+		},
+
+		/**
+		 * Shift-click: select the contiguous range from the current anchor to `id`
+		 * (inclusive), in scene order. Anchor moves to `id`.
+		 * @param {string} id
+		 */
+		selectObjectRangeTo(id) {
+			const ids = this.objects.map((o) => o.id)
+			const to = ids.indexOf(id)
+			if (to < 0) {
+				return
+			}
+			const anchor = this.selectedObjectId ?? id
+			const from = Math.max(0, ids.indexOf(anchor))
+			const [lo, hi] = from <= to ? [from, to] : [to, from]
+			this.selectedObjectIds = ids.slice(lo, hi + 1)
+			this.selectedObjectId = id
 		},
 
 		/**
@@ -1429,6 +1476,27 @@ export const usePrintStore = defineStore('print', {
 			if (this.selectedObjectId === id) {
 				this.selectedObjectId = this.objects[Math.max(0, idx - 1)]?.id ?? null
 			}
+			this.selectedObjectIds = this.selectedObjectIds.filter((x) => x !== id)
+		},
+
+		/**
+		 * Batch-delete a set of objects, but NEVER the last one standing — if the
+		 * request would empty the scene, the final remaining object is kept. Returns
+		 * the ids actually removed (the actual mesh removal is the viewport's job;
+		 * the bridge calls viewport.removeObject per returned id then re-syncs).
+		 * @param {string[]} ids
+		 * @returns {string[]}
+		 */
+		removeObjects(ids) {
+			const wanted = [...new Set(ids)].filter((id) => this.objects.some((o) => o.id === id))
+			// Keep at least one object alive.
+			const removable = wanted.length >= this.objects.length
+				? wanted.slice(0, this.objects.length - 1)
+				: wanted
+			for (const id of removable) {
+				this.removeObject(id)
+			}
+			return removable
 		},
 
 		/** Clone an object's transform+metadata (geometry cloning is the viewport's job). */

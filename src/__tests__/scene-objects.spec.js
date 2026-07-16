@@ -108,3 +108,65 @@ describe('scene objects (Phase 3a)', () => {
 		expect(store.selectedObjectId).toBeNull()
 	})
 })
+
+describe('multi-selection (v1.63)', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	const threeObjects = () => {
+		const store = usePrintStore()
+		store.setModel(makeFile('a.stl'), 'import')
+		const a = store.objects[0].id
+		const b = store.addObject({ name: 'b' }).id
+		const c = store.addObject({ name: 'c' }).id
+		return { store, a, b, c }
+	}
+
+	it('single select keeps selectedObjectIds in sync as [id]', () => {
+		const { store, a } = threeObjects()
+		store.selectObject(a)
+		expect(store.selectedObjectId).toBe(a)
+		expect(store.selectedObjectIds).toEqual([a])
+		store.selectObject(null)
+		expect(store.selectedObjectIds).toEqual([])
+	})
+
+	it('ctrl-toggle adds/removes and moves the anchor', () => {
+		const { store, a, b, c } = threeObjects()
+		store.selectObject(a)
+		store.toggleObjectInSelection(c)
+		expect(new Set(store.selectedObjectIds)).toEqual(new Set([a, c]))
+		expect(store.selectedObjectId).toBe(c) // anchor follows the added id
+		store.toggleObjectInSelection(c) // remove it again
+		expect(store.selectedObjectIds).toEqual([a])
+		expect(store.selectedObjectId).toBe(a)
+		// b was never involved
+		expect(store.selectedObjectIds).not.toContain(b)
+	})
+
+	it('shift-range selects the contiguous span from the anchor (inclusive)', () => {
+		const { store, a, b, c } = threeObjects()
+		store.selectObject(a)
+		store.selectObjectRangeTo(c)
+		expect(store.selectedObjectIds).toEqual([a, b, c])
+		expect(store.selectedObjectId).toBe(c)
+	})
+
+	it('removeObjects batch-deletes but never the last object', () => {
+		const { store, a, b, c } = threeObjects()
+		// Try to delete all three — one must survive.
+		const removed = store.removeObjects([a, b, c])
+		expect(removed).toHaveLength(2)
+		expect(store.objects).toHaveLength(1)
+	})
+
+	it('removeObject prunes the id from the multi-selection', () => {
+		const { store, a, b } = threeObjects()
+		store.selectObject(a)
+		store.toggleObjectInSelection(b)
+		store.removeObject(b)
+		expect(store.selectedObjectIds).not.toContain(b)
+	})
+})
