@@ -124,6 +124,62 @@ class FileFetchService
 		return $this->describeFile($userRoot, $file);
 	}
 
+	/**
+	 * Write an nc-print project file (.3mf with embedded project metadata) as a
+	 * sibling of the model, named "<model-stem>.nc.3mf" so it doesn't collide with
+	 * a plain export. Generalises the gcode-sibling write for arbitrary bytes.
+	 *
+	 * @return array<string, mixed>
+	 */
+	public function writeProjectSibling(Folder $userRoot, File $modelFile, string $bytes): array
+	{
+		return $this->writeSibling($userRoot, $modelFile, '.nc.3mf', $bytes);
+	}
+
+	/**
+	 * Write `$bytes` to a file next to `$modelFile` named "<stem><suffix>",
+	 * overwriting an existing sibling. `$suffix` includes the dot(s) + extension
+	 * (e.g. ".gcode", ".nc.3mf"). Enforces the size cap. Shared write path.
+	 *
+	 * @return array<string, mixed>
+	 */
+	private function writeSibling(Folder $userRoot, File $modelFile, string $suffix, string $bytes): array
+	{
+		if (strlen($bytes) > self::MAX_BYTES) {
+			throw new \InvalidArgumentException('file_too_large');
+		}
+		$parent = $modelFile->getParent();
+		if (!($parent instanceof Folder)) {
+			throw new \RuntimeException('no_parent_folder');
+		}
+		$stem = pathinfo($modelFile->getName(), PATHINFO_FILENAME);
+		if ($stem === '') {
+			throw new \InvalidArgumentException('invalid_model_name');
+		}
+		$name = $stem . $suffix;
+
+		if ($parent->nodeExists($name)) {
+			$node = $parent->get($name);
+			if (!($node instanceof File)) {
+				throw new \InvalidArgumentException('sibling_not_a_file');
+			}
+			try {
+				$node->putContent($bytes);
+			} catch (NotPermittedException $e) {
+				throw new \RuntimeException('write_denied', 0, $e);
+			}
+			return $this->describeFile($userRoot, $node);
+		}
+
+		try {
+			$file = $parent->newFile($name);
+			$file->putContent($bytes);
+		} catch (NotPermittedException $e) {
+			throw new \RuntimeException('write_denied', 0, $e);
+		}
+		return $this->describeFile($userRoot, $file);
+	}
+
 	public function resolveModelNode(Folder $userRoot, ?string $davPath, ?int $fileId): File
 	{
 		return $this->resolveNode($userRoot, $davPath, $fileId, false);

@@ -264,6 +264,14 @@ def _parse_multipart(content_type: str, body: bytes) -> dict:
                 fields["object_overrides"] = v if isinstance(v, list) else []
             except Exception:  # noqa: BLE001
                 fields["object_overrides"] = []
+        elif name == "project_meta":
+            # nc-print's own project state (selection/overrides/plates/names) to
+            # embed as Metadata/nc_print_project.json for a re-openable .3mf.
+            try:
+                v = json.loads(payload.decode() or "{}")
+                fields["project_meta"] = v if isinstance(v, dict) else None
+            except Exception:  # noqa: BLE001
+                fields["project_meta"] = None
         else:
             fields[name] = payload.decode(errors="replace").strip()
     return fields
@@ -661,6 +669,53 @@ async def material_detail(material_id: str) -> JSONResponse:
         return JSONResponse({"error": "not_found",
                              "message": f"unknown material '{material_id}'"}, 404)
     return JSONResponse(m)
+
+
+@app.post("/api/project/pack")
+async def project_pack(request: Request) -> Response:
+    """Pack one or more STL models + nc-print project metadata into a .3mf.
+
+    Multipart body: model/model[] parts (baked-transform STLs, viewport order),
+    optional object_overrides (aligned), and project_meta (JSON — selection,
+    global overrides, plates, per-object names/transforms/overrides). Returns the
+    .3mf bytes so the frontend can Save-to-Files. Reuses the tested
+    stls_to_multiobject_3mf writer; the only new bytes are the embedded
+    Metadata/nc_print_project.json, which makes the file re-openable as a project.
+    """
+    body = await request.body()
+    content_type = request.headers.get("content-type", "")
+    if "multipart/form-data" not in content_type.lower():
+        return JSONResponse({"error": "bad_request",
+                             "message": "expected multipart/form-data"}, 400)
+    fields = _parse_multipart(content_type, body)
+    models = fields["models"] or ([fields["model"]] if fields["model"] else [])
+    if not models:
+        return JSONResponse({"error": "no_model", "message": "model part missing"}, 400)
+
+    job_id = uuid.uuid4().hex[:16]
+    job_dir = os.path.join(JOB_ROOT, job_id)
+    os.makedirs(job_dir, exist_ok=True)
+    out_path = os.path.join(job_dir, "project.3mf")
+    try:
+        stls_to_multiobject_3mf(
+            models, out_path,
+            object_overrides=fields.get("object_overrides") or None,
+            project_meta=fields.get("project_meta") or None)
+        with open(out_path, "rb") as fh:
+            data = fh.read()
+    except ValueError as exc:
+        return JSONResponse({"error": "bad_model", "message": str(exc)}, 400)
+    except Exception as exc:  # noqa: BLE001
+        print(f"[project pack] failed: {exc}", flush=True)
+        return JSONResponse({"error": "pack_failed",
+                             "message": "Could not pack the project"}, 500)
+    finally:
+        try:
+            shutil.rmtree(job_dir, ignore_errors=True)
+        except Exception:  # noqa: BLE001
+            pass
+    return Response(content=data, media_type="model/3mf",
+                    headers={"Content-Disposition": 'attachment; filename="project.3mf"'})
 
 
 @app.post("/api/color-order")

@@ -230,6 +230,26 @@ async function walkModel(zip, modelPath, transform, outPositions, outIndices) {
 }
 
 /**
+ * Read nc-print's own project metadata embedded in a .3mf (written by the
+ * project pack path). Returns the parsed object, or null when the entry is
+ * absent — so a third-party 3MF imports geometry-only (graceful degrade).
+ * @param {ArrayBuffer} arrayBuffer
+ * @returns {Promise<object|null>}
+ */
+export async function readProjectMeta(arrayBuffer) {
+	try {
+		const zip = await JSZip.loadAsync(arrayBuffer)
+		const entry = zip.file('Metadata/nc_print_project.json')
+		if (!entry) {
+			return null
+		}
+		return JSON.parse(await entry.async('text'))
+	} catch {
+		return null
+	}
+}
+
+/**
  * @param {ArrayBuffer} arrayBuffer
  * @returns {Promise<Array<{ id: string, objectId: string, name: string, printable: boolean }>>}
  */

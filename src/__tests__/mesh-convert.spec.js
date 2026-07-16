@@ -227,3 +227,38 @@ endsolid nc_print_gate
 		expect(size.y).toBeGreaterThan(0)
 	})
 })
+
+describe('project .3mf round-trip (v1.68)', () => {
+	// A unit tetrahedron: 4 verts, 4 tris — enough for a valid 3MF mesh.
+	const tetra = () => ({
+		positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10]),
+		indices: new Uint32Array([0, 2, 1, 0, 1, 3, 1, 2, 3, 2, 0, 3]),
+	})
+
+	it('packProject writes readable geometry + recoverable metadata', async () => {
+		const { packProject } = await import('../services/project-api.js')
+		const { readProjectMeta } = await import('../services/mesh-convert.js')
+		const meta = { schema: 'nc-print-project/1', selection: { printerId: 'K1' }, objects: [{ name: 'Tetra' }] }
+		const blob = await packProject({ geometries: [tetra()], projectMeta: meta })
+		const buf = await blob.arrayBuffer()
+		// metadata round-trips
+		const got = await readProjectMeta(buf)
+		expect(got.schema).toBe('nc-print-project/1')
+		expect(got.objects[0].name).toBe('Tetra')
+		// geometry is a valid, parseable 3MF mesh
+		const mesh = await parse3mfMesh(buf)
+		expect(mesh.triangleCount).toBe(4)
+		expect(mesh.positions.length).toBe(12)
+	})
+
+	it('readProjectMeta returns null for a 3MF without project metadata', async () => {
+		const { readProjectMeta } = await import('../services/mesh-convert.js')
+		const zip = new JSZip()
+		zip.file('[Content_Types].xml', CT_XML)
+		zip.folder('_rels').file('.rels', RELS_XML)
+		zip.folder('3D').file('3dmodel.model',
+			'<?xml version="1.0"?><model unit="millimeter" xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources/><build/></model>')
+		const buf = await zip.generateAsync({ type: 'arraybuffer' })
+		expect(await readProjectMeta(buf)).toBeNull()
+	})
+})

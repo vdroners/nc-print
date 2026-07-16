@@ -1,6 +1,6 @@
 {
   "name": "nc_print",
-  "version": "1.60.7",
+  "version": "1.60.8",
   "private": true,
   "description": "NC Print — Nextcloud 3D print workflow (prepare, slice, print)",
   "license": "AGPL-3.0-or-later",

@@ -11,6 +11,7 @@ CLI `--load-settings` presets apply cleanly.
 """
 from __future__ import annotations
 
+import json
 import os
 import struct
 import zipfile
@@ -211,13 +212,18 @@ def stls_to_multiobject_3mf(
     stls: list[bytes],
     out_path: str,
     object_overrides: list[dict] | None = None,
+    project_meta: dict | None = None,
 ) -> tuple[int, int]:
     """Write a 3MF containing one <object> per input STL.
 
     Each object is placed at the origin (identity transform); the engine's
     `--arrange` positions them on the plate. When `object_overrides` is given,
     also writes Metadata/model_settings.config so the engine applies per-object
-    process settings. Returns (object_count, total_tris).
+    process settings. When `project_meta` is given (a JSON-serialisable dict of
+    nc-print's own project state — selection, overrides, plates, object names +
+    transforms), it's written to Metadata/nc_print_project.json so the file can be
+    re-opened as an editable project. Third-party 3MFs simply lack that entry and
+    import geometry-only. Returns (object_count, total_tris).
     """
     if not stls:
         raise ValueError("no models supplied")
@@ -249,4 +255,7 @@ def stls_to_multiobject_3mf(
         z.writestr("3D/3dmodel.model", model)
         if settings_cfg is not None:
             z.writestr("Metadata/model_settings.config", settings_cfg)
+        if project_meta is not None:
+            z.writestr("Metadata/nc_print_project.json",
+                       json.dumps(project_meta, separators=(",", ":")))
     return len(stls), total_tris

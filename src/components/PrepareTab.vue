@@ -409,6 +409,15 @@ export default {
 			this.printStore.clearModel()
 			this.activeTool = ''
 		},
+		async onSaveProject() {
+			if (!this.printStore.model.file) {
+				return
+			}
+			// Export every object's world-baked geometry from the viewport (same
+			// source the slice path bakes), then let the store author + save the .3mf.
+			const geometries = this.$refs.viewport?.exportAllObjects?.() || []
+			await this.printStore.saveProject(geometries)
+		},
 		onChecklistAction(action) {
 			const scrollTo = (refName) => {
 				const el = this.$refs[refName]
@@ -480,6 +489,15 @@ export default {
 					From Files
 				</button>
 				<ReopenMenu inline />
+				<button
+					v-if="printStore.hasModel"
+					type="button"
+					class="nc-print-btn"
+					:disabled="printStore.savingProject || (!printStore.model.fileId && !printStore.model.davPath)"
+					title="Save this scene as a re-openable .3mf project beside the model in Files"
+					@click="onSaveProject">
+					{{ printStore.savingProject ? 'Saving…' : 'Save project' }}
+				</button>
 				<button
 					v-if="printStore.hasModel"
 					type="button"

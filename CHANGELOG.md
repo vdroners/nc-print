@@ -1,5 +1,48 @@
 # Changelog
 
+## [1.60.8] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 8: `.3mf` project save/load
+round-trip. Adapter + PHP + frontend (needs a sidecar rebuild + php-fpm
+restart for the new route).
+
+### Added — projects
+
+- **Save project (.3mf)** — a "Save project" button on Prepare packs the whole
+  scene — every object's geometry (baked transforms), the profile selection,
+  global + per-object overrides, the settings mode, pauses, and object names —
+  into a standard `.3mf` saved beside the model in Files as
+  `<model-stem>.nc.3mf`. The geometry is written by the same tested server-side
+  3MF writer; nc-print's own state rides along in an embedded
+  `Metadata/nc_print_project.json`.
+- **Re-open a project** — importing an `.nc.3mf` (or any 3MF nc-print saved)
+  loads the geometry and then rehydrates the selection, overrides, settings mode,
+  and per-object settings from the embedded metadata. A third-party 3MF simply
+  lacks that entry and imports geometry-only, exactly as before (graceful
+  degrade).
+
+### Changed — internal
+
+- Adapter: `stls_to_multiobject_3mf` gained an optional `project_meta` (writes the
+  JSON entry); new `POST /api/project/pack` multipart endpoint packs models +
+  metadata into a `.3mf` and returns the bytes (allowlisted as `api/project/`).
+- PHP: `FileFetchService` factored a shared `writeSibling` out of the gcode-sibling
+  write; new `writeProjectSibling` + `GcodeSaveController::saveProject` +
+  `files#saveProject` route (delegated from `FilesController`).
+- Frontend: `project-api.js` (`packProject` + `saveProjectToFiles`),
+  `mesh-convert.readProjectMeta`, store `buildProjectMeta`/`hydrateFromProjectMeta`/
+  `saveProject`, and ModelViewport hydration on 3MF import.
+
+### Tests
+
+- adapter `test_adapter.py`: `stls_to_multiobject_3mf` embeds
+  `nc_print_project.json` when given `project_meta` and omits it otherwise.
+- phpunit `GcodeSaveControllerTest`: `saveProject` forbidden without access,
+  requires project bytes, rejects bad base64, requires a model reference.
+- vitest `project-roundtrip.spec.js`: adapter pack + metadata, PHP write +
+  route, FE pack/save/read + graceful degrade, store build/hydrate/save wiring.
+  Full vitest suite green (490); adapter suite green (60); phpunit green (107).
+
 ## [1.60.7] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 7: the slice-warnings surface.

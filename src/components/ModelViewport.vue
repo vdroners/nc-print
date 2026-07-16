@@ -285,6 +285,10 @@ export default {
 		listObjects() {
 			return this.viewport?.listObjects?.() || []
 		},
+		// World-baked per-object geometry for the project-save path (.3mf authoring).
+		exportAllObjects() {
+			return this.viewport?.exportAllObjects?.() || []
+		},
 		recenter() {
 			this.viewport?.recenter()
 			this._scheduleTransformSync()
@@ -332,10 +336,30 @@ export default {
 			}
 			this.viewport.recenter()
 			this._syncTransformFromViewportImmediate()
+			// Re-opened nc-print project? Hydrate selection/overrides/per-object
+			// settings from the embedded metadata (geometry already loaded above).
+			// Third-party 3MFs lack the entry → readProjectMeta returns null → no-op.
+			await this._maybeHydrateProject()
 			if (this.printStore.meshState.autoApply) {
 				await this.applyToSlice({ silent: true })
 			} else {
 				this.printStore.markMeshDirty()
+			}
+		},
+		async _maybeHydrateProject() {
+			const file = this.file
+			if (!file?.name?.toLowerCase().endsWith('.3mf')) {
+				return
+			}
+			try {
+				const { readProjectMeta } = await import('@/services/mesh-convert.js')
+				const buf = await file.arrayBuffer()
+				const meta = await readProjectMeta(buf)
+				if (meta) {
+					this.printStore.hydrateFromProjectMeta(meta)
+				}
+			} catch {
+				// best-effort — geometry import already succeeded
 			}
 		},
 		_syncTransformFromViewportImmediate() {

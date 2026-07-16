@@ -74,6 +74,57 @@ class GcodeSaveController extends Controller
 		}
 	}
 
+	#[NoAdminRequired]
+	#[NoCSRFRequired]
+	public function saveProject(): JSONResponse
+	{
+		if (!$this->access->canUseApp()) {
+			return new JSONResponse($this->access->forbiddenJsonPayload(), Http::STATUS_FORBIDDEN);
+		}
+
+		$params = json_decode((string) file_get_contents('php://input'), true);
+		if (!is_array($params)) {
+			$params = $this->request->getParams();
+		}
+		$fileId = (int) ($params['file_id'] ?? 0);
+		$davPath = (string) ($params['dav_path'] ?? '');
+		$b64 = (string) ($params['project_base64'] ?? '');
+
+		if ($b64 === '') {
+			return new JSONResponse(['error' => 'project_required'], Http::STATUS_BAD_REQUEST);
+		}
+		$bytes = base64_decode($b64, true);
+		if ($bytes === false) {
+			return new JSONResponse(['error' => 'project_base64_invalid'], Http::STATUS_BAD_REQUEST);
+		}
+		if (strlen($bytes) > self::MAX_BYTES) {
+			return new JSONResponse(['error' => 'project_too_large'], Http::STATUS_BAD_REQUEST);
+		}
+		if ($fileId <= 0 && $davPath === '') {
+			return new JSONResponse(['error' => 'model_reference_required'], Http::STATUS_BAD_REQUEST);
+		}
+
+		try {
+			$user = $this->access->requireUser();
+			$root = $this->rootFolder->getUserFolder($user->getUID());
+			$model = $this->files->resolveModelNode(
+				$root,
+				$davPath !== '' ? $davPath : null,
+				$fileId > 0 ? $fileId : null,
+			);
+			$result = $this->files->writeProjectSibling($root, $model, $bytes);
+			return new JSONResponse($result);
+		} catch (NotFoundException) {
+			return new JSONResponse(['error' => 'not_found'], Http::STATUS_NOT_FOUND);
+		} catch (\InvalidArgumentException $e) {
+			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
+		} catch (\RuntimeException $e) {
+			return new JSONResponse(['error' => $e->getMessage()], Http::STATUS_FORBIDDEN);
+		} catch (\Throwable $e) {
+			return new JSONResponse(['error' => 'save_failed'], Http::STATUS_INTERNAL_SERVER_ERROR);
+		}
+	}
+
 	/**
 	 * @return array{0: int, 1: string, 2: string}
 	 */

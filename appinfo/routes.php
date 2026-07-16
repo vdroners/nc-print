@@ -10,6 +10,7 @@ return [
 		['name' => 'files#resolve', 'url' => '/api/files/resolve', 'verb' => 'POST'],
 		['name' => 'files#fetch', 'url' => '/api/files/fetch', 'verb' => 'POST'],
 		['name' => 'files#saveGcode', 'url' => '/api/files/save-gcode', 'verb' => 'POST'],
+		['name' => 'files#saveProject', 'url' => '/api/files/save-project', 'verb' => 'POST'],
 		['name' => 'camera#frame', 'url' => '/api/camera/frame.jpeg', 'verb' => 'GET'],
 		['name' => 'ws_ticket#issue', 'url' => '/api/ws-ticket', 'verb' => 'GET'],
 		['name' => 'admin#saveSettings', 'url' => '/api/admin/settings', 'verb' => 'PUT'],

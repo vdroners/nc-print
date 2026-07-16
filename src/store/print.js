@@ -24,6 +24,7 @@ import { fetchConfig } from '@/services/config-api.js'
 import { fetchAppStatus } from '@/services/status-api.js'
 import { fetchModelBlob, resolveFile } from '@/services/files-api.js'
 import { saveGcodeToFiles as saveGcodeApi } from '@/services/gcode-save-api.js'
+import { packProject, saveProjectToFiles as saveProjectApi } from '@/services/project-api.js'
 import { predictEta as predictEtaApi, recordEta as recordEtaApi } from '@/services/eta-api.js'
 import { discoverPrinters as discoverPrintersApi, fetchCapabilities as fetchCapabilitiesApi, registerSessionPrinter } from '@/services/printers-api.js'
 import { notifyPrintTransition as notifyPrintTransitionApi } from '@/services/events-api.js'
@@ -501,6 +502,7 @@ export const usePrintStore = defineStore('print', {
 		},
 		jobHistory: loadJobHistory(),
 		savingGcode: false,
+		savingProject: false,
 		_pollTimer: null,
 		_statusTimer: null,
 		_wsClient: null,
@@ -2459,6 +2461,68 @@ export const usePrintStore = defineStore('print', {
 			return true
 		},
 
+		/**
+		 * Assemble nc-print's project state for embedding in a saved .3mf. Captures
+		 * what makes a file re-openable as an editable project: version, the
+		 * profile selection, global overrides, per-object names/transforms/overrides
+		 * (viewport order), pauses, and the settings mode. Geometry travels as the
+		 * 3MF meshes; this is the sidecar data.
+		 * @returns {object}
+		 */
+		buildProjectMeta() {
+			return {
+				schema: 'nc-print-project/1',
+				selection: { ...this.selection },
+				overrides: { ...this.overrides },
+				settingsMode: this.settingsMode,
+				pauses: Array.isArray(this.pauses) ? [...this.pauses] : [],
+				objects: this.objects.map((o) => ({
+					name: o.name,
+					position: [...(o.position || [0, 0, 0])],
+					rotation: [...(o.rotation || [0, 0, 0])],
+					scale: [...(o.scale || [1, 1, 1])],
+					overrides: { ...(o.overrides || {}) },
+				})),
+			}
+		},
+
+		/**
+		 * Hydrate the store from project metadata read out of a re-opened .3mf.
+		 * Geometry is loaded separately (the viewport imports the 3MF meshes); this
+		 * restores the sidecar state. Missing/foreign metadata → no-op (the caller
+		 * only calls this when readProjectMeta returned a matching schema).
+		 * @param {object} meta
+		 */
+		hydrateFromProjectMeta(meta) {
+			if (!meta || meta.schema !== 'nc-print-project/1') {
+				return false
+			}
+			if (meta.selection && typeof meta.selection === 'object') {
+				this.selection = { ...this.selection, ...meta.selection }
+			}
+			if (meta.overrides && typeof meta.overrides === 'object') {
+				this.overrides = { ...this.overrides, ...meta.overrides }
+				this._persistOverrides()
+			}
+			if (['basic', 'advanced', 'expert'].includes(meta.settingsMode)) {
+				this.settingsMode = meta.settingsMode
+			}
+			// Per-object names/overrides are applied by index onto the freshly
+			// imported objects (same viewport order the file was written in).
+			if (Array.isArray(meta.objects)) {
+				meta.objects.forEach((m, i) => {
+					const obj = this.objects[i]
+					if (obj) {
+						if (m.name) {
+							obj.name = m.name
+						}
+						obj.overrides = { ...(m.overrides || {}) }
+					}
+				})
+			}
+			return true
+		},
+
 		/** Settings-tree mode: basic | advanced | expert (persisted). */
 		setSettingsMode(mode) {
 			if (['basic', 'advanced', 'expert'].includes(mode)) {
@@ -3358,6 +3422,44 @@ export const usePrintStore = defineStore('print', {
 				return false
 			} finally {
 				this.savingGcode = false
+			}
+		},
+
+		/**
+		 * Save the current scene as a re-openable project .3mf beside the model in
+		 * Files. `geometries` = per-object { positions, indices } in viewport order
+		 * (world transforms baked), from viewport.exportAllObjects(). The .3mf is
+		 * authored client-side (geometry + embedded nc_print_project.json) and
+		 * written as "<model-stem>.nc.3mf".
+		 * @param {Array<{positions:Float32Array, indices:Uint32Array}>} geometries
+		 */
+		async saveProject(geometries) {
+			if (!this.model.fileId && !this.model.davPath) {
+				toastWarning('Load the model from Nextcloud Files to save a project beside it')
+				return false
+			}
+			if (!Array.isArray(geometries) || !geometries.length) {
+				toastError('No geometry to save')
+				return false
+			}
+			this.savingProject = true
+			try {
+				const projectBlob = await packProject({
+					geometries,
+					projectMeta: this.buildProjectMeta(),
+				})
+				const result = await saveProjectApi({
+					file_id: this.model.fileId || undefined,
+					dav_path: this.model.davPath || undefined,
+					projectBlob,
+				})
+				toastSuccess(`Project saved to ${result?.basename || 'Files'}`)
+				return true
+			} catch (e) {
+				toastError('Save project failed', e)
+				return false
+			} finally {
+				this.savingProject = false
 			}
 		},
 

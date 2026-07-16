@@ -91,4 +91,58 @@ class GcodeSaveControllerTest extends TestCase
 		$data = $response->getData();
 		$this->assertSame('gcode_base64_invalid', $data['error']);
 	}
+
+	public function testSaveProjectForbiddenWhenNoAccess(): void
+	{
+		$access = $this->createMock(AccessService::class);
+		$access->method('canUseApp')->willReturn(false);
+		$access->method('forbiddenJsonPayload')->willReturn(['error' => 'forbidden']);
+
+		$response = $this->makeController($access)->saveProject();
+		$this->assertSame(Http::STATUS_FORBIDDEN, $response->getStatus());
+	}
+
+	public function testSaveProjectRequiresProjectBytes(): void
+	{
+		$access = $this->createMock(AccessService::class);
+		$access->method('canUseApp')->willReturn(true);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn(['file_id' => 5]);
+
+		$response = $this->makeController($access, $request)->saveProject();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('project_required', $response->getData()['error']);
+	}
+
+	public function testSaveProjectRejectsInvalidBase64(): void
+	{
+		$access = $this->createMock(AccessService::class);
+		$access->method('canUseApp')->willReturn(true);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn([
+			'file_id' => 5,
+			'project_base64' => '%%%bad%%%',
+		]);
+
+		$response = $this->makeController($access, $request)->saveProject();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('project_base64_invalid', $response->getData()['error']);
+	}
+
+	public function testSaveProjectRequiresModelReference(): void
+	{
+		$access = $this->createMock(AccessService::class);
+		$access->method('canUseApp')->willReturn(true);
+
+		$request = $this->createMock(IRequest::class);
+		$request->method('getParams')->willReturn([
+			'project_base64' => base64_encode('PK-fake-3mf'),
+		]);
+
+		$response = $this->makeController($access, $request)->saveProject();
+		$this->assertSame(Http::STATUS_BAD_REQUEST, $response->getStatus());
+		$this->assertSame('model_reference_required', $response->getData()['error']);
+	}
 }

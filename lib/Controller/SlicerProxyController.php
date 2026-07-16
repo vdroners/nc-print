@@ -223,6 +223,7 @@ class SlicerProxyController extends Controller
 		'api/color-order',  // multi-color purge/flush order optimizer
 		'api/gcode',        // g-code linter (POST /lint) + reference (GET /reference)
 		'api/printer-presets', // static printer model preset lookup
+		'api/project/',     // pack a project .3mf (geometry + nc_print_project.json)
 	];
 
 	private function isAllowedSlicerPath(string $upstreamPath): bool

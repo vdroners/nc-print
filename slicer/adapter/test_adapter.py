@@ -840,6 +840,32 @@ def test_multiobject_3mf_writes_per_object_settings():
             os.unlink(out)
 
 
+def test_multiobject_3mf_embeds_project_metadata():
+    import tempfile as tf
+    import zipfile
+    import json as _json
+    from mesh3mf import stls_to_multiobject_3mf
+    cube = _binary_cube()
+    out = tf.mktemp(suffix=".3mf")
+    meta = {"schema": "nc-print-project/1", "selection": {"printerId": "K1"},
+            "objects": [{"name": "Widget", "overrides": {}}]}
+    try:
+        stls_to_multiobject_3mf([cube], out, project_meta=meta)
+        z = zipfile.ZipFile(out)
+        assert "Metadata/nc_print_project.json" in z.namelist()
+        got = _json.loads(z.read("Metadata/nc_print_project.json").decode())
+        assert got["schema"] == "nc-print-project/1"
+        assert got["objects"][0]["name"] == "Widget"
+        # A plain export (no project_meta) must NOT include the entry.
+        out2 = tf.mktemp(suffix=".3mf")
+        stls_to_multiobject_3mf([cube], out2)
+        assert "Metadata/nc_print_project.json" not in zipfile.ZipFile(out2).namelist()
+        os.unlink(out2)
+    finally:
+        if os.path.exists(out):
+            os.unlink(out)
+
+
 def test_multiobject_3mf_omits_config_when_no_overrides():
     import tempfile as tf
     import zipfile
