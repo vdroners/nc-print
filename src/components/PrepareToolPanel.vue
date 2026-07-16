@@ -551,6 +551,11 @@ export default {
 	top: 8px;
 	width: 260px;
 	z-index: 5;
+	/* Cap to the viewport (8px top + 8px bottom inset) and scroll a tall tool's
+	   controls instead of letting them clip off the bottom of the view. */
+	max-height: calc(100% - 16px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
 }
 
 .nc-print-tool-panel__header {

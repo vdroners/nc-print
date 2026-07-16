@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.60.10] - 2026-07-16
+
+Two field-of-view fixes reported from live use. Frontend-only.
+
+### Fixed
+
+- **"Printer unreachable" no longer eats the viewport.** The service-health
+  recovery card lives in the top chrome (every tab), so when the printer was off
+  the full three-step card + Retry pushed the whole view down. It now collapses to
+  a compact one-line chip (⚠ + summary + inline Retry) that expands to the full
+  recovery steps on click. A healthy lab still shows nothing. Multiple faults
+  summarise as "First fault + N more".
+- **Model-view tool panel no longer clips off the bottom.** The floating tool
+  panel was absolutely positioned with no height cap, so a tall tool's controls
+  (arrange, scale, rotate…) ran off the bottom of the viewport with no way to
+  reach them. It now caps at the viewport height (`max-height: calc(100% - 16px)`)
+  and scrolls its contents.
+
+### Tests
+
+- vitest `viewport-ui-fixes.spec.js`: tool panel caps height + scrolls;
+  ServiceHealthBanner renders a chip that expands to the full stack, keeps an
+  inline Retry, only shows on a real fault, and summarises 3+ faults. Existing
+  chrome-bar contracts still green. Full suite green (499).
+
 ## [1.60.9] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 9 (final): AMS flush matrix. Adapter
