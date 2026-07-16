@@ -10,6 +10,7 @@ import {
 	mapSliceStageLabel,
 	parseExtruderCount,
 	resolveFilamentIds,
+	cleanOverrides,
 } from '@/services/slicer-utils.js'
 import {
 	fetchState,
@@ -1317,6 +1318,10 @@ export const usePrintStore = defineStore('print', {
 				bbox: meta.bbox || null,
 				triangleCount: meta.triangleCount || 0,
 				visible: meta.visible !== false,
+				// Per-object process overrides (v1.66) — process-scoped keys the user
+				// sets for THIS object only. Empty {} = inherit the global overrides.
+				// Carried into the multi-object slice as object_overrides[i].
+				overrides: { ...(meta.overrides || {}) },
 			}
 		},
 
@@ -1352,7 +1357,7 @@ export const usePrintStore = defineStore('print', {
 				modelMeta: { ...this.modelMeta },
 				meshState: { ...this.meshState },
 				sliceJob: { ...this.sliceJob },
-				objects: this.objects.map((o) => ({ ...o })),
+				objects: this.objects.map((o) => ({ ...o, overrides: { ...(o.overrides || {}) } })),
 				selectedObjectId: this.selectedObjectId,
 				sceneSliceFiles: [...this.sceneSliceFiles],
 				threeMfBuildItems: [...this.threeMfBuildItems],
@@ -2965,12 +2970,21 @@ export const usePrintStore = defineStore('print', {
 				if (this.sceneSliceFiles.length > 1) {
 					// Multi-object: slice all parts with their baked layout, arrange
 					// OFF so the engine keeps each part where the user placed it.
+					// Per-object overrides are index-aligned to sceneSliceFiles: both
+					// follow the viewport objects[] push order (the load-bearing
+					// alignment). Each object's camelCase override FORM is mapped to
+					// engine (snake_case) keys via buildSliceOverrides — the same
+					// mapping the global overrides use — so the adapter's
+					// map_process_override recognises them (filament-scoped keys drop).
+					const objectOverrides = this.sceneSliceFiles.map((_, i) =>
+						buildSliceOverrides(cleanOverrides(this.objects[i]?.overrides || {})))
 					done = await sliceStreamMulti({
 						models: this.sceneSliceFiles.map((f) => ({ data: f, filename: f.name })),
 						printerId: this.selection.printerId,
 						filamentIds,
 						processId: this.selection.processId,
 						overrides,
+						objectOverrides,
 						arrange: false,
 						signal,
 						onEvent,

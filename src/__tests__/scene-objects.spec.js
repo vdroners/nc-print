@@ -170,3 +170,28 @@ describe('multi-selection (v1.63)', () => {
 		expect(store.selectedObjectIds).not.toContain(b)
 	})
 })
+
+describe('per-object overrides (v1.66)', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	it('_defaultObject seeds an empty overrides map (independent per object)', () => {
+		const store = usePrintStore()
+		store.setModel(makeFile('a.stl'), 'import')
+		const a = store.objects[0]
+		expect(a.overrides).toEqual({})
+		const b = store.addObject({ name: 'b' })
+		a.overrides.layerHeight = '0.3'
+		// b's overrides must not alias a's (deep-independent maps)
+		expect(b.overrides).toEqual({})
+	})
+
+	it('addObject can carry initial overrides', () => {
+		const store = usePrintStore()
+		store.setModel(makeFile('a.stl'), 'import')
+		const b = store.addObject({ name: 'b', overrides: { perimeters: '5' } })
+		expect(b.overrides).toEqual({ perimeters: '5' })
+	})
+})

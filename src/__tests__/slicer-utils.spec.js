@@ -14,6 +14,7 @@ import {
 	groupsForMode,
 	levelVisible,
 	matchesSearch,
+	cleanOverrides,
 	OVERRIDE_FIELD_DEFS,
 } from '@/services/slicer-utils.js'
 import { readFileSync } from 'node:fs'
@@ -356,5 +357,22 @@ describe('settings tree (v1.65)', () => {
 		const keys = groups.flatMap((g) => g.fields.map((f) => f.key))
 		expect(keys).toContain('ironingType')
 		expect(keys).not.toContain('layerHeight')
+	})
+})
+
+describe('cleanOverrides (v1.66)', () => {
+	it('drops empty / null / undefined values', () => {
+		expect(cleanOverrides({ layerHeight: '0.2', lineWidth: '', perimeters: null, brimWidth: undefined }))
+			.toEqual({ layerHeight: '0.2' })
+	})
+
+	it('treats an unchecked support box as inherit (dropped)', () => {
+		expect(cleanOverrides({ enableSupport: false, perimeters: '4' })).toEqual({ perimeters: '4' })
+		expect(cleanOverrides({ enableSupport: true })).toEqual({ enableSupport: true })
+	})
+
+	it('empty map stays empty', () => {
+		expect(cleanOverrides({})).toEqual({})
+		expect(cleanOverrides(null)).toEqual({})
 	})
 })

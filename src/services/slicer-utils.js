@@ -293,6 +293,30 @@ export const OVERRIDE_FIELD_DEFS = [
 	{ key: 'wipeTowerExtraSpacing', label: 'Prime tower extra spacing (%)', engineKey: 'wipe_tower_extra_spacing', type: 'pct', level: 'expert', group: 'Prime tower' },
 ]
 
+/**
+ * Strip empty / inherit values from an override map so only genuine per-object
+ * overrides are sent. Empty string / null / undefined = "inherit the global
+ * setting"; an unchecked support checkbox (false) also means inherit. Works on
+ * frontend override keys (layerHeight, enableSupport, …) — the shape the store's
+ * per-object `overrides` and the global `overrides` both use. Shared by the
+ * per-object slice path + ArrangePlate.
+ * @param {object} ov
+ * @returns {object}
+ */
+export function cleanOverrides(ov) {
+	const out = {}
+	for (const [k, v] of Object.entries(ov || {})) {
+		if (v === '' || v === null || v === undefined) {
+			continue
+		}
+		if (k === 'enableSupport' && v === false) {
+			continue // unchecked = inherit global
+		}
+		out[k] = v
+	}
+	return out
+}
+
 // Cumulative visibility: Simple ⊂ Advanced ⊂ Expert.
 export const SETTINGS_LEVELS = ['basic', 'advanced', 'expert']
 

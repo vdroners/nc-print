@@ -113,10 +113,31 @@ export default {
 	name: 'OverrideField',
 	props: {
 		def: { type: Object, required: true },
+		// Optional override map to bind to (per-object settings). When omitted the
+		// field edits the global printStore.overrides. When set, "modified" means
+		// "differs from the global override" (i.e. this object diverges), and reset
+		// clears the per-object key (back to inheriting the global value).
+		model: { type: Object, default: null },
 	},
 	emits: ['change'],
 	computed: {
 		...mapStores(usePrintStore),
+		isPerObject() {
+			return !!this.model
+		},
+		// The reactive object this field reads/writes: the per-object map or global.
+		bound() {
+			return this.model || this.printStore.overrides
+		},
+		value: {
+			get() {
+				return this.bound[this.def.key]
+			},
+			set(v) {
+				// Vue 2 reactivity for keys that may not exist yet on a per-object map.
+				this.$set(this.bound, this.def.key, v)
+			},
+		},
 		isCheckbox() {
 			return this.def.type === 'bool'
 		},
@@ -129,7 +150,18 @@ export default {
 		numAttrs() {
 			return NUM_ATTRS[this.def.key] || { step: 1, min: 0 }
 		},
+		resetTitle() {
+			return this.isPerObject ? 'Clear (inherit global)' : 'Reset to profile'
+		},
 		modified() {
+			if (this.isPerObject) {
+				// Per-object: modified = a non-empty value that differs from global.
+				const v = this.bound[this.def.key]
+				if (v === '' || v == null || v === false) {
+					return false
+				}
+				return String(v) !== String(this.printStore.overrides[this.def.key] ?? '')
+			}
 			return isOverrideModified(this.def.key, this.printStore.overrides, this.printStore.overrideDefaults)
 		},
 	},
@@ -138,7 +170,11 @@ export default {
 			this.$emit('change')
 		},
 		reset() {
-			this.printStore.resetOverrideField(this.def.key)
+			if (this.isPerObject) {
+				this.$set(this.bound, this.def.key, '') // inherit global again
+			} else {
+				this.printStore.resetOverrideField(this.def.key)
+			}
 			this.$emit('change')
 		},
 	},
@@ -151,22 +187,22 @@ export default {
 		:class="{ 'is-modified': modified, 'nc-print-field--checkbox': isCheckbox }">
 		<template v-if="isCheckbox">
 			<label>
-				<input v-model="printStore.overrides[def.key]" type="checkbox" @change="onChange">
+				<input v-model="value" type="checkbox" @change="onChange">
 				{{ def.label }}
-				<button v-if="modified" type="button" class="nc-print-reset" title="Reset to profile" @click.prevent="reset">⟲</button>
+				<button v-if="modified" type="button" class="nc-print-reset" :title="resetTitle" @click.prevent="reset">⟲</button>
 			</label>
 		</template>
 		<template v-else>
 			<label>
 				{{ def.label }}
-				<button v-if="modified" type="button" class="nc-print-reset" title="Reset to profile" @click.prevent="reset">⟲</button>
+				<button v-if="modified" type="button" class="nc-print-reset" :title="resetTitle" @click.prevent="reset">⟲</button>
 			</label>
-			<select v-if="isSelect" v-model="printStore.overrides[def.key]" @change="onChange">
+			<select v-if="isSelect" v-model="value" @change="onChange">
 				<option v-for="opt in selectOptions" :key="opt.value || 'default'" :value="opt.value">{{ opt.label }}</option>
 			</select>
 			<input
 				v-else
-				v-model="printStore.overrides[def.key]"
+				v-model="value"
 				type="number"
 				:step="numAttrs.step"
 				:min="numAttrs.min"

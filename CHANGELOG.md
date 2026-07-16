@@ -1,5 +1,47 @@
 # Changelog
 
+## [1.60.6] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 6: per-object settings. Frontend-only
+(the multi-object slice backend was already wired).
+
+### Added — per-object settings (Prepare)
+
+- **Per-object overrides** — with more than one object on the plate, selecting an
+  object reveals a "Per-object" panel where you can override process settings
+  (layer height, walls, infill, speeds, supports, …) for THAT object only. Empty
+  fields inherit the global setting; a "Clear N" button resets the object back to
+  inheriting everything. Reuses the settings-tree mode + search and the shared
+  OverrideField control. Temperature/fan/retraction are filament-wide and stay
+  global (hidden from the per-object panel).
+
+At slice time each object's overrides are mapped to engine keys (the same mapping
+the global overrides use) and sent index-aligned to the object list, so the
+slicer writes them into the per-object `Metadata/model_settings.config` of the
+multi-object 3MF. The single-object slice path is unchanged.
+
+### Changed — internal
+
+- `_defaultObject` seeds an empty `overrides` map; snapshot/restore (plate switch)
+  and the viewport→store scene sync deep-copy it so objects never alias each
+  other's settings. The multi-object slice call now passes `objectOverrides`
+  (previously omitted), built as `buildSliceOverrides(cleanOverrides(obj.overrides))`
+  per object. `cleanOverrides` moved into `slicer-utils.js` (shared) alongside
+  `OverrideField`'s new optional `model` binding for per-object editing.
+
+### Tests
+
+- vitest `scene-objects.spec.js`: `_defaultObject` seeds an independent overrides
+  map; `addObject` can carry initial overrides.
+- vitest `slicer-utils.spec.js`: `cleanOverrides` drops empty/inherit values +
+  unchecked support.
+- vitest `settings-tree.spec.js`: OverrideField per-object `model` binding;
+  PerObjectSettingsPanel binds to the selected object + hides filament-scoped keys
+  + only shows for a multi-object scene; store maps per-object overrides through
+  buildSliceOverrides index-aligned.
+- adapter `test_adapter.py` (existing): per-object keys land under the right
+  `<object id>` in the 3MF. Full vitest suite green (477); adapter suite green.
+
 ## [1.60.5] - 2026-07-15
 
 Slicer-GUI alignment — deferred tier, part 5: the settings tree. Frontend-only

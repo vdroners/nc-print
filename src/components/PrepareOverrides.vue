@@ -3,10 +3,11 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { QUALITY_TIERS, isOverrideModified } from '@/services/slicer-utils.js'
 import ProfileQuickEdit from './ProfileQuickEdit.vue'
+import PerObjectSettingsPanel from './PerObjectSettingsPanel.vue'
 
 export default {
 	name: 'PrepareOverrides',
-	components: { ProfileQuickEdit },
+	components: { ProfileQuickEdit, PerObjectSettingsPanel },
 	data() {
 		return {
 			presetName: '',
@@ -147,6 +148,8 @@ export default {
 			</div>
 
 			<ProfileQuickEdit @change="onOverrideChange" />
+
+			<PerObjectSettingsPanel @change="onOverrideChange" />
 
 			<p v-if="printStore.activePresetName" class="nc-print-preset-status">
 				<span

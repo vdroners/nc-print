@@ -257,6 +257,8 @@ export default {
 					bbox: vp.bbox || prev?.bbox || null,
 					triangleCount: prev?.triangleCount || 0,
 					visible: prev?.visible !== false,
+					// Preserve per-object process overrides (v1.66) across re-syncs.
+					overrides: { ...(prev?.overrides || {}) },
 				}
 			})
 			// Mirror the viewport's current selection.
