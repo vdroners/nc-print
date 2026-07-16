@@ -9,7 +9,7 @@
 
 		<div v-if="ready" class="tp3d__controls">
 			<div class="tp3d__layerrow">
-				<label class="tp3d__label" :for="sliderId">Layer</label>
+				<label class="tp3d__label" :for="sliderId">Top</label>
 				<input
 					:id="sliderId"
 					class="tp3d__slider"
@@ -21,6 +21,18 @@
 				<span class="tp3d__layernum">{{ currentLayer + 1 }} / {{ layerCount }}</span>
 			</div>
 			<div class="tp3d__layerrow">
+				<label class="tp3d__label" :for="minId">Bottom</label>
+				<input
+					:id="minId"
+					class="tp3d__slider"
+					type="range"
+					min="0"
+					:max="layerCount - 1"
+					:value="minLayer"
+					@input="onMinLayer($event.target.value)">
+				<span class="tp3d__layernum">{{ minLayer + 1 }}</span>
+			</div>
+			<div v-show="minLayer === 0" class="tp3d__layerrow">
 				<label class="tp3d__label" :for="moveId">Moves</label>
 				<input
 					:id="moveId"
@@ -113,9 +125,11 @@ export default {
 			ready: false,
 			layerCount: 0,
 			currentLayer: 0,
+			minLayer: 0, // bottom of the visible band (0 = show from the first layer)
 			features: [],
 			visible: {},
 			sliderId: `tp3d-layer-${++_uid}`,
+			minId: `tp3d-min-${++_uid}`,
 			moveId: `tp3d-move-${++_uid}`,
 			colorMode: 'feature', // 'feature' | 'speed'
 			speedRange: null, // { min, max } when the sidecar emits speeds
@@ -166,15 +180,16 @@ export default {
 				this.viewport.showToolpath?.(tp, FEATURE_COLORS, this.colorMode)
 				this.layerCount = tp.layerCount || tp.layers.length
 				this.currentLayer = this.layerCount - 1
+				this.minLayer = 0
 				this.features = presentFeatures(tp)
 				const vis = {}
 				for (const f of this.features) {
 					vis[f] = f !== 'travel'
 				}
 				this.visible = vis
-				this.viewport.setToolpathLayerRange?.(this.currentLayer)
 				this._recomputeTopLayerMoves()
 				this.currentMove = this.topLayerMoves
+				this._applyLayerView()
 				this.ready = true
 			} catch (e) {
 				this.error = e?.message || 'Toolpath preview unavailable'
@@ -184,14 +199,32 @@ export default {
 		},
 		onLayer(val) {
 			this.currentLayer = Number(val)
-			this.viewport?.setToolpathLayerRange?.(this.currentLayer)
+			// Keep the band valid: the bottom can't rise above the top.
+			if (this.minLayer > this.currentLayer) {
+				this.minLayer = this.currentLayer
+			}
 			this._recomputeTopLayerMoves()
 			this.currentMove = this.topLayerMoves
-			this.viewport?.setToolpathMoveRange?.(this.currentLayer, this.currentMove)
+			this._applyLayerView()
+		},
+		onMinLayer(val) {
+			this.minLayer = Math.min(Number(val), this.currentLayer)
+			this._applyLayerView()
 		},
 		onMove(val) {
 			this.currentMove = Number(val)
+			// The move scrubber is only meaningful with the full stack below (band off).
 			this.viewport?.setToolpathMoveRange?.(this.currentLayer, this.currentMove)
+		},
+		// Apply the current layer view: a min–max band when the bottom is raised,
+		// otherwise the single-cap path (which the move scrubber piggybacks on).
+		_applyLayerView() {
+			if (this.minLayer > 0) {
+				this.viewport?.setToolpathLayerRangeMinMax?.(this.minLayer, this.currentLayer)
+			} else {
+				this.viewport?.setToolpathLayerRange?.(this.currentLayer)
+				this.viewport?.setToolpathMoveRange?.(this.currentLayer, this.currentMove)
+			}
 		},
 		setColorMode(mode) {
 			if (mode === this.colorMode || (mode === 'speed' && !this.speedRange)) {
@@ -204,7 +237,7 @@ export default {
 				for (const f of this.features) {
 					this.viewport.setToolpathFeatureVisible?.(f, this.visible[f])
 				}
-				this.viewport.setToolpathLayerRange?.(this.currentLayer)
+				this._applyLayerView()
 			}
 		},
 		// The move slider caps the segment count in the current TOP layer.

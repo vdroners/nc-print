@@ -75,3 +75,42 @@ describe('buildVolume resolution', () => {
 		expect(store.buildVolume).toEqual([180, 180, 180])
 	})
 })
+
+describe('fitsBed includes the Z (height) axis', () => {
+	beforeEach(() => {
+		localStorage.clear()
+		setActivePinia(createPinia())
+	})
+
+	const withK1Max = () => {
+		const store = usePrintStore()
+		store.profiles.printers = [K1MAX]
+		store.selection.printerId = K1MAX.id // 300×300×300
+		return store
+	}
+
+	it('fits when the footprint AND height are within the bed', () => {
+		const store = withK1Max()
+		store.setModelMeta({ bbox: { x: 100, y: 100, z: 100 }, triangleCount: 10 })
+		expect(store.modelMeta.fitsBed).toBe(true)
+	})
+
+	it('does NOT fit when only the height exceeds the build volume', () => {
+		const store = withK1Max()
+		// footprint fits (100×100) but 350mm tall > 300mm build height
+		store.setModelMeta({ bbox: { x: 100, y: 100, z: 350 }, triangleCount: 10 })
+		expect(store.modelMeta.fitsBed).toBe(false)
+	})
+
+	it('does NOT fit when the footprint exceeds the bed', () => {
+		const store = withK1Max()
+		store.setModelMeta({ bbox: { x: 400, y: 100, z: 50 }, triangleCount: 10 })
+		expect(store.modelMeta.fitsBed).toBe(false)
+	})
+
+	it('tolerates a missing z (2D-only bbox) — footprint decides', () => {
+		const store = withK1Max()
+		store.setModelMeta({ bbox: { x: 100, y: 100 }, triangleCount: 10 })
+		expect(store.modelMeta.fitsBed).toBe(true)
+	})
+})

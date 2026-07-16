@@ -67,6 +67,7 @@ export async function createViewport(canvas, wrap) {
 	// what keeps the gizmo lifecycle safe.
 	const objects = [] // [{ id, mesh }]
 	let selectedId = null
+	const outOfBedIds = new Set() // ids whose bounds exceed the build volume (any axis)
 	let objSeq = 0
 	let modelMesh = null
 	let bedVolume = [220, 220, 220]
@@ -148,7 +149,9 @@ export async function createViewport(canvas, wrap) {
 		return objects.find((o) => o.id === selectedId) || null
 	}
 
-	// Subtle emissive tint marks the selected object; others revert to flat.
+	// Subtle emissive tint marks object state. Precedence: selection (green) wins
+	// over out-of-bed (red); everything else reverts to flat. The out-of-bed set is
+	// refreshed by refreshOutOfBed() whenever geometry/transforms/bed change.
 	function applyHighlight() {
 		for (const { id, mesh } of objects) {
 			const mat = mesh.material
@@ -157,10 +160,32 @@ export async function createViewport(canvas, wrap) {
 			}
 			if (id === selectedId) {
 				mat.emissive.setHex(0x1e6b3a)
+			} else if (outOfBedIds.has(id)) {
+				mat.emissive.setHex(0x8a1c1c)
 			} else {
 				mat.emissive.setHex(0x000000)
 			}
 		}
+	}
+
+	// Recompute which objects exceed the build volume (any axis, incl. Z height),
+	// update the tint set, and re-apply highlight. Returns the id list so callers
+	// (the store) can flag them in the UI. Cheap — bbox per object.
+	function refreshOutOfBed() {
+		const [bx, by, bz] = bedVolume
+		outOfBedIds.clear()
+		for (const { id, mesh } of objects) {
+			mesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(mesh)
+			const fits = box.min.x >= -0.5 && box.min.y >= -0.5 && box.min.z >= -0.5
+				&& box.max.x <= bx + 0.5 && box.max.y <= by + 0.5
+				&& box.max.z <= bz + 0.5
+			if (!fits) {
+				outOfBedIds.add(id)
+			}
+		}
+		applyHighlight()
+		return [...outOfBedIds]
 	}
 
 	/**
@@ -763,9 +788,18 @@ export async function createViewport(canvas, wrap) {
 			}
 			modelMesh.updateMatrixWorld(true)
 			const box = new THREE.Box3().setFromObject(modelMesh)
-			const [bx, by] = bedVolume
+			const [bx, by, bz] = bedVolume
 			return box.min.x >= -0.5 && box.min.y >= -0.5 && box.min.z >= -0.5
 				&& box.max.x <= bx + 0.5 && box.max.y <= by + 0.5
+				&& box.max.z <= bz + 0.5
+		},
+		/**
+		 * Which currently-loaded objects exceed the build volume (any axis, incl. Z
+		 * height). Refreshes the red-tint set + re-applies highlight as a side effect,
+		 * and returns the id array so the store/UI can flag them. Empty when all fit.
+		 */
+		objectsOutOfBed() {
+			return refreshOutOfBed()
 		},
 		pickFaceNormal(clientX, clientY) {
 			if (!modelMesh) {
@@ -1026,6 +1060,40 @@ export async function createViewport(canvas, wrap) {
 					}
 				}
 				line.geometry.setDrawRange(0, count)
+			}
+		},
+		/**
+		 * Limit visible layers to the inclusive band [minLayer, maxLayer] via a
+		 * contiguous per-feature draw range. Vertices are grouped by ascending layer,
+		 * so the band is one slice: start = first vertex with layer >= minLayer,
+		 * end = last vertex with layer <= maxLayer. Cheap — no geometry rebuild.
+		 * Keeps `setToolpathLayerRange` (single-cap) for existing callers.
+		 * @param {number} minLayer
+		 * @param {number} maxLayer
+		 */
+		setToolpathLayerRangeMinMax(minLayer, maxLayer) {
+			if (!toolpathGroup) {
+				return
+			}
+			const lo = Number.isFinite(minLayer) ? Math.max(0, minLayer) : 0
+			const hi = Number.isFinite(maxLayer) ? maxLayer : toolpathLayerCount
+			for (const { line, layerOfVertex } of toolpathLines.values()) {
+				let start = layerOfVertex.length
+				let end = layerOfVertex.length
+				for (let i = 0; i < layerOfVertex.length; i++) {
+					if (start === layerOfVertex.length && layerOfVertex[i] >= lo) {
+						start = i
+					}
+					if (layerOfVertex[i] > hi) {
+						end = i
+						break
+					}
+				}
+				if (start >= end) {
+					line.geometry.setDrawRange(0, 0)
+				} else {
+					line.geometry.setDrawRange(start, end - start)
+				}
 			}
 		},
 		/**

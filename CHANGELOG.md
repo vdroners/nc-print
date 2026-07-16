@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.60.2] - 2026-07-15
+
+Slicer-GUI alignment — deferred tier, part 2: preview + viewport polish.
+Frontend-only (no sidecar rebuild).
+
+### Added — g-code preview (Slice tab)
+
+- **Layer band (Top + Bottom sliders)** — the toolpath viewer now has a second
+  "Bottom" slider beside the existing "Top" one, so you can isolate a slab of
+  layers (e.g. inspect layers 40–60) instead of only capping the top. When the
+  bottom is at 0 it behaves exactly as before (single cap + the in-layer "Moves"
+  scrubber, which is hidden while a band is active). Backed by a new
+  `viewport.setToolpathLayerRangeMinMax(min, max)` that draws one contiguous
+  range; the original single-cap `setToolpathLayerRange` is untouched.
+
+### Added — viewport (Prepare)
+
+- **Out-of-bed warning (now includes height)** — objects that exceed the build
+  volume on ANY axis, including Z height, are tinted red in the 3D view.
+  Selection (green) still takes precedence. The "Bed" badge on the Ready-to-slice
+  card now reports how many objects are off the bed (e.g. "2 objects off bed"),
+  and the overall fits-bed check finally accounts for build height — a model that
+  fits the footprint but is too tall is now correctly flagged. The tint + flag
+  refresh on load and after every move/scale.
+
+### Tests
+
+- vitest `build-volume.spec.js`: `fitsBed` includes Z (fits when footprint AND
+  height fit; fails on height-only overflow; tolerates a 2D bbox).
+- vitest `preview-alignment.spec.js`: viewport exposes the min–max band method
+  (and retains the single-cap one), Toolpath3D wires the bottom slider, viewport
+  tints out-of-bed objects with the Z-max clause. Full suite green (444).
+
 ## [1.60.1] - 2026-07-13
 
 Slicer-GUI alignment — deferred tier, part 1: calibration suite (verify + two

@@ -333,6 +333,10 @@ export const usePrintStore = defineStore('print', {
 		//     scale:[x,y,z], bbox|null, triangleCount, visible }
 		objects: [],
 		selectedObjectId: null,
+		// Ids of objects whose bounds exceed the build volume (any axis, incl. Z
+		// height). Authored by the viewport bridge (_syncSceneFromViewport →
+		// viewport.objectsOutOfBed) so the scene list + summary can flag them.
+		outOfBedIds: [],
 		// Baked per-object STL Files for the multi-object slice path (3d), stashed
 		// by applyMeshToSlice when the scene has >1 object. Empty → single-object
 		// slice path is used. Each: File (world-transform baked into vertices).
@@ -1563,8 +1567,11 @@ export const usePrintStore = defineStore('print', {
 				this.modelMeta.triangleCount = meta.triangleCount
 				this.modelMeta.bbox = meta.bbox
 				if (meta.bbox) {
-					const [bx, by] = this.buildVolume
+					const [bx, by, bz] = this.buildVolume
+					// Include the Z (height) axis — a model taller than the build
+					// height won't print even if its footprint fits.
 					this.modelMeta.fitsBed = meta.bbox.x <= bx && meta.bbox.y <= by
+						&& (meta.bbox.z == null || meta.bbox.z <= bz)
 				}
 			} catch (e) {
 				this.modelMeta.parseError = e?.message || 'Parse failed'
@@ -1582,8 +1589,9 @@ export const usePrintStore = defineStore('print', {
 				previewSkipped: !!meta.previewSkipped,
 			}
 			if (meta.bbox) {
-				const [bx, by] = this.buildVolume
+				const [bx, by, bz] = this.buildVolume
 				this.modelMeta.fitsBed = meta.bbox.x <= bx && meta.bbox.y <= by
+					&& (meta.bbox.z == null || meta.bbox.z <= bz)
 			}
 		},
 

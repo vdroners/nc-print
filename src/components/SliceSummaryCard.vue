@@ -66,12 +66,21 @@ export default {
 			return `${Math.round(bbox.x)}×${Math.round(bbox.y)}×${Math.round(bbox.z)} mm`
 		},
 		fitsBedLabel() {
+			// Per-object out-of-bed (any axis, incl. Z) takes priority — it's the
+			// most specific signal when the scene has multiple objects.
+			const n = this.printStore.outOfBedIds?.length || 0
+			if (n > 0) {
+				return n === 1 ? '1 object off bed' : `${n} objects off bed`
+			}
 			if (!this.printStore.modelMeta.bbox) {
 				return 'Unknown'
 			}
 			return this.printStore.modelMeta.fitsBed ? 'Fits bed' : 'May exceed bed'
 		},
 		fitsBedClass() {
+			if ((this.printStore.outOfBedIds?.length || 0) > 0) {
+				return 'nc-print-badge--warn'
+			}
 			if (!this.printStore.modelMeta.bbox) {
 				return 'nc-print-badge--info'
 			}

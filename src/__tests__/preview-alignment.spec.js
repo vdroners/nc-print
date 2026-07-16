@@ -42,3 +42,26 @@ describe('preview alignment (v1.60.0)', () => {
 		expect(adapter).toMatch(/speed_max/)
 	})
 })
+
+describe('preview/viewport A (v1.62)', () => {
+	it('viewport exposes a min–max layer band method (keeps the single-cap one)', () => {
+		expect(viewport).toMatch(/setToolpathLayerRangeMinMax\(minLayer, maxLayer\)/)
+		expect(viewport).toMatch(/setToolpathLayerRange\(maxLayer\)/) // single-cap retained
+		// band uses a contiguous draw range (start, count)
+		expect(viewport).toMatch(/setDrawRange\(start, end - start\)/)
+	})
+
+	it('Toolpath3D has a bottom (min-layer) slider wired to the band method', () => {
+		expect(tp).toMatch(/onMinLayer\(/)
+		expect(tp).toMatch(/setToolpathLayerRangeMinMax/)
+		expect(tp).toMatch(/minLayer: 0/)
+	})
+
+	it('viewport tints out-of-bed objects red, with selection taking precedence', () => {
+		expect(viewport).toMatch(/outOfBedIds/)
+		expect(viewport).toMatch(/refreshOutOfBed/)
+		expect(viewport).toMatch(/objectsOutOfBed\(\)/)
+		// isOnBed + objectsOutOfBed check the Z-max clause
+		expect(viewport).toMatch(/box\.max\.z <= bz \+ 0\.5/)
+	})
+})

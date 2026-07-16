@@ -150,6 +150,9 @@ export default {
 			}
 			this.printStore.setMeshTransform(transform)
 			this.printStore.markMeshDirty()
+			// A move/scale can push an object past the build volume — refresh the
+			// out-of-bed tint + flag list after each transform settles.
+			this.printStore.outOfBedIds = this.viewport?.objectsOutOfBed?.() || []
 			if (this.printStore.meshState.autoApply) {
 				void this.applyToSlice({ silent: true })
 			}
@@ -246,6 +249,9 @@ export default {
 			})
 			// Mirror the viewport's current selection.
 			this.printStore.selectedObjectId = this.viewport?.getSelectedId?.() ?? null
+			// Refresh out-of-bed tinting + flag list (viewport recomputes bounds and
+			// re-applies the red highlight as a side effect).
+			this.printStore.outOfBedIds = this.viewport?.objectsOutOfBed?.() || []
 		},
 		duplicateSelected() {
 			const id = this.viewport?.duplicateSelected?.()
