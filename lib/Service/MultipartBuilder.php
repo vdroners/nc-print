@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace OCA\NcPrint\Service;
 
 /**
- * Builds multipart/form-data bodies for forge-slicer slice jobs and Moonraker uploads.
+ * Builds multipart/form-data bodies for slicer slice jobs and Moonraker uploads.
  */
 final class MultipartBuilder
 {

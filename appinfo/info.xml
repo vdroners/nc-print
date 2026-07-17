@@ -7,7 +7,7 @@
 	<description><![CDATA[NC 3D Print — slice, send, and monitor Klipper/Moonraker 3D printers from Nextcloud.
 
 Requires a Moonraker-connected printer and the optional nc-print-slicer sidecar container for in-browser slicing (see docs/INSTALL.md). No NC-GCS dependency.]]></description>
-	<version>1.60.10</version>
+	<version>1.60.11</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="dan@19labs.com">19labs</author>
 	<namespace>NcPrint</namespace>

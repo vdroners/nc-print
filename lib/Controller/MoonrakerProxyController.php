@@ -18,29 +18,39 @@ use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 /**
- * Proxies a strict Moonraker API allowlist. Only the configured internal base
- * URL may be contacted — user-supplied hosts in paths or query are rejected.
+ * Proxies a Moonraker API path+method allowlist. Only the configured (or
+ * session-registered) Moonraker base URL may be contacted — user-supplied hosts
+ * in paths or query are rejected. Most writes go through PrinterController;
+ * intentional UI POSTs for job queue and power devices are allowlisted here.
  */
 class MoonrakerProxyController extends Controller
 {
-	private const ALLOWED_PREFIXES = [
+	/** GET (and HEAD) prefixes — monitoring / read surfaces. */
+	private const ALLOWED_GET_PREFIXES = [
 		'server/info',
 		'server/files/',
 		'printer/objects/',
 		'printer/print/',
-		// Part B (WS10-WS16) read-only prefixes. Writes still go through
-		// PrinterController guarded actions — never a raw gcode passthrough.
 		'server/temperature_store', // WS10 temp graph
 		'server/history/', // WS15 history/statistics
-		'server/job_queue/', // WS13 print/job queue
+		'server/job_queue/', // WS13 print/job queue (list)
 		'machine/timelapse/', // WS16 timelapse
 		'server/timelapse', // WS16 timelapse (settings)
-		'machine/device_power/', // WS10/WS14 optional power/fan/LED
+		'machine/device_power/', // WS10/WS14 optional power/fan/LED (list)
 		'server/spoolman/', // WS14 filament (Spoolman)
 		'server/webcams', // multi-webcam list/picker
 		'machine/update/status', // update_manager status (read-only)
 		'machine/update_manager/status', // update_manager status (alt path)
 		'server/announcements/', // Moonraker service announcements
+	];
+
+	/**
+	 * POST-only write prefixes used by the UI (queue mutate + power toggle).
+	 * PUT/PATCH/DELETE are never allowed through this proxy.
+	 */
+	private const ALLOWED_POST_PREFIXES = [
+		'server/job_queue/',
+		'machine/device_power/',
 	];
 
 	private const CONNECT_TIMEOUT_SECONDS = 5;
@@ -88,11 +98,12 @@ class MoonrakerProxyController extends Controller
 		}
 
 		$safePath = PathSanitizer::normalize($path);
-		if (!$this->isAllowedMoonrakerPath($safePath)) {
+		$method = strtoupper($this->request->getMethod());
+		if (!$this->isAllowedMoonrakerRequest($safePath, $method)) {
 			return new JSONResponse(
 				[
 					'error' => 'path_not_allowed',
-					'message' => 'Moonraker path not on allowlist',
+					'message' => 'Moonraker path/method not on allowlist',
 				],
 				Http::STATUS_FORBIDDEN,
 			);
@@ -122,7 +133,6 @@ class MoonrakerProxyController extends Controller
 			$targetUrl .= '?' . $query;
 		}
 
-		$method = $this->request->getMethod();
 		$body = null;
 		if (in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) {
 			$contentLength = (int) ($this->request->server['CONTENT_LENGTH'] ?? 0);
@@ -192,9 +202,23 @@ class MoonrakerProxyController extends Controller
 		return new JSONResponse($data, $httpCode);
 	}
 
-	private function isAllowedMoonrakerPath(string $safePath): bool
+	private function isAllowedMoonrakerRequest(string $safePath, string $method): bool
 	{
-		foreach (self::ALLOWED_PREFIXES as $prefix) {
+		if ($method === 'GET' || $method === 'HEAD') {
+			return $this->pathMatchesPrefixes($safePath, self::ALLOWED_GET_PREFIXES);
+		}
+		if ($method === 'POST') {
+			return $this->pathMatchesPrefixes($safePath, self::ALLOWED_POST_PREFIXES);
+		}
+		return false;
+	}
+
+	/**
+	 * @param list<string> $prefixes
+	 */
+	private function pathMatchesPrefixes(string $safePath, array $prefixes): bool
+	{
+		foreach ($prefixes as $prefix) {
 			if ($safePath === rtrim($prefix, '/')) {
 				return true;
 			}

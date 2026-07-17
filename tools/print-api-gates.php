@@ -169,7 +169,7 @@ try {
 	gate('G03', false, 'blocked');
 }
 
-// G04 — forge-slicer /api/health (direct from PHP via ConfigService URL)
+// G04 — slicer /api/health (direct from PHP via ConfigService URL)
 if ($config !== null) {
 	$healthUrl = rtrim($config->getSlicerInternalUrl(), '/') . '/api/health';
 	$health = gate_http_json($healthUrl);
@@ -460,14 +460,15 @@ if (!is_readable($deployedCss) || $jsGlob === []) {
 		: sprintf('stale css: css=%d < js=%d-60', $cssMtime, $jsMtime));
 }
 
-// G45 — Part B proxy allowlist + console-off regression.
+// G45 — Part B proxy allowlist + console-off + method allowlist regression.
 $proxySrcPath = dirname(__DIR__) . '/lib/Controller/MoonrakerProxyController.php';
 $proxySrc = is_readable($proxySrcPath) ? (string) file_get_contents($proxySrcPath) : '';
 $configSrcPath = dirname(__DIR__) . '/lib/Service/ConfigService.php';
 $configSrcG45 = is_readable($configSrcPath) ? (string) file_get_contents($configSrcPath) : '';
 
 // Part B read prefixes present, raw gcode passthrough never allowed, console
-// disabled by default, and consoleCommand guards on isConsoleEnabled.
+// disabled by default, consoleCommand guards on isConsoleEnabled, and POST
+// writes limited to job_queue + device_power.
 $partBPrefixes = [
 	'server/temperature_store',
 	'server/history/',
@@ -487,12 +488,18 @@ $g45ConsoleGuard = $printerSrc !== ''
 	&& preg_match("/function consoleCommand\\(/", $printerSrc) === 1;
 $g45ConsoleDefaultOff = $configSrcG45 !== ''
 	&& preg_match("/function isConsoleEnabled\\([\\s\\S]{0,200}?false/", $configSrcG45) === 1;
+$g45MethodAllowlist = $proxySrc !== ''
+	&& str_contains($proxySrc, 'ALLOWED_GET_PREFIXES')
+	&& str_contains($proxySrc, 'ALLOWED_POST_PREFIXES')
+	&& str_contains($proxySrc, 'isAllowedMoonrakerRequest')
+	&& preg_match("/ALLOWED_POST_PREFIXES\\s*=\\s*\\[[\\s\\S]*?'server\\/job_queue\\/'[\\s\\S]*?'machine\\/device_power\\/'/", $proxySrc) === 1;
 
-$g45 = $g45Reads && $g45NoRawGcode && $g45ConsoleGuard && $g45ConsoleDefaultOff;
+$g45 = $g45Reads && $g45NoRawGcode && $g45ConsoleGuard && $g45ConsoleDefaultOff && $g45MethodAllowlist;
 gate('G45', $g45, $g45
-	? 'proxy allowlist + console-off regression OK'
-	: sprintf('reads=%d noraw=%d guard=%d off=%d',
-		$g45Reads ? 1 : 0, $g45NoRawGcode ? 1 : 0, $g45ConsoleGuard ? 1 : 0, $g45ConsoleDefaultOff ? 1 : 0));
+	? 'proxy path+method allowlist + console-off regression OK'
+	: sprintf('reads=%d noraw=%d guard=%d off=%d method=%d',
+		$g45Reads ? 1 : 0, $g45NoRawGcode ? 1 : 0, $g45ConsoleGuard ? 1 : 0,
+		$g45ConsoleDefaultOff ? 1 : 0, $g45MethodAllowlist ? 1 : 0));
 
 // ── G46–G50: routes/allowlist added since G45 are actually registered in the
 // DEPLOYED files. We assert wiring against the deployed routes.php / controller
@@ -515,12 +522,14 @@ gate('G47', $g47, $g47 ? 'eta routes registered' : 'missing eta route(s)');
 $g48 = gate_routes_contain($routesRaw, "'print_event#notifyTransition'");
 gate('G48', $g48, $g48 ? 'print-transition route registered' : 'missing print-transition route');
 
-// G49 — monitor read prefixes on the Moonraker allowlist (v1.27.0 expansion).
+// G49 — monitor read prefixes on the Moonraker GET allowlist + POST method lock.
 $g49 = $proxySrc !== ''
 	&& str_contains($proxySrc, "'server/webcams'")
 	&& str_contains($proxySrc, "'machine/update/status'")
-	&& str_contains($proxySrc, "'server/announcements/'");
-gate('G49', $g49, $g49 ? 'monitor read prefixes allowlisted' : 'missing monitor read prefix');
+	&& str_contains($proxySrc, "'server/announcements/'")
+	&& str_contains($proxySrc, 'ALLOWED_GET_PREFIXES')
+	&& str_contains($proxySrc, 'ALLOWED_POST_PREFIXES');
+gate('G49', $g49, $g49 ? 'monitor read prefixes + method allowlist present' : 'missing monitor read prefix / method allowlist');
 
 // G50 — guarded filament_extrude action is allowlisted AND idle-only.
 $printerSrcPath = dirname(__DIR__) . '/lib/Controller/PrinterController.php';

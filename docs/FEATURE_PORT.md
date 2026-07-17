@@ -1,6 +1,12 @@
 # FEATURE_PORT.md — Forge Slicer Studio vs NC Print
 
-Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintforge/src/public/js/components/slicer-studio.js) and forge-slicer REST API.
+> **Historical tracker.** This document records early Forge Studio / forge-slicer
+> parity work through ~v1.7. For the **live** gap list against mainstream
+> slicers (Orca / Prusa / Bambu / Cura), use
+> [`docs/plans/slicer-gui-alignment.md`](plans/slicer-gui-alignment.md)
+> (refreshed through the 1.57–1.60.9 alignment round).
+
+Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintforge/src/public/js/components/slicer-studio.js) and the former forge-slicer REST API. The app now owns `nc-print-slicer` (Orca-fork sidecar); several “upstream 404/501” rows below are obsolete.
 
 **Legend:** Done · v1.x = shipped · Deferred = backlog / upstream blocked
 
@@ -11,9 +17,9 @@ Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintfo
 | C1 | Split workspace right rail | F (v1.5.2) | Done — `WorkspaceRail.vue` |
 | C2 | Pre-print modal before Slice & Send | D (v1.5.0) | Done — `PrePrintModal.vue` |
 | C3 | PNG preview lightbox | D (v1.5.0) | Done — `PreviewLightbox.vue` |
-| C4 | Save quality preset to forge | J (v1.7.x) | Deferred — `POST /api/profiles` 404; local presets in G |
+| C4 | Save quality preset to forge | J (v1.7.x) | Deferred for **external** forge `POST /api/profiles` — **local named presets shipped** (v1.6+) |
 | C5 | Estimate vs actual on Print | G (v1.6.0) | Done |
-| C6 | Interactive toolpath preview | F (v1.5.2) | Done — 2D layer scrubber; 3D preview deferred (501) |
+| C6 | Interactive toolpath preview | F → later | Done — 2D scrubber (v1.7) + **3D toolpath** on owned sidecar (`GET /api/jobs/{id}/toolpath`, `Toolpath3D`, color-by-speed in v1.60) |
 
 ## v1.7.0 shipped (2026-07-01)
 
@@ -123,24 +129,25 @@ Tracks UI and API parity against Forge [`slicer-studio.js`](/media/4TB/3dprintfo
 | — | Error recovery cards | ErrorRecoveryCard v1.7 |
 | — | Multi-tool filament slots | MultiToolFilamentPicker v1.7 |
 
-## forge-slicer API (via proxy)
+## Slicer API (via proxy) — owned `nc-print-slicer`
 
 | API | UI | Status |
 |-----|-----|--------|
 | GET /api/health | Status banner | v1.0.1 |
 | GET /api/profiles | ProfilePicker | Done |
-| POST /api/profiles | Save preset | **404** — local presets v1.6 |
-| POST /api/slice (SSE) | sliceStream | Done |
-| GET jobs/gcode, preview.png | Slice tab | Done |
+| POST /api/profiles | Save preset to **external** forge | Still N/A — **local named presets** v1.6+ |
+| POST /api/slice/stream (SSE) | sliceStream | Done (CLI-exec adapter) |
+| GET jobs/gcode | Slice tab | Done |
 | POST jobs/:id/cancel | cancelSliceJob | v1.1 |
-| GET /api/jobs | Job history enrich | v1.7 |
-| POST /api/preview | 3D toolpath | **501** — layer scrubber v1.7 |
-| POST /api/mesh/* | Mesh panel | **404** — browser fallback v1.7 |
+| GET /api/jobs/{id}/toolpath | Toolpath3D | **Shipped** on owned sidecar (not forge `/api/preview`) |
+| POST /api/mesh/analyze | MeshHealthPanel | **Shipped** on owned sidecar |
+| POST /api/project/pack | Save project (.3mf) | **Shipped** v1.60.8 |
+| POST /api/flush/matrix | AMS flush matrix | **Shipped** v1.60.9 |
 
-See [`docs/plans/forge-slicer-api-audit.md`](docs/plans/forge-slicer-api-audit.md).
+Historical forge-slicer audit (obsolete): [`docs/plans/archive/forge-slicer-api-audit.md`](plans/archive/forge-slicer-api-audit.md) after the plans archive lands.
 
 ## Coverage summary
 
-~38% at v1.0 → **~85%** at v1.2 → **~95%** operator-facing parity at v1.7.
+~38% at v1.0 → **~85%** at v1.2 → **~95%** operator-facing parity at v1.7; slicer-GUI alignment round (1.57–1.60.9) closed most remaining table-stakes gaps.
 
-**Still deferred:** forge POST profiles, server 3D preview, batch multi-object slice queue, seam/fuzzy region painting, raw YAML editor, phone-first UX.
+**Still deferred / out of scope:** external forge `POST /api/profiles`, seam/fuzzy region painting, modifier meshes, phone-first UX. Live backlog: [`plans/slicer-gui-alignment.md`](plans/slicer-gui-alignment.md).

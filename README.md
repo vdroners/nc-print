@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.60.10** · Nextcloud 28–33 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.60.11** · Nextcloud 28–34 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -135,7 +135,7 @@ PHP reaches the engine by container DNS (`http://nc-print-slicer:8080`). See
 
 | Component | Requirement |
 |-----------|-------------|
-| Nextcloud | 28 – 33 |
+| Nextcloud | 28 – 34 |
 | PHP | 8.1+ (matches your Nextcloud) |
 | Docker | for the `nc-print-slicer` sidecar (Ubuntu 24.04 base — the engine needs glibc ≥ 2.38) |
 | Slicing engine | 3DPrintForge Slicer (OrcaSlicer fork) — staged at build time, **not** committed to git |

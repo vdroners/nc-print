@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""TCP relay: LAN-facing port -> forge-slicer on 127.0.0.1 (Docker cannot reach :8766)."""
+"""DEPRECATED — legacy TCP relay for external forge-slicer on :8766.
+
+Current ops use the owned sidecar (`nc-print-slicer:8080` on `nc-print-net`).
+Keep this helper only if an operator still points Admin `slicer_internal_url`
+at a host-bound forge-slicer that Docker cannot reach on :8766 (InternalUrlResolver
+rewrites 8766 → LAN :8082). Prefer `make slicer-up` instead.
+"""
 from __future__ import annotations
 
 import os

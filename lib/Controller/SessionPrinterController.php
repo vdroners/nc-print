@@ -65,6 +65,12 @@ class SessionPrinterController extends Controller
 				$cameraUrl = $base . ':8080/?action=snapshot';
 			}
 		}
+		if ($cameraUrl !== '' && !UrlSafety::isSafeHttpUrl($cameraUrl)) {
+			return new JSONResponse([
+				'error' => 'invalid_url',
+				'message' => 'Camera URL is not allowed',
+			], Http::STATUS_BAD_REQUEST);
+		}
 
 		try {
 			$row = $this->sessionPrinters->register([

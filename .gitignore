@@ -15,3 +15,7 @@ __pycache__/
 /docs/*.3MF
 /docs/*.stl
 /docs/*.STL
+/docs/**/*.gcode
+# Operator lab dump — models/gcode kept next to the repo for convenience;
+# never commit or ship in App Store tarballs.
+/docs/3D Printing/

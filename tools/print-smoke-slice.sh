@@ -1,13 +1,37 @@
 #!/usr/bin/env bash
-# Smoke-test slice POST against forge-slicer (direct) or nc_print slicer proxy.
+# Smoke-test slice POST against the owned nc-print-slicer sidecar (direct)
+# or the nc_print slicer proxy (with a Nextcloud session cookie).
+#
+# Slicer URL resolution:
+#   1. NC_PRINT_SLICER_URL if set
+#   2. http://nc-print-slicer:8080 if that host resolves (e.g. inside cloud_app
+#      / on nc-print-net)
+#   3. otherwise FAIL — set NC_PRINT_SLICER_URL explicitly (no silent :8766)
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURE="${NC_PRINT_FIXTURE:-$ROOT/tests/fixtures/cube10.stl}"
 MODE="${NC_PRINT_SLICE_MODE:-auto}"
-SLICER_URL="${NC_PRINT_SLICER_URL:-http://127.0.0.1:8766}"
 NC_BASE="${NC_PRINT_URL:-${NC_URL:-http://127.0.0.1}}"
 NC_COOKIE="${NC_PRINT_SESSION_COOKIE:-${NC_COOKIE:-}}"
 SSE_ACCEPT="${NC_PRINT_SSE_ACCEPT:-}"
+
+resolve_slicer_url() {
+	if [[ -n "${NC_PRINT_SLICER_URL:-}" ]]; then
+		printf '%s\n' "$NC_PRINT_SLICER_URL"
+		return 0
+	fi
+	# Prefer container DNS when the sidecar hostname resolves.
+	if getent hosts nc-print-slicer >/dev/null 2>&1 \
+		|| host nc-print-slicer >/dev/null 2>&1 \
+		|| python3 -c 'import socket; socket.getaddrinfo("nc-print-slicer", None)' >/dev/null 2>&1; then
+		printf '%s\n' 'http://nc-print-slicer:8080'
+		return 0
+	fi
+	echo "FAIL: set NC_PRINT_SLICER_URL (e.g. http://nc-print-slicer:8080 via cloud_app, or your engine URL). Default :8766 forge-slicer is no longer used." >&2
+	return 1
+}
+
+SLICER_URL="$(resolve_slicer_url)"
 
 if [[ ! -f "$FIXTURE" ]]; then
 	echo "FAIL missing fixture: $FIXTURE" >&2

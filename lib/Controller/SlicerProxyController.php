@@ -19,7 +19,8 @@ use OCP\IRequest;
 use Psr\Log\LoggerInterface;
 
 /**
- * Proxies REST requests to forge-slicer over the internal Docker/LAN network.
+ * Proxies REST requests to the owned nc-print-slicer sidecar (or a configured
+ * external engine URL) over the internal Docker/LAN network.
  * Supports SSE streaming for slice jobs and multipart uploads up to 50 MB.
  */
 class SlicerProxyController extends Controller

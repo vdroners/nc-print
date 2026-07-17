@@ -6,7 +6,7 @@ still provides Prepare and Moonraker monitoring.
 
 ## Prerequisites
 
-- A running Nextcloud (28–33) in Docker — this repo deploys into a container
+- A running Nextcloud (28–34) in Docker — this repo deploys into a container
   named `cloud_app` by default (override with `CONTAINER=...`).
 - Docker + `docker compose` on the host, for the sidecar.
 - Node.js 18+ (frontend build only).

@@ -55,4 +55,20 @@ class AdminControllerTest extends TestCase
 		$c = AdminController::buildDiscoveryCandidates([], 'http://10.0.0.210:7125');
 		$this->assertLessThanOrEqual(260, count($c));
 	}
+
+	/**
+	 * console_enabled must stay occ-only — not writable via Admin saveSettings.
+	 */
+	public function testSaveSettingsDoesNotWriteConsoleEnabled(): void
+	{
+		$src = (string) file_get_contents(__DIR__ . '/../../lib/Controller/AdminController.php');
+		$start = strpos($src, 'function saveSettings');
+		$this->assertNotFalse($start);
+		$end = strpos($src, 'function ', $start + 10);
+		$this->assertNotFalse($end);
+		$block = substr($src, $start, $end - $start);
+		$this->assertStringNotContainsString('KEY_CONSOLE_ENABLED', $block);
+		$this->assertStringContainsString('KEY_SLICER_ENABLED', $block);
+		$this->assertStringContainsString('KEY_MOONRAKER_ENABLED', $block);
+	}
 }

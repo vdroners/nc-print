@@ -173,6 +173,8 @@ appstore: build
 	rsync -a --delete \
 		--exclude node_modules --exclude tests --exclude .git \
 		--exclude slicer/3dprintforge-slicer --exclude .phpunit.cache \
+		--exclude 'docs/3D Printing' --exclude '*.map' \
+		--exclude .vitest-gate-stamp \
 		"$(ROOT)" "$(STAGING)/"
 	cd "$(STAGING)" && composer install --no-dev --no-interaction --optimize-autoloader
 	rm -rf "$(STAGING)/node_modules"

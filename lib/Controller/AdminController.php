@@ -53,7 +53,7 @@ class AdminController extends Controller
 		foreach ([
 			ConfigService::KEY_SLICER_ENABLED,
 			ConfigService::KEY_MOONRAKER_ENABLED,
-			ConfigService::KEY_CONSOLE_ENABLED,
+			// console_enabled is intentionally NOT writable here — occ-only.
 		] as $boolKey) {
 			if (array_key_exists($boolKey, $params)) {
 				$raw = $params[$boolKey];

@@ -27,8 +27,12 @@ Per the [Release Automation guide](https://docs.nextcloud.com/server/stable/deve
 ## 4. GitHub release workflow
 
 1. Bump version in `appinfo/info.xml`, `package.json`, and `CHANGELOG.md`.
-2. Tag and publish a GitHub Release (tag should match version, e.g. `1.32.1`).
-3. The `.github/workflows/release.yml` workflow builds, signs, uploads `*.tar.gz`, and pushes to the App Store.
+2. Tag and publish a GitHub Release. The **tag must equal** the version in
+   `appinfo/info.xml` with **no `v` prefix** (e.g. tag `1.60.11` for version
+   `1.60.11`). The release workflow refuses a mismatch so the App Store
+   download URL stays aligned with `nc_print-<version>.tar.gz`.
+3. The `.github/workflows/release.yml` workflow builds, signs, uploads
+   `nc_print-<version>.tar.gz`, and pushes to the App Store.
 
 Local dry-run:
 

@@ -1,5 +1,38 @@
 # Changelog
 
+## [1.60.11] - 2026-07-17
+
+Hygiene + security truth from the full-audit cleanup. Packaging/docs/CI
+hygiene (no behaviour change for P0–P3) plus bounded Moonraker/Admin/session
+hardening.
+
+### Security
+
+- **Moonraker proxy is path + method allowlisted.** GET/HEAD keep the existing
+  monitoring prefixes; POST is limited to `server/job_queue/` and
+  `machine/device_power/` (UI queue + power). PUT/PATCH/DELETE are denied.
+  File upload / print start|pause|cancel stay on `PrinterController`.
+- **`console_enabled` is occ-only again.** Admin `saveSettings` no longer
+  accepts that key (matches SECURITY.md / docs).
+- **Session `camera_url` is UrlSafety-checked** at register time (same rules as
+  Moonraker URL).
+- **SECURITY.md** rewritten to the real model (admin URLs, session discovery
+  SSRF posture, proxy method allowlist, slicer prefix allowlist).
+
+### Changed — hygiene
+
+- gitignore + `make appstore` exclude `docs/3D Printing/`, `*.map`, gate stamp.
+- Docs truth: VERIFY, FEATURE_PORT, README/INSTALL NC 28–34, screenshots names,
+  plans archive + slicer-gui-alignment refresh through 1.60.9.
+- Smoke script no longer defaults to `:8766`; release.yml asset/tag naming;
+  CI runs `make slicer-test`; forge relay marked deprecated.
+
+### Tests
+
+- ProxyAllowlistTest: method allowlist + session camera UrlSafety source gates.
+- AdminControllerTest: saveSettings does not write `KEY_CONSOLE_ENABLED`.
+- G45/G49 assert GET/POST method allowlist constants.
+
 ## [1.60.10] - 2026-07-16
 
 Two field-of-view fixes reported from live use. Frontend-only.
