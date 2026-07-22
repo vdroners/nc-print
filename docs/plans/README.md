@@ -10,7 +10,8 @@ Checked-in implementation plans for NC Print.
 | [`appstore-publication.md`](appstore-publication.md) | App Store / signing / release packaging |
 | [`creality-import-inventory.md`](creality-import-inventory.md) | Creality profile import inventory |
 
-Other root plans under this directory document shipped feature rounds (prepare/tools, discovery, history DB, etc.). Prefer CHANGELOG + the alignment plan for “what’s next.”
+Other historical feature-round plans live under [`archive/`](archive/). Prefer
+CHANGELOG + the alignment plan for “what’s next.”
 
 ## Archive
 

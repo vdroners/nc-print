@@ -26,7 +26,7 @@ parts 1–9 are **shipped**.
 |---|-----|----------------|-------|--------|--------|
 | 7 | Color-by speed (+ scaffold flow/layer-time) | Feature \| Speed toggle | TS | L | **Shipped** v1.60 |
 | 8 | In-layer sequential "moves" slider | move scrubber | TS | M | **Shipped** v1.60 |
-| 9 | Layer range (min..max) not just max | max only | NH | S | **Open** |
+| 9 | Layer range (min..max) not just max | Top + Bottom band sliders | NH | S | **Done** v1.60.2 |
 | 10 | Travel / seam / retraction toggles as first-class | travel in feature legend | NH | S | **Open** |
 
 ## Workflow / estimate
@@ -43,8 +43,8 @@ parts 1–9 are **shipped**.
 |---|-----|----------------|-------|--------|--------|
 | 16 | Persistent camera view widget | ViewportCameraCube | TS | S | **Shipped** v1.58 |
 | 17 | Scene-tree right-click context menu | Objects list menu | TS | S | **Shipped** v1.58 |
-| 18 | Out-of-bed detection in Z + per-object tint | XY fits-bed + warnings; Z tint incomplete | NH | M | **Open** |
-| 19 | Multi-select in the scene tree | single-select | NH | M | **Open** |
+| 18 | Out-of-bed detection in Z + per-object tint | XY + Z height tint / fits-bed | NH | M | **Done** v1.60.2 |
+| 19 | Multi-select in the scene tree | Ctrl/Cmd + Shift multi-select | NH | M | **Done** v1.60.3 |
 | 20 | Exclusion / disallowed zones on the bed | none | NH | M | **Open** |
 
 ## Filament / material
@@ -59,13 +59,13 @@ parts 1–9 are **shipped**.
 
 ## Remaining open gaps (highest value)
 
-1. Layer range min..max (9)
-2. First-class travel / seam / retraction toggles (10)
-3. Z out-of-bed tint + multi-select + exclusion zones (18–20)
-4. Deeper calibration-generator suite
-5. Paint / modifiers (explicitly out of scope unless engine story changes)
+1. First-class travel / seam / retraction toggles (10)
+2. Exclusion / disallowed zones on the bed (20)
+3. Deeper calibration-generator suite
+4. Paint / modifiers (explicitly out of scope unless engine story changes)
 
 ## Shipped rounds (reference)
 
 - v1.57 settings · v1.58 viewport · v1.59 workflow · v1.60 preview
+- v1.60.2 layer band + Z out-of-bed tint · v1.60.3 multi-select
 - v1.60.5 settings tree · v1.60.6 per-object · v1.60.7 warnings · v1.60.8 project · v1.60.9 AMS flush
