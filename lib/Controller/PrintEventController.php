@@ -12,7 +12,6 @@ use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use OCP\IUserSession;
@@ -49,7 +48,6 @@ class PrintEventController extends Controller
 		parent::__construct(Application::APP_ID, $request);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function notifyTransition(): JSONResponse
 	{

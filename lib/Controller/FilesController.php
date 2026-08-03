@@ -10,7 +10,6 @@ use OCA\NcPrint\Service\FileFetchService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\DataDownloadResponse;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
@@ -30,7 +29,6 @@ class FilesController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function resolve(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {
@@ -65,7 +63,6 @@ class FilesController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function fetch(): Http\Response
 	{
 		if (!$this->access->canUseApp()) {
@@ -103,7 +100,6 @@ class FilesController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveGcode(): Http\Response
 	{
 		$controller = new GcodeSaveController($this->request, $this->access, $this->files, $this->rootFolder);
@@ -111,7 +107,6 @@ class FilesController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveProject(): Http\Response
 	{
 		$controller = new GcodeSaveController($this->request, $this->access, $this->files, $this->rootFolder);

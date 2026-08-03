@@ -9,7 +9,8 @@ use OCA\NcPrint\Service\ConfigService;
 use OCA\NcPrint\Service\PrinterDiscoveryService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http\Attribute\AdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\PasswordConfirmationRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -26,7 +27,7 @@ class AdminController extends Controller
 	}
 
 	#[AdminRequired]
-	#[NoCSRFRequired]
+	#[PasswordConfirmationRequired]
 	public function saveSettings(): JSONResponse
 	{
 		$params = $this->request->getParams();
@@ -77,7 +78,7 @@ class AdminController extends Controller
 	 * few common names. Admin-only; the scan runs server-side from cloud_app.
 	 */
 	#[AdminRequired]
-	#[NoCSRFRequired]
+	#[UserRateLimit(limit: 10, period: 60)]
 	public function discoverPrinters(): JSONResponse
 	{
 		$params = $this->configService->applyDiscoveryDefaults($this->request->getParams());

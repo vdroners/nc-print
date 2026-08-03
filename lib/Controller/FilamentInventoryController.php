@@ -43,7 +43,6 @@ class FilamentInventoryController extends Controller
 		return new JSONResponse($this->inventory->list($uid, (bool) $this->request->getParam('archived')));
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function create(): JSONResponse
 	{
@@ -58,7 +57,6 @@ class FilamentInventoryController extends Controller
 		return new JSONResponse($created);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function update(int $id): JSONResponse
 	{
@@ -73,7 +71,6 @@ class FilamentInventoryController extends Controller
 		return new JSONResponse($updated);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function destroy(int $id): JSONResponse
 	{

@@ -8,6 +8,28 @@
 	const saveUrl = root.dataset.saveUrl
 	const discoverUrl = root.dataset.discoverUrl
 
+	/**
+	 * Confirm admin password when Nextcloud requires it (PasswordConfirmationRequired).
+	 * Uses the legacy OC.PasswordConfirmation API available on Settings pages.
+	 * @returns {Promise<void>}
+	 */
+	function ensurePasswordConfirmed() {
+		const PC = typeof OC !== 'undefined' ? OC.PasswordConfirmation : null
+		if (!PC || typeof PC.requirePasswordConfirmation !== 'function') {
+			return Promise.resolve()
+		}
+		if (typeof PC.requiresPasswordConfirmation === 'function' && !PC.requiresPasswordConfirmation()) {
+			return Promise.resolve()
+		}
+		return new Promise((resolve, reject) => {
+			try {
+				PC.requirePasswordConfirmation(resolve, {}, reject)
+			} catch (err) {
+				reject(err)
+			}
+		})
+	}
+
 	// ── Printer autodetect ────────────────────────────────────────────
 	const discoverBtn = document.getElementById('nc-print-discover-btn')
 	const discoverStatus = document.getElementById('nc-print-discover-status')
@@ -117,6 +139,7 @@
 			status.textContent = 'Saving…'
 		}
 		try {
+			await ensurePasswordConfirmed()
 			const res = await fetch(saveUrl, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json', requesttoken: OC.requestToken },

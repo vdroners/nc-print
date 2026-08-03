@@ -138,7 +138,7 @@ export default {
 					type="text"
 					inputmode="decimal"
 					class="nc-print-multi-printer__manual-input"
-					placeholder="10.0.0.210"
+					placeholder="printer.local or IP"
 					:disabled="printStore.discovering"
 					@keydown.enter.prevent="connectManual">
 				<button

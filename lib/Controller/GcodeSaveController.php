@@ -10,7 +10,6 @@ use OCA\NcPrint\Service\FileFetchService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\Files\IRootFolder;
 use OCP\Files\NotFoundException;
@@ -30,7 +29,6 @@ class GcodeSaveController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveGcode(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {
@@ -75,7 +73,6 @@ class GcodeSaveController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function saveProject(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {

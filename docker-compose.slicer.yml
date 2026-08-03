@@ -3,6 +3,12 @@
 # Brought up by `make slicer-up`, which also attaches the Nextcloud container
 # (cloud_app) to `nc-print-net` so PHP can resolve `nc-print-slicer:8080`.
 #
+# Image options:
+#   - Local build (default below): `docker compose -f docker-compose.slicer.yml build`
+#   - Prebuilt GHCR: set image to `ghcr.io/vdroners/nc-print-slicer:<tag>` and
+#     skip the build (see .github/workflows/docker-slicer.yml). ENGINE_SRC /
+#     release assets supply the AGPL corresponding source for the Orca engine.
+#
 # The engine runs a C++ parser on user-uploaded meshes, so the container is
 # hardened: no host port published (reachable only from the internal network),
 # capabilities dropped, no privilege escalation, read-only rootfs with a tmpfs

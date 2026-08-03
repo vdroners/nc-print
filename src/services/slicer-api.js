@@ -2,6 +2,7 @@ import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { parseSseBlock, parseSseChunk, flushSseLeftover, buildSliceOverrides } from './slicer-utils.js'
 import { uploadAndStart } from './moonraker-api.js'
+import { csrfRequestToken } from '@/services/csrf.js'
 
 export { parseSseBlock, parseSseChunk, buildSliceOverrides } from './slicer-utils.js'
 
@@ -91,6 +92,7 @@ export async function sliceStream({
 			'Content-Type': 'application/octet-stream',
 			Accept: 'text/event-stream',
 			'X-Filename': filename || 'model.stl',
+			requesttoken: csrfRequestToken(),
 		},
 		body,
 		credentials: 'same-origin',
@@ -232,7 +234,10 @@ export async function sliceStreamMulti({
 
 	const response = await fetch(`${apiBase()}/slice/stream`, {
 		method: 'POST',
-		headers: { Accept: 'text/event-stream' },
+		headers: {
+			Accept: 'text/event-stream',
+			requesttoken: csrfRequestToken(),
+		},
 		body: form,
 		credentials: 'same-origin',
 		signal,

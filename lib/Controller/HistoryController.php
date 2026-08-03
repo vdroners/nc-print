@@ -88,7 +88,6 @@ class HistoryController extends Controller
 		return new JSONResponse($this->history->analytics($uid, $pricePerKg));
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function destroy(int $id): JSONResponse
 	{
@@ -99,7 +98,6 @@ class HistoryController extends Controller
 		return new JSONResponse(['ok' => true, 'deleted' => $this->history->delete($uid, $id)]);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function clear(): JSONResponse
 	{

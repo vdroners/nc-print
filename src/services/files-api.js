@@ -1,5 +1,6 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { csrfRequestToken } from '@/services/csrf.js'
 
 const base = () => generateUrl('/apps/nc_print/api/files')
 
@@ -20,7 +21,10 @@ export async function resolveFile(params) {
 export async function fetchModelBlob(params) {
 	const response = await fetch(`${base()}/fetch`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: {
+			'Content-Type': 'application/json',
+			requesttoken: csrfRequestToken(),
+		},
 		body: JSON.stringify(params),
 		credentials: 'same-origin',
 	})

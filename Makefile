@@ -167,14 +167,18 @@ STAGING := /tmp/$(APP_ID)-$(VERSION)
 TARBALL := /tmp/$(APP_ID)-$(VERSION).tar.gz
 
 # Self-contained App Store tarball (built assets + composer vendor; slicer engine excluded).
+# appstore-sign copies scripts/file_from_env.php into the staging root (not via rsync).
 appstore: build
 	rm -rf "$(STAGING)"
 	mkdir -p "$(STAGING)"
 	rsync -a --delete \
 		--exclude node_modules --exclude tests --exclude .git \
-		--exclude slicer/3dprintforge-slicer --exclude .phpunit.cache \
-		--exclude 'docs/3D Printing' --exclude '*.map' \
-		--exclude .vitest-gate-stamp \
+		--exclude .github --exclude tools --exclude scripts --exclude src \
+		--exclude slicer --exclude .phpunit.cache \
+		--exclude 'docs/3D Printing' --exclude 'docs/*.stl' --exclude 'docs/*.STL' \
+		--exclude 'docs/*.3MF' --exclude 'docs/*.3mf' \
+		--exclude '*.map' --exclude .vitest-gate-stamp \
+		--exclude .cursor --exclude .vscode --exclude .idea \
 		"$(ROOT)" "$(STAGING)/"
 	cd "$(STAGING)" && composer install --no-dev --no-interaction --optimize-autoloader
 	rm -rf "$(STAGING)/node_modules"

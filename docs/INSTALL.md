@@ -11,9 +11,9 @@ still provides Prepare and Moonraker monitoring.
 - Docker + `docker compose` on the host, for the sidecar.
 - Node.js 18+ (frontend build only).
 - The slicing engine (3DPrintForge Slicer / OrcaSlicer fork) available locally to
-  stage from — default `/media/4TB/3dprintforge/slicer/3dprintforge-slicer`, plus
-  its data-dir seed at `~/.config/3DPrintForgeSlicer` (enables the full vendor
-  profile bundle). Override the engine source with `ENGINE_SRC=...`.
+  stage from — set `ENGINE_SRC` to the path of your `3dprintforge-slicer` tree
+  (and optionally seed profiles from `~/.config/3DPrintForgeSlicer` for the full
+  vendor profile bundle).
 
 ## 1. Stand up the slicing engine sidecar
 

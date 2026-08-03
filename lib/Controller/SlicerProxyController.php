@@ -12,7 +12,7 @@ use OCA\NcPrint\Service\PathSanitizer;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\AppFramework\Http\Response;
 use OCP\IRequest;
@@ -38,8 +38,8 @@ class SlicerProxyController extends Controller
 		parent::__construct(Application::APP_ID, $request);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 60, period: 60)]
 	public function proxy(string $path): Response
 	{
 		if (!$this->access->canUseApp()) {

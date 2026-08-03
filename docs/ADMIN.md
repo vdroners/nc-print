@@ -5,10 +5,10 @@ Configure in **Settings → NC 3D Print**:
 - **Slicer internal URL** — the owned slicing engine sidecar. Default
   `http://nc-print-slicer:8080` (reached by container DNS over `nc-print-net`).
   Change it only to point at an external engine; user paths can never retarget it.
-- **Moonraker internal URL** — Klipper API (default `http://10.0.0.210:7125`).
+- **Moonraker internal URL** — Klipper API (set to your printer, e.g. `http://printer.local:7125`). Empty by default until configured.
 - **Camera URL** — snapshot endpoint for PiP / the Print monitor.
 - **Printer display name** — UI label.
-- **Allowed groups** — comma-separated Nextcloud groups (default `19 Labs`).
+- **Allowed groups** — comma-separated Nextcloud groups. Empty default means **administrators only** until groups are configured.
 - **Multi-printer config** — optional JSON array of
   `{id, name, moonraker_url, camera_url, default}`.
 - Feature toggles to disable the slicer or Moonraker independently.

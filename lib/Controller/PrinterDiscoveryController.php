@@ -11,7 +11,7 @@ use OCA\NcPrint\Service\PrinterDiscoveryService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
+use OCP\AppFramework\Http\Attribute\UserRateLimit;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IConfig;
 use OCP\IRequest;
@@ -31,8 +31,8 @@ class PrinterDiscoveryController extends Controller
 		parent::__construct(Application::APP_ID, $request);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
+	#[UserRateLimit(limit: 10, period: 60)]
 	public function discover(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {

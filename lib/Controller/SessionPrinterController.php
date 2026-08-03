@@ -11,7 +11,6 @@ use OCA\NcPrint\Util\UrlSafety;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 
@@ -26,7 +25,6 @@ class SessionPrinterController extends Controller
 	}
 
 	#[NoAdminRequired]
-	#[NoCSRFRequired]
 	public function registerSession(): JSONResponse
 	{
 		if (!$this->access->canUseApp()) {

@@ -43,7 +43,6 @@ class MaintenanceController extends Controller
 		return new JSONResponse($this->maintenance->summary($uid));
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function log(): JSONResponse
 	{

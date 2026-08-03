@@ -1,0 +1,109 @@
+# Build and publish the nc-print-slicer sidecar to GHCR.
+#
+# The Orca-lineage engine binary is NOT committed to git (~380 MB). This
+# workflow builds when slicer/3dprintforge-slicer/ is present in the tree
+# (operator staged via `make slicer-fetch`) OR downloads a matching release
+# asset named `3dprintforge-slicer-<tag>.tar.gz` / `nc-print-slicer-engine-<tag>.tar.gz`.
+#
+# AGPL: distributing the image requires offering corresponding source — keep
+# ENGINE_SRC / release assets aligned with docs/THIRD_PARTY.md.
+
+name: Docker slicer (GHCR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag (default = github.ref_name or latest)
+        required: false
+        default: ''
+  release:
+    types: [published]
+  push:
+    branches: [main]
+    paths:
+      - 'slicer/**'
+      - 'docker-compose.slicer.yml'
+      - '.github/workflows/docker-slicer.yml'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: vdroners/nc-print-slicer
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve image tag
+        id: meta
+        run: |
+          if [ -n "${{ inputs.tag }}" ]; then
+            TAG="${{ inputs.tag }}"
+          elif [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="latest"
+          fi
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Stage engine binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          ENGINE_DIR="slicer/3dprintforge-slicer"
+          if [ -x "${ENGINE_DIR}/3dprintforge-slicer" ] || [ -f "${ENGINE_DIR}/LICENSE.txt" ]; then
+            echo "Engine already present under ${ENGINE_DIR}"
+            ls -la "${ENGINE_DIR}" | head
+            exit 0
+          fi
+          echo "Engine not in tree — trying GitHub release assets for tag ${TAG}"
+          if [ "${TAG}" = "latest" ]; then
+            echo "::warning::No staged engine and tag=latest; set ENGINE_SRC locally or attach a release asset."
+            echo "::error::Cannot build slicer image without engine binary. Stage slicer/3dprintforge-slicer/ or publish a release asset named 3dprintforge-slicer-<tag>.tar.gz"
+            exit 1
+          fi
+          ASSET=""
+          for name in \
+            "3dprintforge-slicer-${TAG}.tar.gz" \
+            "nc-print-slicer-engine-${TAG}.tar.gz" \
+            "3dprintforge-slicer.tar.gz"; do
+            if gh release download "${TAG}" -p "${name}" -O /tmp/engine.tgz 2>/dev/null; then
+              ASSET="${name}"
+              break
+            fi
+          done
+          if [ -z "${ASSET}" ]; then
+            echo "::error::No engine in tree and no matching release asset for ${TAG}. Document ENGINE_SRC in docs/INSTALL.md."
+            exit 1
+          fi
+          mkdir -p slicer
+          tar -xzf /tmp/engine.tgz -C slicer
+          test -d "${ENGINE_DIR}" || (echo "Archive must unpack to slicer/3dprintforge-slicer/" && exit 1)
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push amd64
+        uses: docker/build-push-action@v6
+        with:
+          context: ./slicer
+          file: ./slicer/Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.tag }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest

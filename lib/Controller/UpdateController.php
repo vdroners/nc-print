@@ -10,7 +10,6 @@ use OCA\NcPrint\Service\ConfigService;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
-use OCP\AppFramework\Http\Attribute\NoCSRFRequired;
 use OCP\AppFramework\Http\JSONResponse;
 use OCP\IRequest;
 use Psr\Log\LoggerInterface;
@@ -44,7 +43,6 @@ class UpdateController extends Controller
 		parent::__construct(Application::APP_ID, $request);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function trigger(): JSONResponse
 	{

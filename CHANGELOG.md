@@ -1,5 +1,32 @@
 # Changelog
 
+## [1.60.12] - 2026-08-03
+
+App Store readiness: CSRF hardening, uninstall cleanup, packaging excludes,
+public docs polish, and GHCR slicer workflow stub.
+
+### Security
+
+- Strip `#[NoCSRFRequired]` from all state-changing controller methods (POST/
+  PUT/PATCH/DELETE); keep it only on the HTML page GET and selected read-only
+  GETs. Frontend raw `fetch` mutators now send `requesttoken`.
+- `#[PasswordConfirmationRequired]` on `AdminController::saveSettings`; admin
+  UI confirms password via `OC.PasswordConfirmation` before save.
+- `#[UserRateLimit]` on printer discovery scans and Moonraker/slicer proxies.
+
+### Changed
+
+- Uninstall drops `ncprint_prints` / `ncprint_spools` / `ncprint_maintenance`
+  tables (plus existing appconfig wipe).
+- `make appstore` excludes `.github`, `tools`, `scripts`, `src`, entire
+  `slicer/`, and docs mesh fixtures (sign still copies `file_from_env.php`).
+- Nested `info.xml` `<documentation>` + longer privacy-aware description.
+- Neutralize lab host/path examples in README / ADMIN / INSTALL; fix allowed-
+  groups docs (empty = admins-only).
+- `.github/workflows/docker-slicer.yml` for `ghcr.io/vdroners/nc-print-slicer`
+  (engine from tree or release asset); AGPL corresponding-source notes in
+  THIRD_PARTY / APPSTORE_ONBOARDING.
+
 ## [1.60.11] - 2026-07-17
 
 Hygiene + security truth from the full-audit cleanup. Packaging/docs/CI

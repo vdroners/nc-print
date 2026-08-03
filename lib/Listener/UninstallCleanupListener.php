@@ -9,16 +9,24 @@ use OCP\App\Events\AppUninstallEvent;
 use OCP\EventDispatcher\Event;
 use OCP\EventDispatcher\IEventListener;
 use OCP\IConfig;
+use OCP\IDBConnection;
 
 /**
- * Remove all nc_print appconfig on uninstall (store rule: clean up after themselves).
+ * Drop ncprint_* tables and appconfig on uninstall (store rule: clean up after themselves).
  *
  * @template-implements IEventListener<AppUninstallEvent>
  */
 class UninstallCleanupListener implements IEventListener
 {
+	private const TABLES = [
+		'ncprint_prints',
+		'ncprint_spools',
+		'ncprint_maintenance',
+	];
+
 	public function __construct(
 		private IConfig $config,
+		private IDBConnection $db,
 	) {
 	}
 
@@ -26,6 +34,11 @@ class UninstallCleanupListener implements IEventListener
 	{
 		if (!$event instanceof AppUninstallEvent || $event->getAppId() !== Application::APP_ID) {
 			return;
+		}
+
+		$prefix = $this->db->getPrefix();
+		foreach (self::TABLES as $table) {
+			$this->db->executeStatement('DROP TABLE IF EXISTS `' . $prefix . $table . '`');
 		}
 
 		$this->config->deleteAppValues(Application::APP_ID);

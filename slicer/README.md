@@ -32,13 +32,13 @@ The engine binary and its resources are **not** committed to git (~380 MB).
 Stage them first, then bring the sidecar up:
 
 ```bash
-cd /media/4TB/nc-print
+cd /path/to/nc-print
 make slicer-fetch    # copies engine + resources into slicer/3dprintforge-slicer/
 make slicer-up       # builds the image, starts it, attaches cloud_app to the net
 ```
 
 `ENGINE_SRC` overrides where the engine is staged from (default:
-`/media/4TB/3dprintforge/slicer/3dprintforge-slicer`).
+your local `3dprintforge-slicer` tree (set `ENGINE_SRC`)).
 
 ## Why this shape
 

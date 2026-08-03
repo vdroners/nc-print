@@ -4,10 +4,14 @@
 	<id>nc_print</id>
 	<name>NC 3D Print</name>
 	<summary>Slice, send, and monitor Klipper/Moonraker 3D prints from Nextcloud</summary>
-	<description><![CDATA[NC 3D Print — slice, send, and monitor Klipper/Moonraker 3D printers from Nextcloud.
+	<description><![CDATA[NC 3D Print connects Nextcloud to Klipper printers via Moonraker: prepare models from Files, slice with an optional owned slicer sidecar, upload G-code, and monitor jobs (pause/resume/cancel, temperatures, camera).
 
-Requires a Moonraker-connected printer and the optional nc-print-slicer sidecar container for in-browser slicing (see docs/INSTALL.md). No NC-GCS dependency.]]></description>
-	<version>1.60.11</version>
+Unlike SkyPrint or SavaPage (which target traditional CUPS / office printing), this app is purpose-built for consumer and workshop FDM printers running Klipper + Moonraker. In-browser slicing uses the separate nc-print-slicer container (OrcaSlicer-lineage engine); without it, Prepare and Moonraker monitoring still work.
+
+Privacy: the app does not phone home or collect telemetry. It only contacts the Moonraker and slicer URLs configured by your administrator (plus your Nextcloud file storage).
+
+See INSTALL.md for the sidecar and ADMIN.md for settings.]]></description>
+	<version>1.60.12</version>
 	<licence>AGPL-3.0-or-later</licence>
 	<author mail="dan@19labs.com">19labs</author>
 	<namespace>NcPrint</namespace>
@@ -15,7 +19,10 @@ Requires a Moonraker-connected printer and the optional nc-print-slicer sidecar 
 	<website>https://github.com/vdroners/nc-print</website>
 	<bugs>https://github.com/vdroners/nc-print/issues</bugs>
 	<repository type="git">https://github.com/vdroners/nc-print.git</repository>
-	<documentation>https://github.com/vdroners/nc-print/blob/main/README.md</documentation>
+	<documentation>
+		<user>https://github.com/vdroners/nc-print/blob/main/README.md</user>
+		<admin>https://github.com/vdroners/nc-print/blob/main/docs/ADMIN.md</admin>
+	</documentation>
 	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/prepare.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/slice.png</screenshot>
 	<screenshot>https://raw.githubusercontent.com/vdroners/nc-print/main/docs/screenshots/print.png</screenshot>

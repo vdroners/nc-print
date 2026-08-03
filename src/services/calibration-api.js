@@ -8,6 +8,7 @@
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
 import { parseSseChunk, flushSseLeftover } from './slicer-utils.js'
+import { csrfRequestToken } from '@/services/csrf.js'
 
 const apiBase = () => generateUrl('/apps/nc_print/api/slicer')
 
@@ -67,7 +68,11 @@ export async function sliceCalibration({
 	}
 	const response = await fetch(`${apiBase()}/calibration/${encodeURIComponent(calibId)}/slice`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+		headers: {
+			'Content-Type': 'application/json',
+			Accept: 'text/event-stream',
+			requesttoken: csrfRequestToken(),
+		},
 		body: JSON.stringify(body),
 		credentials: 'same-origin',
 	})

@@ -245,28 +245,24 @@ class PrinterController extends Controller
 		return $out === [] ? null : $out;
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function pause(): JSONResponse
 	{
 		return $this->printAction('printer/print/pause');
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function resume(): JSONResponse
 	{
 		return $this->printAction('printer/print/resume');
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function cancel(): JSONResponse
 	{
 		return $this->printAction('printer/print/cancel');
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function setTemperature(): JSONResponse
 	{
@@ -314,7 +310,6 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function emergencyStop(): JSONResponse
 	{
@@ -334,7 +329,6 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function gcodeAction(): JSONResponse
 	{
@@ -379,7 +373,6 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function upload(): JSONResponse
 	{
@@ -799,7 +792,6 @@ class PrinterController extends Controller
 	 * turned on `console_enabled`. Per-command guard: length cap, single line,
 	 * printable ASCII. Motion-while-printing rules still apply.
 	 */
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function consoleCommand(): JSONResponse
 	{

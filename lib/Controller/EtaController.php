@@ -32,7 +32,6 @@ class EtaController extends Controller
 		parent::__construct(Application::APP_ID, $request);
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function predict(): JSONResponse
 	{
@@ -50,7 +49,6 @@ class EtaController extends Controller
 		return new JSONResponse($this->eta->predict($slicerMinutes, $this->ctxFromParams($params)));
 	}
 
-	#[NoCSRFRequired]
 	#[NoAdminRequired]
 	public function record(): JSONResponse
 	{

@@ -58,9 +58,14 @@ Prepare long descriptions for both languages covering:
 The ~380 MB Orca engine is **not** bundled in the app tarball. Publish the sidecar as a container image, e.g.:
 
 ```bash
-docker build -t ghcr.io/vdroners/nc-print-slicer:1.32.1 slicer/
-docker push ghcr.io/vdroners/nc-print-slicer:1.32.1
+# Prefer the GHCR workflow (.github/workflows/docker-slicer.yml), or locally:
+docker build -t ghcr.io/vdroners/nc-print-slicer:1.60.12 slicer/
+docker push ghcr.io/vdroners/nc-print-slicer:1.60.12
 ```
+
+`docker-compose.slicer.yml` can pull `ghcr.io/vdroners/nc-print-slicer` when a prebuilt image is preferred over a local build.
+
+**AGPL corresponding source:** the Orca-lineage engine inside the image is AGPL-3.0. Publish matching source (release asset or documented `ENGINE_SRC`) whenever you distribute the image — see `docs/THIRD_PARTY.md`.
 
 Reference `docker-compose.slicer.yml` in the store listing and `docs/INSTALL.md`.
 
