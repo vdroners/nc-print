@@ -44,10 +44,9 @@ class PageController extends Controller
 		}
 
 		Util::addScript(Application::APP_ID, 'nc_print-main');
-		// nc-print-theme.css (design tokens + app-shell base) is added globally
-		// in Application::boot(); style.css holds the app's component/layout
-		// rules (built from css/style.scss) and must be enqueued for the app
-		// page or the workflow bar, viewport toolbar, etc. render unstyled.
+		// Design tokens + app-shell base (scoped to #nc-print-root). Must load
+		// before style.css so component rules can resolve --nc-gcs-* vars.
+		Util::addStyle(Application::APP_ID, 'nc-print-theme');
 		Util::addStyle(Application::APP_ID, 'style');
 
 		$fileId = (int) $this->request->getParam('fileId', 0);

@@ -82,8 +82,8 @@ export default {
 .nc-print-announcements__item {
 	display: flex; align-items: center; gap: 10px;
 	padding: 8px 12px; border-radius: 8px;
-	background: color-mix(in srgb, var(--color-warning, #d9a441) 12%, transparent);
-	border: 1px solid color-mix(in srgb, var(--color-warning, #d9a441) 35%, transparent);
+	background: color-mix(in srgb, var(--color-warning) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-warning) 35%, transparent);
 	font-size: 0.84rem;
 }
 .nc-print-announcements__title { flex: 1; }

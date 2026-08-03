@@ -14,7 +14,6 @@ use OCP\AppFramework\App;
 use OCP\AppFramework\Bootstrap\IBootContext;
 use OCP\AppFramework\Bootstrap\IBootstrap;
 use OCP\AppFramework\Bootstrap\IRegistrationContext;
-use OCP\Util;
 
 class Application extends App implements IBootstrap
 {
@@ -44,10 +43,19 @@ class Application extends App implements IBootstrap
 		$context->registerDashboardWidget(PrinterStatusWidget::class);
 	}
 
+	/**
+	 * Required by IBootstrap — deliberately empty.
+	 *
+	 * This used to `Util::addStyle(self::APP_ID, 'nc-print-theme')`, which put
+	 * a nc_print stylesheet in the <head> of EVERY Nextcloud page (Files, the
+	 * login screen, other apps' settings). Theme tokens now load only where the
+	 * app owns chrome: PageController, AdminSettings, and PrinterStatusWidget.
+	 *
+	 * Do NOT delete this method to "clean up" — IBootstrap declares it, and a
+	 * class that does not implement it fails at runtime in a way `php -l`
+	 * cannot see.
+	 */
 	public function boot(IBootContext $context): void
 	{
-		$context->injectFn(function (): void {
-			Util::addStyle(self::APP_ID, 'nc-print-theme');
-		});
 	}
 }

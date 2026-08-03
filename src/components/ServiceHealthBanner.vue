@@ -118,10 +118,10 @@ export default {
 /* Collapsed chip — a single compact row, not a viewport-eating card. */
 .nc-print-health-chip {
 	align-items: center;
-	background: color-mix(in srgb, var(--nc-gcs-danger) 16%, transparent);
-	border: 1px solid color-mix(in srgb, var(--nc-gcs-danger) 45%, transparent);
+	background: color-mix(in srgb, var(--color-error) 16%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-error) 45%, transparent);
 	border-radius: 999px;
-	color: var(--nc-gcs-danger-soft);
+	color: var(--color-error-text, var(--color-error));
 	display: inline-flex;
 	gap: 8px;
 	max-width: 100%;
@@ -161,7 +161,7 @@ export default {
 
 .nc-print-health-chip__retry {
 	appearance: none;
-	background: color-mix(in srgb, var(--nc-gcs-danger) 30%, transparent);
+	background: color-mix(in srgb, var(--color-error) 30%, transparent);
 	border: none;
 	border-radius: 999px;
 	color: inherit;
@@ -174,7 +174,7 @@ export default {
 }
 
 .nc-print-health-chip__retry:hover {
-	background: color-mix(in srgb, var(--nc-gcs-danger) 45%, transparent);
+	background: color-mix(in srgb, var(--color-error) 45%, transparent);
 }
 
 .nc-print-health-stack {

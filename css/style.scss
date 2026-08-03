@@ -1,4 +1,5 @@
-@import '../css/nc-print-theme.css';
+/* Theme tokens load via Util::addStyle(..., 'nc-print-theme') on app/admin/dashboard
+ * pages — do not @import here or tokens re-declare on every stylesheet fetch. */
 
 #nc-print-root {
 	min-height: 60vh;
@@ -188,23 +189,23 @@
 	padding: 2px 8px;
 
 	&--ok {
-		background: color-mix(in srgb, var(--nc-app-accent) 15%, transparent);
-		color: var(--nc-app-accent);
+		background: color-mix(in srgb, var(--color-success) 15%, transparent);
+		color: var(--color-success-text, var(--color-success));
 	}
 
 	&--warn {
-		background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 15%, transparent);
-		color: var(--nc-gcs-warning, #eab308);
+		background: color-mix(in srgb, var(--color-warning) 15%, transparent);
+		color: var(--color-warning-text, var(--color-warning));
 	}
 
 	&--danger {
-		background: color-mix(in srgb, var(--nc-gcs-danger) 15%, transparent);
-		color: var(--nc-gcs-danger-soft);
+		background: color-mix(in srgb, var(--color-error) 15%, transparent);
+		color: var(--color-error-text, var(--color-error));
 	}
 
 	&--info {
-		background: color-mix(in srgb, var(--nc-gcs-info) 15%, transparent);
-		color: var(--nc-gcs-info-soft);
+		background: color-mix(in srgb, var(--color-primary) 15%, transparent);
+		color: var(--color-primary-text, var(--color-primary));
 	}
 }
 

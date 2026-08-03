@@ -82,7 +82,7 @@ export default {
 }
 
 .nc-print-slicer-status__error {
-	color: var(--nc-gcs-danger-soft);
+	color: var(--color-error-text, var(--color-error));
 	font-size: var(--nc-gcs-text-sm);
 	margin: var(--nc-gcs-space-sm) 0 0;
 }
@@ -92,6 +92,6 @@ export default {
 }
 
 .nc-print-slicer-status--warn {
-	border-color: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 40%, var(--nc-gcs-border));
+	border-color: color-mix(in srgb, var(--color-warning) 40%, var(--nc-gcs-border));
 }
 </style>

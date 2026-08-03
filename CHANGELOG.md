@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.60.14] - 2026-08-03
+
+### Fixed
+- App icon redrawn as single-ink `currentColor` silhouette for Nextcloud nav/Settings tinting
+- Stopped global `boot()` injection of `nc-print-theme` (theme now loads only on app/admin/dashboard pages)
+- Scoped theme tokens to print app roots instead of bare `:root`
+- Mapped banner/badge danger/warning colors to Nextcloud `--color-error` / `--color-warning` tokens
+
+
 ## [1.60.13] - 2026-08-03
 
 ### Fixed

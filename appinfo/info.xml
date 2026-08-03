@@ -11,7 +11,7 @@ Unlike SkyPrint or SavaPage (which target traditional CUPS / office printing), t
 Privacy: the app does not phone home or collect telemetry. It only contacts the Moonraker and slicer URLs configured by your administrator (plus your Nextcloud file storage).
 
 See INSTALL.md for the sidecar and ADMIN.md for settings.]]></description>
-<version>1.60.13</version>
+<version>1.60.14</version>
 <licence>AGPL-3.0-or-later</licence>
 <author mail="dan@19labs.com">19labs</author>
 <namespace>NcPrint</namespace>

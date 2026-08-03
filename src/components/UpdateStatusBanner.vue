@@ -91,8 +91,8 @@ export default {
 .nc-print-update-banner {
 	display: flex; align-items: center; gap: 10px;
 	padding: 8px 12px; border-radius: 8px;
-	background: color-mix(in srgb, var(--color-primary, #4c8eda) 14%, transparent);
-	border: 1px solid color-mix(in srgb, var(--color-primary, #4c8eda) 40%, transparent);
+	background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+	border: 1px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
 	font-size: 0.84rem;
 }
 .nc-print-update-banner__text { flex: 1; }

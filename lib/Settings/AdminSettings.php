@@ -22,6 +22,7 @@ class AdminSettings implements ISettings
 
 	public function getForm(): TemplateResponse
 	{
+		Util::addStyle(Application::APP_ID, 'nc-print-theme');
 		Util::addScript(Application::APP_ID, 'nc_print-admin');
 
 		$params = [

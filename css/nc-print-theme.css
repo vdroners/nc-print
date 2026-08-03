@@ -1,23 +1,22 @@
 /*
- * NC-GCS Shared Theme Tokens (Phase 1 of nc-ecosystem-rename-and-theme).
+ * NC Print theme tokens.
  *
- * This file is the single source of truth for ALL nc_gcs* sibling apps'
- * visual identity (brand colors, neutral scale, status colors, spacing,
- * radius, shadows, typography). It is loaded into every sibling's page
- * head by `OCA\NcGcs\Util\ThemeAssetLoader::register($appId)` so that
- * siblings can render `<NcGcsAppShell>` (or any element using these vars)
- * with NC-GCS look without copying tokens.
+ * Single source of truth for this app's visual identity (brand colors, neutral
+ * scale, status colors, spacing, radius, shadows, typography). Tokens are
+ * scoped to the app's own roots — never `:root` — so loading this sheet on the
+ * admin settings page or Dashboard does not repaint sibling apps' chrome.
  *
- * Each sibling MAY override `--nc-app-accent` in its own per-app stylesheet
- * to tint accent surfaces (e.g. NC_ADSB uses cyan, NC_Sim uses green).
+ *   #nc-print-root            — templates/main.php (SPA mount)
+ *   #nc-print-admin-settings  — templates/admin_settings.php
+ *   .nc-print-dash            — Dashboard widget mount
  *
- * IMPORTANT: this file MUST stay token-only. No component classes here —
- * those still live in `apps/nc_gcs/src/assets/theme.css` (parent-only) and
- * each sibling's per-panel SCSS. Adding component selectors here would
- * leak parent-only styles into sibling navigation/header chrome.
+ * IMPORTANT: this file MUST stay token-only plus the shared `.nc-gcs-app-shell`
+ * layout helpers. No per-panel component classes here.
  */
 
-:root {
+#nc-print-root,
+#nc-print-admin-settings,
+.nc-print-dash {
 	/* ─── Brand ──────────────────────────────────────────────────────── */
 	--nc-gcs-primary: #2196f3;
 	--nc-gcs-primary-hover: #42a5f5;
@@ -112,9 +111,11 @@
 	--nc-gcs-z-toast: 3000;
 }
 
-/* ─── Light theme overrides ──────────────────────────────────────────── */
+/* ─── Light theme overrides (nested under app roots) ─────────────────── */
 @media (prefers-color-scheme: light) {
-	:root:not([data-nc-gcs-theme="dark"]) {
+	body[data-theme-default] #nc-print-root,
+	body[data-theme-default] #nc-print-admin-settings,
+	body[data-theme-default] .nc-print-dash {
 		--nc-gcs-bg-app: #ffffff;
 		--nc-gcs-bg-surface: #f5f5f5;
 		--nc-gcs-bg-surface-hover: #ebebeb;
@@ -144,9 +145,19 @@
 	}
 }
 
-/* Explicit opt-in light-mode (used by Nextcloud's "light" body class). */
-.theme--light :root,
-body.theme--light {
+/* Explicit light-mode (Nextcloud body theme markers + legacy theme--light). */
+body[data-theme-light] #nc-print-root,
+body[data-theme-light] #nc-print-admin-settings,
+body[data-theme-light] .nc-print-dash,
+body[data-theme-light-highcontrast] #nc-print-root,
+body[data-theme-light-highcontrast] #nc-print-admin-settings,
+body[data-theme-light-highcontrast] .nc-print-dash,
+body.theme--light #nc-print-root,
+body.theme--light #nc-print-admin-settings,
+body.theme--light .nc-print-dash,
+.theme--light #nc-print-root,
+.theme--light #nc-print-admin-settings,
+.theme--light .nc-print-dash {
 	--nc-gcs-bg-app: #ffffff;
 	--nc-gcs-bg-surface: #f5f5f5;
 	--nc-gcs-bg-surface-hover: #ebebeb;
@@ -171,9 +182,20 @@ body.theme--light {
 }
 
 /* Explicit dark opt-in when Nextcloud body is in dark mode */
-.theme--dark .nc-gcs-app-shell,
+body[data-theme-dark] #nc-print-root,
+body[data-theme-dark] #nc-print-admin-settings,
+body[data-theme-dark] .nc-print-dash,
+body[data-theme-dark-highcontrast] #nc-print-root,
+body[data-theme-dark-highcontrast] #nc-print-admin-settings,
+body[data-theme-dark-highcontrast] .nc-print-dash,
+body.theme--dark #nc-print-root,
+body.theme--dark #nc-print-admin-settings,
+body.theme--dark .nc-print-dash,
 body.theme--dark .nc-gcs-app-shell,
-[data-nc-gcs-theme="dark"] {
+.theme--dark .nc-gcs-app-shell,
+#nc-print-root[data-nc-gcs-theme="dark"],
+#nc-print-admin-settings[data-nc-gcs-theme="dark"],
+.nc-print-dash[data-nc-gcs-theme="dark"] {
 	--nc-gcs-bg-app: #0d1117;
 	--nc-gcs-bg-surface: #161b22;
 	--nc-gcs-text-primary: #e6edf3;

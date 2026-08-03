@@ -105,12 +105,12 @@ export default {
 }
 
 .nc-print-error-recovery--danger {
-	background: color-mix(in srgb, var(--nc-gcs-danger) 18%, transparent);
-	color: var(--nc-gcs-danger-soft);
+	background: color-mix(in srgb, var(--color-error) 18%, transparent);
+	color: var(--color-error-text, var(--color-error));
 }
 
 .nc-print-error-recovery--warn {
-	background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 18%, transparent);
+	background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 	color: var(--nc-gcs-text-primary);
 }
 
