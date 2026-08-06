@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.60.14** · Nextcloud 28–34 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.61.0** · Nextcloud 28–34 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -14,6 +14,10 @@ external slicer service** and no NC-GCS dependency.
 **Prepare**
 - Three.js model viewport (STL / OBJ / 3MF) with a Z-up bed grid and
   bounding-box overlay
+- **Operator-speed model prep** — one-click "Ready to print"
+  (auto-orient → center → drop), arrow-key nudging (1 / 10 / 0.1 mm),
+  Ctrl+D duplicate, gizmo snap presets, and bed exclusion zones with
+  pre-slice overlap warnings
 - Interactive transform gizmos (move / rotate / scale) plus lay-flat,
   auto-orient, place-on-face, mirror, and plane-cut tools — the mesh you see is
   the mesh that slices (WYSIWYG, no "blind" slices)
@@ -239,6 +243,7 @@ must also offer the corresponding source of the engine fork.
 | [docs/INSTALL.md](docs/INSTALL.md) | Install, sidecar setup & enable |
 | [docs/ADMIN.md](docs/ADMIN.md) | Admin config, Docker networking, sidecar tuning, console toggle |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Component & sidecar overview |
+| [docs/STACK_MAP.md](docs/STACK_MAP.md) | Lab paths, Forge vs NC Print, health commands |
 | [docs/VERIFY.md](docs/VERIFY.md) | Gate & acceptance matrix |
 | [docs/LIMITATIONS.md](docs/LIMITATIONS.md) | Known limitations |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |

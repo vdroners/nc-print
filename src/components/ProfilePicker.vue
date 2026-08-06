@@ -150,7 +150,7 @@ export default {
 <template>
 	<div class="nc-print-profile-picker">
 		<div class="nc-print-field">
-			<label for="nc-print-printer-filter">Slicer printer profile</label>
+			<label for="nc-print-printer-filter">Slicer printer profile (how it slices)</label>
 			<input
 				id="nc-print-printer-filter"
 				v-model="printerFilter"

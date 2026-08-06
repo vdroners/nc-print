@@ -35,7 +35,7 @@ export default {
 			if (this.label) {
 				return this.label
 			}
-			return this.variant === 'print' ? 'Send to printer' : 'Target printer'
+			return this.variant === 'print' ? 'Send to printer' : 'Send-to printer (Moonraker)'
 		},
 		connectionLabel() {
 			return this.printStore.targetConnectionLabel
@@ -51,6 +51,21 @@ export default {
 				&& !this.printStore.discoverError
 				&& this.printStore.lastDiscoverCount === 0
 				&& this.printStore.lastDiscoverAt > 0
+		},
+		// Wave B cold-start: nothing configured and nothing found yet — replace
+		// the empty dropdown with a guided setup card.
+		noPrintersAtAll() {
+			return this.groups.configured.length === 0
+				&& this.groups.recent.length === 0
+				&& !this.hasDiscovered
+		},
+		adminSettingsUrl() {
+			try {
+				// eslint-disable-next-line no-undef
+				return OC.generateUrl('/settings/admin/nc_print')
+			} catch {
+				return '/settings/admin/nc_print'
+			}
 		},
 	},
 	mounted() {
@@ -91,7 +106,29 @@ export default {
 			</button>
 		</div>
 
+		<div v-if="noPrintersAtAll" class="nc-print-multi-printer__setup">
+			<p class="nc-print-multi-printer__setup-title">No printer connected yet</p>
+			<p class="nc-print-multi-printer__setup-body">
+				Slicing works without one — connect a Moonraker/Klipper printer when
+				you're ready to send the print.
+			</p>
+			<div class="nc-print-multi-printer__setup-actions">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:disabled="printStore.discovering"
+					@click="scan">
+					{{ printStore.discovering ? 'Scanning…' : 'Scan the network' }}
+				</button>
+				<a class="nc-print-btn" :href="adminSettingsUrl">Admin settings</a>
+			</div>
+			<p class="nc-print-multi-printer__setup-hint">
+				…or type the printer's hostname / IP under Connect by IP below.
+			</p>
+		</div>
+
 		<select
+			v-else
 			:id="selectId"
 			v-model="printStore.selectedPrinterId"
 			@change="onChange">
@@ -230,6 +267,37 @@ export default {
 .nc-print-multi-printer__empty {
 	margin: 4px 0 0;
 	font-size: 0.74rem;
+	color: var(--color-text-maxcontrast, #8b949e);
+}
+.nc-print-multi-printer__setup {
+	border: 1px dashed var(--color-border, #30363d);
+	border-radius: 8px;
+	padding: 10px 12px;
+	margin-top: 4px;
+}
+.nc-print-multi-printer__setup-title {
+	margin: 0 0 4px;
+	font-size: 0.85rem;
+	font-weight: 600;
+}
+.nc-print-multi-printer__setup-body {
+	margin: 0 0 8px;
+	font-size: 0.76rem;
+	color: var(--color-text-maxcontrast, #8b949e);
+}
+.nc-print-multi-printer__setup-actions {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+.nc-print-multi-printer__setup-actions .nc-print-btn {
+	font-size: 0.78rem;
+	padding: 4px 12px;
+	text-decoration: none;
+}
+.nc-print-multi-printer__setup-hint {
+	margin: 8px 0 0;
+	font-size: 0.7rem;
 	color: var(--color-text-maxcontrast, #8b949e);
 }
 .nc-print-multi-printer__found {

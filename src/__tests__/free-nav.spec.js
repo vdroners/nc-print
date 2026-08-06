@@ -12,11 +12,30 @@ describe('free navigation — Print monitor (G36a)', () => {
 		expect(printMonitorReachable(state)).toBe(true)
 	})
 
-	it('is reachable when Moonraker is configured but not yet connected', () => {
+	it('is reachable when Moonraker is enabled and a target is configured (not yet connected)', () => {
 		expect(printMonitorReachable({
 			printerState: { connected: false },
 			appStatus: { moonraker_enabled: true },
+			config: { multi_printers: [{ id: 'k1' }] },
 		})).toBe(true)
+		expect(printMonitorReachable({
+			printerState: { connected: false },
+			appStatus: { moonraker_enabled: true },
+			config: { moonraker_configured: true },
+		})).toBe(true)
+		expect(printMonitorReachable({
+			printerState: { connected: false },
+			appStatus: { moonraker_enabled: true },
+			selectedPrinterId: 'k1',
+		})).toBe(true)
+	})
+
+	it('is not reachable when Moonraker is enabled but nothing is configured or selected (Wave B)', () => {
+		expect(printMonitorReachable({
+			printerState: { connected: false },
+			appStatus: { moonraker_enabled: true },
+			config: { multi_printers: [] },
+		})).toBe(false)
 	})
 
 	it('is not reachable with no printer connected and Moonraker disabled', () => {

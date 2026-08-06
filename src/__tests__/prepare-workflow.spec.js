@@ -20,7 +20,7 @@ describe('prepare workflow gates (G19)', () => {
 		expect(isPrepareComplete(base)).toBe(false)
 	})
 
-	it('prepareComplete is true when model, profiles, target, and slicer are ready', () => {
+	it('prepareComplete is true when model, profiles, and slicer are ready', () => {
 		expect(isPrepareComplete({
 			...base,
 			model: { file: {} },
@@ -29,12 +29,12 @@ describe('prepare workflow gates (G19)', () => {
 		})).toBe(true)
 	})
 
-	it('prepareComplete is false without target printer', () => {
+	it('prepareComplete does NOT require a send-to target printer (Wave A)', () => {
 		expect(isPrepareComplete({
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
-		})).toBe(false)
+		})).toBe(true)
 	})
 
 	it('prepareComplete is false when slicer is offline', () => {
@@ -134,21 +134,20 @@ describe('prepare workflow gates (G19)', () => {
 		})).toBe(false)
 	})
 
-	it('firstPrepareBlocker mentions target printer when missing', () => {
+	it('firstPrepareBlocker never mentions the send-to target printer (Wave A)', () => {
 		expect(firstPrepareBlocker({
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
-		})).toMatch(/Target printer/)
+		})).toBe('')
 	})
 
-	it('prepareChecklistProgress excludes advisory rows', () => {
+	it('prepareChecklistProgress excludes advisory rows and the send-to target', () => {
 		const progress = prepareChecklistProgress({
 			...base,
 			model: { file: {} },
 			selection: { printerId: 'p1', filamentId: 'f1', processId: 'q1' },
-			selectedPrinterId: 'k1',
 		})
-		expect(progress).toEqual({ ready: 8, total: 8 })
+		expect(progress).toEqual({ ready: 7, total: 7 })
 	})
 })

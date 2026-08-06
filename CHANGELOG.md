@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.61.0] - 2026-08-06
+
+First-print UX program (waves A–D): fewer gates in the way of a first slice,
+guided cold-start, safer send, and faster operator model manipulation.
+
+### Added
+
+- One-click "Ready to print" on the viewport orient pad: auto-orient
+  (balanced) → center XY → drop to bed in one action, undoable.
+- Arrow-key nudge on Prepare: arrows move X/Y 1 mm (Shift = 10 mm,
+  Alt = 0.1 mm), PageUp/PageDown move Z; Ctrl/Cmd+D duplicates the selected
+  object.
+- Snap preset chips in the Move (0.1 / 1 / 5 / 10 mm) and Rotate
+  (1° / 5° / 15° / 45°) tool panels driving the gizmo snap.
+- Bed exclusion zones: new "Bed zones" tool draws keep-out rectangles on the
+  plate (persisted per-browser); overlapping objects are flagged and Slice
+  warns before sending.
+- Travel / Seams / Retractions quick toggles on the 3D toolpath preview,
+  available in both Feature and Speed color modes.
+- Admin settings: discovery subnet (CIDR) field for the LAN printer scan.
+- Cold-start setup cards: "No printer connected yet" state in the target
+  printer picker (Scan + Admin CTAs) and a "First-print setup" card when the
+  slicer is offline or no profiles are loaded.
+
+### Changed
+
+- Prepare completion no longer requires a Moonraker target printer — the
+  send-to printer only gates sending/starting, not slicing (checklist rows are
+  now advisory).
+- Dual-printer language disambiguated: "Slicer printer profile (how it
+  slices)" vs "Send-to printer (Moonraker)".
+- Successful "Slice now" auto-advances to the Slice tab.
+- PrePrint modal offers "Upload only" alongside "Slice, send & start" — an
+  offline printer blocks starting but no longer blocks uploading G-code.
+- A pending viewport transform is auto-applied at slice time instead of
+  blocking the slice behind a manual Apply click.
+- Print-tab gate tightened: `moonraker_enabled` alone is no longer enough, a
+  configured or selected target printer is required.
+
+### Fixed
+
+- Admin G-code console checkbox no longer pretends to save (it is `occ`-only);
+  disabled with an explanatory hint.
+
 ## [1.60.14] - 2026-08-03
 
 ### Fixed

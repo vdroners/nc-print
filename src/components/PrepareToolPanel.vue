@@ -16,7 +16,12 @@ const TITLES = {
 	view: 'View & section',
 	measure: 'Measure',
 	arrange: 'Arrange all',
+	zones: 'Bed exclusion zones',
 }
+
+// Wave D snap presets surfaced as chips (mm for translate, degrees for rotate).
+const MOVE_SNAPS = [0.1, 1, 5, 10]
+const ROTATE_SNAPS = [1, 5, 15, 45]
 
 export default {
 	name: 'PrepareToolPanel',
@@ -48,6 +53,12 @@ export default {
 			drillArmed: false,
 			embossArmed: false,
 			measureArmed: false,
+			// Wave D: gizmo snap presets + new-zone form.
+			moveSnaps: MOVE_SNAPS,
+			rotateSnaps: ROTATE_SNAPS,
+			snapMove: 1,
+			snapRot: 15,
+			zoneForm: { x: 10, y: 10, w: 40, h: 40 },
 		}
 	},
 	computed: {
@@ -62,6 +73,9 @@ export default {
 			return !!this.bounds && (
 				this.bounds.min[0] < -0.5 || this.bounds.min[1] < -0.5 || this.bounds.min[2] < -0.5
 			)
+		},
+		storeZones() {
+			return this.printStore.exclusionZones || []
 		},
 		axisRange() {
 			const idx = this.section.axis === 'x' ? 0 : this.section.axis === 'y' ? 1 : 2
@@ -199,6 +213,31 @@ export default {
 			this.syncFromBounds()
 			this.emitSection()
 		},
+		// ── Wave D: snap presets + bed exclusion zones ─────────────────────
+		setSnapMove(v) {
+			this.snapMove = v
+			this.$emit('snap-translate', v)
+		},
+		setSnapRot(v) {
+			this.snapRot = v
+			this.$emit('snap-rotate', v)
+		},
+		addZone() {
+			const z = {
+				x: Number(this.zoneForm.x),
+				y: Number(this.zoneForm.y),
+				w: Number(this.zoneForm.w),
+				h: Number(this.zoneForm.h),
+			}
+			if (![z.x, z.y, z.w, z.h].every(Number.isFinite) || z.w <= 0 || z.h <= 0) {
+				return
+			}
+			this.$emit('zones-change', [...this.storeZones, z])
+		},
+		removeZone(idx) {
+			const next = this.storeZones.filter((_, i) => i !== idx)
+			this.$emit('zones-change', next)
+		},
 	},
 }
 </script>
@@ -224,7 +263,21 @@ export default {
 				<button type="button" class="nc-print-btn" :disabled="disabled" title="Center on X/Y, keep current height" @click="$emit('center-xy')">Center XY</button>
 				<button type="button" class="nc-print-btn" :disabled="disabled" title="Center on bed and drop to z=0" @click="$emit('center')">Center + drop</button>
 			</div>
-			<p class="nc-print-tool-panel__hint">Drag the on-screen arrows to move; snaps to 1 mm.</p>
+			<div class="nc-print-tool-panel__snaprow">
+				<span class="nc-print-tool-panel__snaplabel">Snap</span>
+				<button
+					v-for="s in moveSnaps"
+					:key="'msnap' + s"
+					type="button"
+					class="nc-print-tool-panel__chip"
+					:class="{ 'nc-print-tool-panel__chip--active': snapMove === s }"
+					:disabled="disabled"
+					:title="`Gizmo drag snaps to ${s} mm`"
+					@click="setSnapMove(s)">
+					{{ s }} mm
+				</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Drag the on-screen arrows to move; snaps to {{ snapMove }} mm. Arrow keys nudge 1 mm (Shift = 10, Alt = 0.1; PgUp/PgDn = Z).</p>
 		</div>
 
 		<!-- Rotate -->
@@ -257,7 +310,21 @@ export default {
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('auto-orient')">Auto-orient</button>
 				<button type="button" class="nc-print-btn" :disabled="disabled" @click="$emit('reset-rotation')">Reset</button>
 			</div>
-			<p class="nc-print-tool-panel__hint">Drag the on-screen rings to rotate; snaps to 15°.</p>
+			<div class="nc-print-tool-panel__snaprow">
+				<span class="nc-print-tool-panel__snaplabel">Snap</span>
+				<button
+					v-for="s in rotateSnaps"
+					:key="'rsnap' + s"
+					type="button"
+					class="nc-print-tool-panel__chip"
+					:class="{ 'nc-print-tool-panel__chip--active': snapRot === s }"
+					:disabled="disabled"
+					:title="`Gizmo drag snaps to ${s}°`"
+					@click="setSnapRot(s)">
+					{{ s }}°
+				</button>
+			</div>
+			<p class="nc-print-tool-panel__hint">Drag the on-screen rings to rotate; snaps to {{ snapRot }}°.</p>
 		</div>
 
 		<!-- Auto-orient -->
@@ -535,6 +602,40 @@ export default {
 				Arrange all objects
 			</button>
 		</div>
+
+		<!-- Bed exclusion zones (Wave D) -->
+		<div v-else-if="tool === 'zones'" class="nc-print-tool-panel__body">
+			<p class="nc-print-tool-panel__hint">
+				Keep-out rectangles on the plate (purge tower, clips, binder areas).
+				Overlapping objects are flagged and Slice warns before you send.
+			</p>
+			<ul v-if="storeZones.length" class="nc-print-tool-panel__zonelist">
+				<li v-for="(z, idx) in storeZones" :key="'zone' + idx" class="nc-print-tool-panel__zonerow">
+					<span>{{ z.w }} × {{ z.h }} mm at ({{ z.x }}, {{ z.y }})</span>
+					<button type="button" class="nc-print-btn nc-print-btn--sm" title="Remove this zone" @click="removeZone(idx)">✕</button>
+				</li>
+			</ul>
+			<p v-else class="nc-print-tool-panel__hint">No zones defined yet.</p>
+			<div class="nc-print-tool-panel__grid">
+				<label>X <input v-model.number="zoneForm.x" type="number" step="1" :disabled="disabled"></label>
+				<label>Y <input v-model.number="zoneForm.y" type="number" step="1" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__grid">
+				<label>W <input v-model.number="zoneForm.w" type="number" min="1" step="1" :disabled="disabled"></label>
+				<label>H <input v-model.number="zoneForm.h" type="number" min="1" step="1" :disabled="disabled"></label>
+			</div>
+			<div class="nc-print-tool-panel__actions">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" :disabled="disabled" @click="addZone">Add zone</button>
+				<button
+					v-if="storeZones.length"
+					type="button"
+					class="nc-print-btn"
+					:disabled="disabled"
+					@click="$emit('zones-change', [])">
+					Clear all
+				</button>
+			</div>
+		</div>
 	</div>
 </template>
 
@@ -677,5 +778,59 @@ export default {
 .nc-print-tool-panel--disabled {
 	opacity: 0.6;
 	pointer-events: none;
+}
+
+.nc-print-tool-panel__snaprow {
+	align-items: center;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.nc-print-tool-panel__snaplabel {
+	color: var(--nc-gcs-text-muted);
+	font-size: 10px;
+	letter-spacing: 0.05em;
+	text-transform: uppercase;
+}
+
+.nc-print-tool-panel__chip {
+	appearance: none;
+	background: transparent;
+	border: 1px solid var(--nc-gcs-border);
+	border-radius: 999px;
+	color: var(--nc-gcs-text-secondary);
+	cursor: pointer;
+	font-size: 11px;
+	padding: 2px 9px;
+}
+
+.nc-print-tool-panel__chip:hover:not(:disabled) {
+	border-color: var(--nc-app-accent);
+	color: var(--nc-gcs-text-primary);
+}
+
+.nc-print-tool-panel__chip--active {
+	background: color-mix(in srgb, var(--nc-app-accent) 24%, transparent);
+	border-color: var(--nc-app-accent);
+	color: var(--nc-app-accent);
+}
+
+.nc-print-tool-panel__zonelist {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.nc-print-tool-panel__zonerow {
+	align-items: center;
+	color: var(--nc-gcs-text-secondary);
+	display: flex;
+	font-size: 12px;
+	gap: 6px;
+	justify-content: space-between;
 }
 </style>

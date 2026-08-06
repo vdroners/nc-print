@@ -50,6 +50,10 @@ class AdminSettings implements ISettings
 				ConfigService::KEY_MULTI_PRINTERS,
 				'',
 			),
+			ConfigService::KEY_DISCOVERY_SUBNET => $this->getString(
+				ConfigService::KEY_DISCOVERY_SUBNET,
+				'',
+			),
 			ConfigService::KEY_SLICER_ENABLED => $this->isEnabled(
 				ConfigService::KEY_SLICER_ENABLED,
 				true,

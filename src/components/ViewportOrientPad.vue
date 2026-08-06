@@ -18,6 +18,14 @@ export default {
 	<div class="nc-print-orient-pad" role="group" aria-label="Placement">
 		<button
 			type="button"
+			class="nc-print-orient-pad__btn nc-print-orient-pad__ready"
+			:disabled="disabled"
+			title="Auto-orient, center on bed, and drop to z=0 in one step (undoable)"
+			@click="$emit('ready-to-print')">
+			★ Ready to print
+		</button>
+		<button
+			type="button"
 			class="nc-print-orient-pad__btn nc-print-orient-pad__center"
 			:disabled="!canCenter"
 			title="Center on bed and drop to z=0"
@@ -95,4 +103,11 @@ export default {
 .nc-print-orient-pad__center {
 	font-weight: 600;
 }
+
+.nc-print-orient-pad__ready {
+	font-weight: 600;
+	border-color: var(--nc-app-accent);
+	color: var(--nc-app-accent);
+}
+
 </style>

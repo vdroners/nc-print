@@ -75,6 +75,23 @@ export default {
 		canTransform() {
 			return this.printStore.hasModel && !this.printStore.modelMeta.previewSkipped
 		},
+		// Wave B cold-start: show the guided setup card when the slicer is
+		// offline/disabled or no profiles came back.
+		firstPrintSetupNeeded() {
+			const s = this.printStore
+			if (s.appStatus.loaded && !s.slicerReady) {
+				return true
+			}
+			return !!s.profiles.error || (s.profiles.loaded && !s.profiles.printers.length)
+		},
+		adminSettingsUrl() {
+			try {
+				// eslint-disable-next-line no-undef
+				return OC.generateUrl('/settings/admin/nc_print')
+			} catch {
+				return '/settings/admin/nc_print'
+			}
+		},
 	},
 	watch: {
 		'printStore.model.file'() {
@@ -95,14 +112,17 @@ export default {
 		this._onChecklistAction = (e) => this.onChecklistAction(e.detail?.action)
 		this._onCanvasClick = (e) => this.onCanvasClick(e)
 		this._onUndoRedo = (e) => (e.detail?.redo ? this.onRedo() : this.onUndo())
+		this._onKeydown = (e) => this.onGlobalKeydown(e)
 		window.addEventListener('nc-print-recenter', this._onRecenter)
 		window.addEventListener('nc-print-checklist-action', this._onChecklistAction)
 		window.addEventListener('nc-print-undo-redo', this._onUndoRedo)
+		window.addEventListener('keydown', this._onKeydown)
 	},
 	beforeDestroy() {
 		window.removeEventListener('nc-print-recenter', this._onRecenter)
 		window.removeEventListener('nc-print-checklist-action', this._onChecklistAction)
 		window.removeEventListener('nc-print-undo-redo', this._onUndoRedo)
+		window.removeEventListener('keydown', this._onKeydown)
 	},
 	methods: {
 		onSelectObject(id) {
@@ -357,6 +377,63 @@ export default {
 			this.$refs.viewport?.arrangeAll?.()
 			this.refreshBounds()
 		},
+		// ── Wave D: operator model tools ────────────────────────────────────────
+		onSnapTranslate(v) {
+			this.$refs.viewport?.setGizmoSnap?.({ translate: v })
+		},
+		onSnapRotate(v) {
+			this.$refs.viewport?.setGizmoSnap?.({ rotateDeg: v })
+		},
+		onZonesChange(zones) {
+			this.printStore.setExclusionZones(zones)
+			this.$refs.viewport?.setExclusionZones?.(this.printStore.exclusionZones)
+		},
+		// One-click "Ready to print": auto-orient (balanced) → center XY → drop
+		// to bed. Each step syncs the transform, so undo walks back through it.
+		async onReadyToPrint() {
+			const vp = this.$refs.viewport
+			if (!vp || !this.canTransform) {
+				return
+			}
+			await vp.autoOrientMesh?.('default')
+			vp.centerXY?.()
+			vp.dropToBed?.()
+			this.refreshBounds()
+		},
+		// Arrow-key nudge (Move muscle memory from desktop slicers): arrows move
+		// X/Y, PageUp/PageDown move Z. 1 mm default, Shift = 10 mm, Alt = 0.1 mm.
+		// Ctrl/Cmd+D duplicates the selected object.
+		onGlobalKeydown(e) {
+			if (this.printStore.activeTab !== TABS.PREPARE || !this.canTransform) {
+				return
+			}
+			const tag = e.target?.tagName
+			if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || e.target?.isContentEditable) {
+				return
+			}
+			if ((e.ctrlKey || e.metaKey) && (e.key === 'd' || e.key === 'D')) {
+				e.preventDefault()
+				this.$refs.viewport?.duplicateSelected?.()
+				this.refreshBounds()
+				return
+			}
+			const step = e.altKey ? 0.1 : e.shiftKey ? 10 : 1
+			const nudges = {
+				ArrowLeft: [-step, 0, 0],
+				ArrowRight: [step, 0, 0],
+				ArrowUp: [0, step, 0],
+				ArrowDown: [0, -step, 0],
+				PageUp: [0, 0, step],
+				PageDown: [0, 0, -step],
+			}
+			const vec = nudges[e.key]
+			if (!vec || e.ctrlKey || e.metaKey) {
+				return
+			}
+			e.preventDefault()
+			this.$refs.viewport?.translateBy?.(vec)
+			this.refreshBounds()
+		},
 		onCloseTool() {
 			this.activeTool = ''
 			this.applyToolMode()
@@ -509,22 +586,44 @@ export default {
 		</NcPrintCollapsible>
 
 		<div
-			v-if="printStore.profiles.error || (printStore.profiles.loaded && !printStore.profiles.printers.length)"
-			class="nc-print-banner nc-print-banner--warn"
+			v-if="firstPrintSetupNeeded"
+			class="nc-print-card nc-print-first-setup"
 			role="alert">
-			<p class="nc-print-banner__body" style="margin-bottom: 8px;">
-				{{ printStore.profiles.error || 'No slicer profiles loaded — check the slicer service and Admin settings.' }}
-			</p>
-				<button type="button" class="nc-print-link-btn" style="margin-left: 8px;" @click="reloadProfiles">
+			<h2 class="nc-print-card__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="printer" :size="18" />
+					First-print setup
+				</span>
+			</h2>
+			<ol class="nc-print-first-setup__steps">
+				<li :class="{ 'is-done': printStore.slicerReady }">
+					Slicer service online
+					<span v-if="!printStore.slicerReady" class="nc-print-first-setup__why">
+						— {{ printStore.appStatus.loaded && !printStore.appStatus.slicer_enabled
+							? 'disabled in Admin settings'
+							: 'start the nc-print-slicer sidecar or check Admin settings' }}
+					</span>
+				</li>
+				<li :class="{ 'is-done': printStore.profiles.printers.length > 0 }">
+					Slicer profiles loaded
+					<span v-if="printStore.profiles.error" class="nc-print-first-setup__why">
+						— {{ printStore.profiles.error }}
+					</span>
+				</li>
+			</ol>
+			<div class="nc-print-first-setup__actions">
+				<button type="button" class="nc-print-btn" @click="reloadProfiles">
 					Retry
-			</button>
+				</button>
+				<a class="nc-print-btn" :href="adminSettingsUrl">Admin settings</a>
+			</div>
 		</div>
 
 		<div ref="targetPrinterCard" class="nc-print-card">
 			<h2 class="nc-print-card__title">
 				<span class="nc-print-card__title-row">
 					<NcPrintIcon name="printer" :size="18" />
-					Target printer
+					Send-to printer
 				</span>
 			</h2>
 			<TargetPrinterPicker variant="prepare" select-id="nc-print-target-printer-prepare" />
@@ -597,6 +696,7 @@ export default {
 					class="nc-print-viewport-orientpad"
 					:disabled="!canTransform"
 					:can-center="printStore.hasModel"
+					@ready-to-print="onReadyToPrint"
 					@center="onCenter"
 					@rotate="onRotate"
 					@lay-flat="onLayFlat"
@@ -650,7 +750,10 @@ export default {
 					@wireframe="onWireframe"
 					@section="onSection"
 					@model-color="onModelColor"
-					@model-opacity="onModelOpacity" />
+					@model-opacity="onModelOpacity"
+					@snap-translate="onSnapTranslate"
+					@snap-rotate="onSnapRotate"
+					@zones-change="onZonesChange" />
 			</div>
 		</template>
 
@@ -688,6 +791,34 @@ export default {
 
 .nc-print-import-section .nc-print-btn {
 	flex: 1 1 auto;
+}
+
+.nc-print-first-setup__steps {
+	margin: 0 0 var(--nc-gcs-space-sm);
+	padding-left: 20px;
+	font-size: var(--nc-gcs-text-sm);
+}
+
+.nc-print-first-setup__steps li {
+	margin-bottom: 4px;
+}
+
+.nc-print-first-setup__steps li.is-done {
+	color: var(--nc-gcs-text-muted);
+	text-decoration: line-through;
+}
+
+.nc-print-first-setup__why {
+	color: var(--nc-gcs-warning, #eab308);
+}
+
+.nc-print-first-setup__actions {
+	display: flex;
+	gap: var(--nc-gcs-space-sm);
+}
+
+.nc-print-first-setup__actions .nc-print-btn {
+	text-decoration: none;
 }
 
 /* ── Docked viewport controls (v1.54.0) ──────────────────────────────────────

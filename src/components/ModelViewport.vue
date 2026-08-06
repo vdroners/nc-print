@@ -114,6 +114,10 @@ export default {
 			canvas.addEventListener('pointerdown', this._onSelectClick)
 			this.viewportReady = true
 			this.viewportError = ''
+			// Wave C: let the store auto-apply pending transforms at slice time.
+			this.printStore.registerViewport(this.viewport)
+			// Wave D: render any persisted bed exclusion zones.
+			this.viewport.setExclusionZones?.(this.printStore.exclusionZones)
 			this._restoreSavedTransform()
 			await this.flushPendingLoad()
 		} catch (e) {
@@ -128,6 +132,7 @@ export default {
 		if (this._onSelectClick && this.$refs.canvas) {
 			this.$refs.canvas.removeEventListener('pointerdown', this._onSelectClick)
 		}
+		this.printStore.unregisterViewport(this.viewport)
 		this.viewport?.dispose()
 	},
 	methods: {
@@ -165,6 +170,7 @@ export default {
 			// A move/scale can push an object past the build volume — refresh the
 			// out-of-bed tint + flag list after each transform settles.
 			this.printStore.outOfBedIds = this.viewport?.objectsOutOfBed?.() || []
+			this.printStore.zoneViolations = this.viewport?.objectsInExclusionZones?.() || []
 			if (this.printStore.meshState.autoApply) {
 				void this.applyToSlice({ silent: true })
 			}
@@ -269,6 +275,7 @@ export default {
 			// Refresh out-of-bed tinting + flag list (viewport recomputes bounds and
 			// re-applies the red highlight as a side effect).
 			this.printStore.outOfBedIds = this.viewport?.objectsOutOfBed?.() || []
+			this.printStore.zoneViolations = this.viewport?.objectsInExclusionZones?.() || []
 		},
 		duplicateSelected() {
 			const id = this.viewport?.duplicateSelected?.()
@@ -528,6 +535,14 @@ export default {
 		},
 		setGizmoMode(mode) {
 			this.viewport?.setGizmoMode?.(mode)
+		},
+		// Wave D passthroughs: snap presets + bed exclusion zones.
+		setGizmoSnap(opts) {
+			this.viewport?.setGizmoSnap?.(opts)
+		},
+		setExclusionZones(zones) {
+			this.viewport?.setExclusionZones?.(zones)
+			this.printStore.zoneViolations = this.viewport?.objectsInExclusionZones?.() || []
 		},
 		cameraPreset(name) {
 			this.viewport?.setCameraPreset?.(name)

@@ -1,6 +1,7 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
 import { formatPrintTime, estimatePrintTimeBand, resolveFilamentPricePerKg, estimateFilamentCost } from '@/services/slicer-utils.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
@@ -115,6 +116,11 @@ export default {
 			this.abortController = new AbortController()
 			try {
 				await this.printStore.sliceOnly({ signal: this.abortController.signal })
+				// Wave A: a successful Slice now hands the operator straight to
+				// the Slice tab (toolpath preview + send actions).
+				if (this.printStore.sliceJob.status === 'done') {
+					this.printStore.setActiveTab(TABS.SLICE)
+				}
 			} catch (e) {
 				// store toasts on failure; AbortError is a user cancel
 			} finally {

@@ -464,6 +464,12 @@ export const usePrintStore = defineStore('print', {
 			modelColor: '#22c55e',
 			modelOpacity: 0.85,
 		},
+		// Wave D: bed exclusion zones (keep-out rectangles in bed mm,
+		// { x, y, w, h } lower-left origin). Persisted per-browser.
+		exclusionZones: [],
+		// Ids of objects whose XY footprint overlaps an exclusion zone.
+		// Authored by the viewport bridge, advisory (warns on slice).
+		zoneViolations: [],
 		// Pause / filament-change points injected into gcode at a Z height.
 		// Each: { height: number, type: 'filament_change'|'pause' }
 		pauses: [],
@@ -814,14 +820,14 @@ export const usePrintStore = defineStore('print', {
 					// Mesh checks are not applicable until a model is loaded —
 					// show them as pending (neutral) rather than a misleading ✓.
 					pending: !state.model.file,
+					// Wave C: a dirty transform no longer fails this row — it is
+					// auto-applied when the operator slices.
 					ok: !state.model.file
 						|| (
 							(!state.model.name?.toLowerCase().endsWith('.3mf') || !!state.model.sliceFile)
 							&& !state.model.convertError
-							&& !state.meshState.dirty
 						),
-					hint: state.model.convertError
-						|| (state.meshState.dirty ? 'Apply viewport transform to slice mesh' : 'Waiting for 3MF mesh extraction…'),
+					hint: state.model.convertError || 'Waiting for 3MF mesh extraction…',
 					action: 'mesh',
 				},
 				{
@@ -846,9 +852,9 @@ export const usePrintStore = defineStore('print', {
 				},
 				{
 					id: 'printer',
-					label: 'Slicer profile',
+					label: 'Slicer printer profile',
 					ok: !!state.selection.printerId,
-					hint: 'Choose a slicer printer profile on Prepare',
+					hint: 'Choose a slicer printer profile on Prepare (how it slices)',
 					action: 'printer',
 				},
 				{
@@ -873,15 +879,18 @@ export const usePrintStore = defineStore('print', {
 					action: 'slicer',
 				},
 				{
+					// Wave A: advisory — a send-to printer is only needed to
+					// upload/start on Print, never to slice.
 					id: 'target',
-					label: 'Target printer selected',
+					label: 'Send-to printer (Moonraker) selected',
+					advisory: true,
 					ok: !!state.selectedPrinterId,
-					hint: 'Choose the Moonraker printer to send to',
+					hint: 'Only needed to send/start — choose the Moonraker printer',
 					action: 'target',
 				},
 				{
 					id: 'target_online',
-					label: 'Target printer online',
+					label: 'Send-to printer online',
 					advisory: true,
 					ok: !state.selectedPrinterId || !!state.printerState.connected,
 					hint: state.printerState.message || 'Printer unreachable — check network or selection',
@@ -954,7 +963,7 @@ export const usePrintStore = defineStore('print', {
 							: 'Slice failed'
 					}
 					if (state.meshState.dirty) {
-						return 'Apply mesh transform before slice'
+						return 'Transform pending — auto-applies at slice'
 					}
 					return state.model.file ? 'Ready to slice' : 'Load model first'
 				}
@@ -2565,6 +2574,11 @@ export const usePrintStore = defineStore('print', {
 					this.viewPrefs.modelOpacity = prefs.viewPrefs.modelOpacity
 				}
 			}
+			if (Array.isArray(prefs.exclusionZones)) {
+				this.exclusionZones = prefs.exclusionZones.filter(
+					(z) => z && [z.x, z.y, z.w, z.h].every(Number.isFinite) && z.w > 0 && z.h > 0,
+				)
+			}
 			// Restore the last-active tab, but only if it's currently reachable —
 			// Overview + Prepare always are; Slice needs a prepared model; Print
 			// needs a reachable printer. Otherwise fall back to Prepare so a cold
@@ -3049,13 +3063,33 @@ export const usePrintStore = defineStore('print', {
 			persistJobHistory(this.jobHistory)
 		},
 
-		async runSlice({ signal, andSend = false } = {}) {
+		async runSlice({ signal, andSend = false, startAfterSend = true } = {}) {
 			if (!this.model.file) {
 				throw new Error('No model loaded')
 			}
 			if (!this.slicerReady) {
 				toastWarning('Slicer service is offline — check Admin settings')
 				throw new Error('Slicer offline')
+			}
+			// Wave C: a pending viewport transform is applied automatically
+			// instead of blocking the slice behind a manual "Apply" click.
+			if (this.meshState.dirty) {
+				const viewport = this._viewportRef
+				if (viewport) {
+					const ok = await this.applyMeshToSlice(viewport, { silent: true })
+					if (!ok) {
+						throw new Error('Could not apply the pending transform — use Apply to slice on Prepare')
+					}
+					toastInfo('Applied pending transform before slicing')
+				} else {
+					throw new Error('Apply viewport transform before slicing')
+				}
+			}
+			// Wave D: advisory keep-out warning — never blocks the slice, but the
+			// operator should re-check placement before sending.
+			if (this.zoneViolations.length) {
+				const n = this.zoneViolations.length
+				toastWarning(`${n} object${n > 1 ? 's' : ''} overlap${n > 1 ? '' : 's'} a bed exclusion zone — check placement before printing`)
 			}
 			this.resetSliceJob()
 			this.sliceJob.status = 'running'
@@ -3171,7 +3205,7 @@ export const usePrintStore = defineStore('print', {
 				}
 
 				if (andSend && this.sliceJob.gcodeBlob) {
-					await this.sendGcodeToPrinter(this.sliceJob.gcodeBlob, this.sliceJob.gcodeFilename, true)
+					await this.sendGcodeToPrinter(this.sliceJob.gcodeBlob, this.sliceJob.gcodeFilename, startAfterSend)
 				}
 
 				this._recordJobHistory({ andSend })
@@ -3307,11 +3341,15 @@ export const usePrintStore = defineStore('print', {
 			})
 		},
 
-		confirmPrePrint() {
+		/**
+		 * @param {'start'|'upload'} mode 'start' uploads + starts the print;
+		 *   'upload' only uploads the G-code (Wave C offline-friendly path).
+		 */
+		confirmPrePrint(mode = 'start') {
 			const { resolve } = this.prePrintModal
 			this.prePrintModal = { visible: false, resolve: null }
 			if (resolve) {
-				resolve(true)
+				resolve(mode)
 			}
 		},
 
@@ -3324,11 +3362,21 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		async sliceAndSend({ signal } = {}) {
-			const confirmed = await this.requestPrePrintConfirm()
-			if (!confirmed) {
+			const mode = await this.requestPrePrintConfirm()
+			if (!mode) {
 				return null
 			}
-			return this.runSlice({ signal, andSend: true })
+			return this.runSlice({ signal, andSend: true, startAfterSend: mode !== 'upload' })
+		},
+
+		/** Viewport bridge for slice-time auto-apply (non-reactive on purpose). */
+		registerViewport(viewport) {
+			this._viewportRef = viewport || null
+		},
+		unregisterViewport(viewport) {
+			if (!viewport || this._viewportRef === viewport) {
+				this._viewportRef = null
+			}
 		},
 
 		cancelSlice(abortController) {
@@ -3564,6 +3612,14 @@ export const usePrintStore = defineStore('print', {
 		toggleOverridesCollapsed() {
 			this.overridesCollapsed = !this.overridesCollapsed
 			savePrefs({ overridesCollapsed: this.overridesCollapsed })
+		},
+
+		// Wave D: replace the bed exclusion-zone list (persisted per-browser).
+		setExclusionZones(zones) {
+			this.exclusionZones = (Array.isArray(zones) ? zones : []).filter(
+				(z) => z && [z.x, z.y, z.w, z.h].every(Number.isFinite) && z.w > 0 && z.h > 0,
+			)
+			savePrefs({ exclusionZones: this.exclusionZones })
 		},
 
 		// Viewport appearance prefs — model colour ('#rrggbb') / opacity (0..1).

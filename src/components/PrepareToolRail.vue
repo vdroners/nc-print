@@ -33,6 +33,7 @@ const GROUPS = [
 			{ id: 'view', icon: 'eye', label: 'View & section' },
 			{ id: 'measure', icon: 'target', label: 'Measure' },
 			{ id: 'arrange', icon: 'grid', label: 'Arrange all' },
+			{ id: 'zones', icon: 'grid', label: 'Bed zones' },
 		],
 	},
 ]

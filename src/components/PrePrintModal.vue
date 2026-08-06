@@ -51,7 +51,7 @@ export default {
 				},
 				{
 					id: 'target',
-					label: 'Target printer selected',
+					label: 'Send-to printer selected',
 					ok: !!this.printStore.selectedPrinterId,
 				},
 				{
@@ -64,6 +64,10 @@ export default {
 					label: 'Printer reachable',
 					ok: this.printStore.printerState.connected,
 					warn: !this.printStore.printerState.connected,
+					// Wave C: an offline printer only blocks Start — the G-code
+					// upload attempt is still allowed (it fails with a clear toast
+					// if Moonraker is truly unreachable).
+					startOnly: true,
 				},
 				{
 					id: 'bed',
@@ -75,10 +79,13 @@ export default {
 			return rows
 		},
 		blockers() {
-			return this.checklist.filter(r => !r.ok && !r.manual)
+			return this.checklist.filter(r => !r.ok && !r.manual && !r.startOnly)
 		},
-		canConfirm() {
+		canUpload() {
 			return this.blockers.length === 0
+		},
+		canStart() {
+			return this.canUpload && this.printStore.printerState.connected
 		},
 	},
 	watch: {
@@ -107,11 +114,17 @@ export default {
 		cancel() {
 			this.printStore.cancelPrePrint()
 		},
-		confirm() {
-			if (!this.canConfirm) {
+		confirmStart() {
+			if (!this.canStart) {
 				return
 			}
-			this.printStore.confirmPrePrint()
+			this.printStore.confirmPrePrint('start')
+		},
+		confirmUpload() {
+			if (!this.canUpload) {
+				return
+			}
+			this.printStore.confirmPrePrint('upload')
 		},
 		onBackdrop(e) {
 			if (e.target === e.currentTarget) {
@@ -144,7 +157,8 @@ export default {
 					Ready to slice and send?
 				</h2>
 				<p class="nc-print-preprint-modal__lead">
-					Confirm the checklist below. G-code will upload to the printer and start printing.
+					Confirm the checklist below, then upload the G-code — with or without
+					starting the print.
 				</p>
 				<TargetPrinterPicker variant="modal" :show-scan="false" select-id="nc-print-target-printer-modal" />
 				<div class="nc-print-preprint-modal__camera nc-print-camera-panel">
@@ -176,8 +190,12 @@ export default {
 						{{ row.label }}
 					</li>
 				</ul>
-				<p v-if="!canConfirm" class="nc-print-preprint-modal__blocker">
+				<p v-if="!canUpload" class="nc-print-preprint-modal__blocker">
 					Fix the failed items before continuing.
+				</p>
+				<p v-else-if="!canStart" class="nc-print-preprint-modal__blocker nc-print-preprint-modal__blocker--warn">
+					Printer offline — you can still slice and upload; starting the print
+					needs a reachable printer.
 				</p>
 				<div class="nc-print-modal__actions">
 					<button type="button" class="nc-print-btn" @click="cancel">
@@ -185,10 +203,19 @@ export default {
 					</button>
 					<button
 						type="button"
+						class="nc-print-btn"
+						:disabled="!canUpload"
+						title="Slice and upload the G-code without starting the print"
+						@click="confirmUpload">
+						Upload only
+					</button>
+					<button
+						type="button"
 						class="nc-print-btn nc-print-btn--primary"
-						:disabled="!canConfirm"
-						@click="confirm">
-						Slice and send
+						:disabled="!canStart"
+						:title="canStart ? 'Slice, upload, and start printing' : 'Printer must be reachable to start'"
+						@click="confirmStart">
+						Slice, send &amp; start
 					</button>
 				</div>
 			</div>
@@ -283,5 +310,9 @@ export default {
 	color: var(--nc-gcs-danger-soft);
 	font-size: var(--nc-gcs-text-sm);
 	margin: var(--nc-gcs-space-sm) 0 0;
+}
+
+.nc-print-preprint-modal__blocker--warn {
+	color: var(--nc-gcs-warning, #eab308);
 }
 </style>

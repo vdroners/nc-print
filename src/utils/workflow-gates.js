@@ -42,8 +42,19 @@ export function previewBlocked(state) {
  * @returns {boolean}
  */
 export function printMonitorReachable(state) {
-	return !!(state.printerState && state.printerState.connected)
-		|| !!(state.appStatus && state.appStatus.moonraker_enabled)
+	if (state.printerState && state.printerState.connected) {
+		return true
+	}
+	// Wave B tighten: `moonraker_enabled` alone is not enough — there must be
+	// an actual target (selected, configured list, or single-printer URL) or
+	// the tab is an empty monitor with nothing to monitor.
+	const appStatus = state.appStatus || {}
+	if (!appStatus.moonraker_enabled) {
+		return false
+	}
+	const cfg = state.config || {}
+	const configured = Array.isArray(cfg.multi_printers) ? cfg.multi_printers : []
+	return !!state.selectedPrinterId || configured.length > 0 || !!cfg.moonraker_configured
 }
 
 /**
@@ -65,7 +76,6 @@ export function sliceBlockReason(state) {
 	const model = state.model || {}
 	const selection = state.selection || {}
 	const appStatus = state.appStatus || {}
-	const meshState = state.meshState || {}
 
 	if (!model.file) {
 		return 'Load a model on Prepare first'
@@ -76,9 +86,8 @@ export function sliceBlockReason(state) {
 	if (previewBlocked(state)) {
 		return 'No mesh preview — re-import or wait for 3MF extraction'
 	}
-	if (meshState.dirty) {
-		return 'Apply viewport transform before slicing'
-	}
+	// Wave C: a dirty viewport transform no longer blocks — runSlice
+	// auto-applies it (with a toast) before slicing.
 	if (!selection.printerId || !selection.filamentId || !selection.processId) {
 		return 'Select printer, filament, and process on Prepare'
 	}
@@ -103,7 +112,6 @@ export function isPrepareComplete(state) {
 	const model = state.model || {}
 	const selection = state.selection || {}
 	const appStatus = state.appStatus || {}
-	const meshState = state.meshState || {}
 
 	const slicerOk = appStatus.loaded && appStatus.slicer_enabled && appStatus.slicer_ok
 	if (!model.file) {
@@ -112,18 +120,20 @@ export function isPrepareComplete(state) {
 	if (previewBlocked(state)) {
 		return false
 	}
+	// Wave C: meshState.dirty intentionally does not gate — pending transforms
+	// auto-apply at slice time.
 	const meshReady = !model.file
 		|| (
 			(!String(model.name || '').toLowerCase().endsWith('.3mf') || !!model.sliceFile)
 			&& !model.convertError
-			&& !meshState.dirty
 		)
+	// Wave A: the Moonraker target printer is deliberately NOT required here.
+	// Slicing is a local operation; the target only gates send/start on Print.
 	return !!model.file
 		&& meshReady
 		&& !!selection.printerId
 		&& !!selection.filamentId
 		&& !!selection.processId
-		&& !!state.selectedPrinterId
 		&& !!slicerOk
 }
 
@@ -136,7 +146,6 @@ export function firstPrepareBlocker(state) {
 	const model = state.model || {}
 	const selection = state.selection || {}
 	const appStatus = state.appStatus || {}
-	const meshState = state.meshState || {}
 
 	for (const row of [
 		{ ok: !!model.file, label: 'Model loaded', hint: 'Import or pick a file from Nextcloud' },
@@ -150,16 +159,13 @@ export function firstPrepareBlocker(state) {
 				|| (
 					(!String(model.name || '').toLowerCase().endsWith('.3mf') || !!model.sliceFile)
 					&& !model.convertError
-					&& !meshState.dirty
 				),
 			label: 'Slice-ready mesh',
-			hint: model.convertError
-				|| (meshState.dirty ? 'Apply viewport transform to slice mesh' : '3MF mesh extraction failed — export STL'),
+			hint: model.convertError || '3MF mesh extraction failed — export STL',
 		},
-		{ ok: !!selection.printerId, label: 'Slicer profile', hint: 'Choose a slicer profile on Prepare' },
+		{ ok: !!selection.printerId, label: 'Slicer printer profile', hint: 'Choose a slicer printer profile on Prepare' },
 		{ ok: !!selection.filamentId, label: 'Filament profile', hint: 'Choose a filament profile' },
 		{ ok: !!selection.processId, label: 'Process profile', hint: 'Choose a process profile' },
-		{ ok: !!state.selectedPrinterId, label: 'Target printer', hint: 'Choose a target printer on Prepare' },
 		{
 			ok: appStatus.loaded && appStatus.slicer_enabled && appStatus.slicer_ok,
 			label: 'Slicer service',
@@ -179,7 +185,7 @@ export function firstPrepareBlocker(state) {
  * @returns {number}
  */
 export function prepareChecklistGatingTotal() {
-	return 8
+	return 7
 }
 
 /**
@@ -191,7 +197,6 @@ export function prepareChecklistProgress(state) {
 	const model = state.model || {}
 	const selection = state.selection || {}
 	const appStatus = state.appStatus || {}
-	const meshState = state.meshState || {}
 	const slicerOk = appStatus.loaded && appStatus.slicer_enabled && appStatus.slicer_ok
 	const rows = [
 		!!model.file,
@@ -200,12 +205,10 @@ export function prepareChecklistProgress(state) {
 			|| (
 				(!String(model.name || '').toLowerCase().endsWith('.3mf') || !!model.sliceFile)
 				&& !model.convertError
-				&& !meshState.dirty
 			),
 		!!selection.printerId,
 		!!selection.filamentId,
 		!!selection.processId,
-		!!state.selectedPrinterId,
 		!!slicerOk,
 	]
 	const ready = rows.filter(Boolean).length

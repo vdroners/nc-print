@@ -68,6 +68,23 @@
 					<span class="tp3d__gradunit">mm/s</span>
 				</span>
 			</div>
+			<!-- First-class preview toggles (Wave D): travel / seams / retractions
+			     stay reachable in BOTH color modes so operators can vet the
+			     toolpath before sending. -->
+			<div v-if="quickToggles.length" class="tp3d__colorrow">
+				<span class="tp3d__label">Show</span>
+				<button
+					v-for="feat in quickToggles"
+					:key="'qt-' + feat"
+					type="button"
+					class="tp3d__modebtn"
+					:class="{ 'tp3d__modebtn--on': visible[feat] }"
+					:title="visible[feat] ? `Hide ${labelFor(feat).toLowerCase()}` : `Show ${labelFor(feat).toLowerCase()}`"
+					@click="toggleFeature(feat)">
+					<span class="tp3d__swatch" :style="{ background: swatch(feat) }" />
+					{{ labelFor(feat) }}
+				</button>
+			</div>
 			<div v-show="colorMode === 'feature'" class="tp3d__legend">
 				<button
 					v-for="feat in features"
@@ -115,6 +132,11 @@ export default {
 	computed: {
 		immersive() {
 			return this.mode === 'immersive'
+		},
+		// Wave D: the "trust the preview" features surfaced as always-visible
+		// quick toggles (present in both feature and speed color modes).
+		quickToggles() {
+			return ['travel', 'seam', 'retraction'].filter((f) => this.features.includes(f))
 		},
 	},
 	data() {
@@ -338,7 +360,10 @@ export default {
 	gap: 6px;
 }
 .tp3d__modebtn {
+	align-items: center;
 	appearance: none;
+	display: inline-flex;
+	gap: 5px;
 	background: var(--color-background-hover, #21262d);
 	border: 1px solid var(--color-border, #30363d);
 	border-radius: 999px;

@@ -9,6 +9,7 @@ $keys = [
 	ConfigService::KEY_PRINTER_DISPLAY_NAME,
 	ConfigService::KEY_ALLOWED_GROUPS,
 	ConfigService::KEY_MULTI_PRINTERS,
+	ConfigService::KEY_DISCOVERY_SUBNET,
 	ConfigService::KEY_SLICER_ENABLED,
 	ConfigService::KEY_MOONRAKER_ENABLED,
 	ConfigService::KEY_CONSOLE_ENABLED,
@@ -60,6 +61,15 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 		<p class="settings-hint">
 			Each entry: <code>id</code>, <code>name</code>, <code>moonraker_url</code>, optional <code>moonraker_ws_url</code>, <code>camera_url</code>, <code>default</code>.
 		</p>
+		<label>
+			<span>Discovery subnet prefix</span>
+			<input type="text" name="<?php echo ConfigService::KEY_DISCOVERY_SUBNET; ?>" value="<?php echo htmlspecialchars((string)($_['discovery_subnet'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="192.168.1." pattern="^\d{1,3}\.\d{1,3}\.\d{1,3}\.$">
+		</label>
+		<p class="settings-hint">
+			Network prefix scanned by "Discover printers" and the in-app Scan button
+			(e.g. <code>192.168.1.</code> scans <code>192.168.1.0/24</code>). Leave empty
+			to derive it from the configured Moonraker URL.
+		</p>
 		<div class="nc-print-admin-discover">
 			<button type="button" id="nc-print-discover-btn" class="secondary">Discover printers on network</button>
 			<p id="nc-print-discover-status" class="settings-hint" aria-live="polite"></p>
@@ -74,9 +84,14 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 			<span>Moonraker enabled</span>
 		</label>
 		<label class="checkbox">
-			<input type="checkbox" name="<?php echo ConfigService::KEY_CONSOLE_ENABLED; ?>" value="yes" <?php echo !empty($_['console_enabled']) ? 'checked' : ''; ?>>
+			<input type="checkbox" disabled <?php echo !empty($_['console_enabled']) ? 'checked' : ''; ?>>
 			<span>G-code console enabled (security-sensitive — off by default)</span>
 		</label>
+		<p class="settings-hint">
+			The console toggle is command-line only. Enable with
+			<code>occ config:app:set nc_print console_enabled --value yes</code>
+			(and <code>--value no</code> to disable).
+		</p>
 		<button type="submit" class="primary">Save</button>
 		<p id="nc-print-admin-status" class="settings-hint" aria-live="polite"></p>
 	</form>

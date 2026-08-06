@@ -3,6 +3,7 @@
  * Uses Z-up coordinates to match slicer / Orca convention (bed in XY at z=0).
  */
 import { colorForSpeed } from '@/services/toolpath-3d.js'
+import { normalizeZone, rectInAnyZone } from '@/utils/bed-zones.js'
 
 let _threePromise = null
 
@@ -81,6 +82,12 @@ export async function createViewport(canvas, wrap) {
 	let gizmoHelper = null
 	let gizmoMode = null
 	let onGizmoChange = null
+	// Operator-adjustable gizmo snap (Wave D preset chips).
+	let snapTranslate = 1
+	let snapRotateDeg = 15
+	// Bed exclusion zones (Wave D): keep-out rectangles rendered on the plate.
+	let zoneGroup = null
+	let exclusionZones = []
 	// Non-destructive view state re-applied whenever modelMesh is rebuilt.
 	let wireframe = false
 	// Model material appearance (persisted by the store; re-applied to every mesh).
@@ -103,8 +110,8 @@ export async function createViewport(canvas, wrap) {
 		}
 		gizmo = new TransformControls(camera, canvas)
 		gizmo.setSize(0.85)
-		gizmo.setTranslationSnap(1)
-		gizmo.setRotationSnap(THREE.MathUtils.degToRad(15))
+		gizmo.setTranslationSnap(snapTranslate)
+		gizmo.setRotationSnap(THREE.MathUtils.degToRad(snapRotateDeg))
 		gizmo.setScaleSnap(0.05)
 		gizmo.addEventListener('dragging-changed', (event) => {
 			controls.enabled = !event.value
@@ -190,6 +197,75 @@ export async function createViewport(canvas, wrap) {
 		}
 		applyHighlight()
 		return [...outOfBedIds]
+	}
+
+	// ---- Bed exclusion zones (Wave D) --------------------------------------
+	// Translucent red slabs on the plate marking operator keep-out rectangles
+	// (purge towers, clips, binder areas). Purely visual + advisory: the store
+	// warns on slice when an object's XY footprint overlaps a zone.
+	function rebuildZoneGroup() {
+		if (zoneGroup) {
+			scene.remove(zoneGroup)
+			zoneGroup.traverse((child) => {
+				child.geometry?.dispose?.()
+				child.material?.dispose?.()
+			})
+			zoneGroup = null
+		}
+		if (!exclusionZones.length) {
+			return
+		}
+		zoneGroup = new THREE.Group()
+		zoneGroup.name = 'exclusion-zones'
+		for (const z of exclusionZones) {
+			const slab = new THREE.Mesh(
+				new THREE.BoxGeometry(z.w, z.h, 1.2),
+				new THREE.MeshBasicMaterial({
+					color: 0xef4444,
+					transparent: true,
+					opacity: 0.22,
+					depthWrite: false,
+				}),
+			)
+			slab.position.set(z.x + z.w / 2, z.y + z.h / 2, 0.6)
+			zoneGroup.add(slab)
+			const outline = new THREE.LineSegments(
+				new THREE.EdgesGeometry(new THREE.PlaneGeometry(z.w, z.h)),
+				new THREE.LineBasicMaterial({ color: 0xef4444 }),
+			)
+			outline.position.set(z.x + z.w / 2, z.y + z.h / 2, 1.25)
+			zoneGroup.add(outline)
+		}
+		scene.add(zoneGroup)
+	}
+
+	function setExclusionZones(list) {
+		exclusionZones = (Array.isArray(list) ? list : [])
+			.map((z) => normalizeZone(z))
+			.filter(Boolean)
+		rebuildZoneGroup()
+	}
+
+	/** Ids of objects whose XY footprint overlaps any exclusion zone. */
+	function objectsInExclusionZones() {
+		if (!exclusionZones.length || !objects.length) {
+			return []
+		}
+		const hits = []
+		for (const { id, mesh } of objects) {
+			mesh.updateMatrixWorld(true)
+			const box = new THREE.Box3().setFromObject(mesh)
+			const rect = {
+				minX: box.min.x,
+				minY: box.min.y,
+				maxX: box.max.x,
+				maxY: box.max.y,
+			}
+			if (rectInAnyZone(exclusionZones, rect)) {
+				hits.push(id)
+			}
+		}
+		return hits
 	}
 
 	/**
@@ -805,6 +881,29 @@ export async function createViewport(canvas, wrap) {
 		objectsOutOfBed() {
 			return refreshOutOfBed()
 		},
+		/**
+		 * Wave D: adjust gizmo snap increments from the operator preset chips.
+		 * @param {{ translate?: number, rotateDeg?: number }} opts
+		 */
+		setGizmoSnap({ translate, rotateDeg } = {}) {
+			if (Number.isFinite(translate) && translate > 0) {
+				snapTranslate = translate
+			}
+			if (Number.isFinite(rotateDeg) && rotateDeg > 0) {
+				snapRotateDeg = rotateDeg
+			}
+			if (gizmo) {
+				gizmo.setTranslationSnap(snapTranslate)
+				gizmo.setRotationSnap(THREE.MathUtils.degToRad(snapRotateDeg))
+			}
+		},
+		getGizmoSnap() {
+			return { translate: snapTranslate, rotateDeg: snapRotateDeg }
+		},
+		/** Wave D: replace the rendered bed exclusion zones. */
+		setExclusionZones,
+		/** Wave D: ids of objects whose XY footprint overlaps any exclusion zone. */
+		objectsInExclusionZones,
 		/**
 		 * Set the scene-list multi-selection tint set. The gizmo anchor is unchanged
 		 * (still driven by selectObjectById) — this only recolours the members.
