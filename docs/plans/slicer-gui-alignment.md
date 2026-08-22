@@ -7,8 +7,7 @@ the OrcaSlicer-fork engine resources.
 Legend: **TS** = table-stakes (in ~all four slicers) · **NH** = nice-to-have /
 differentiator · effort **S/M/L**.
 
-**Status refresh:** 2026-07-17 against shipped **1.57.0–1.60.9** (plus field
-fixes in 1.60.10). The original ⭐ “build now” subset and the deferred tier
+**Status refresh:** 2026-08-21 against shipped **1.61.0**. The original ⭐ “build now” subset and the deferred tier
 parts 1–9 are **shipped**.
 
 ## Settings / parameter editing

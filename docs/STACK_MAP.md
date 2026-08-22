@@ -1,6 +1,6 @@
 # NC Print + 3DPrintForge — stack map
 
-Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-08-06**.
+Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-08-21**.
 
 ## What to build
 
@@ -54,12 +54,30 @@ docker exec cloud_app curl -sS http://nc-print-slicer:8080/api/health
 curl -skI https://127.0.0.1:3040/login.html
 curl -sf http://127.0.0.1:8766/api/health
 docker ps --filter name=nc-print-slicer --filter name=3dprintforge --filter name=cloud_app
+# K1 Max (ssh alias k1-max)
+curl -sf http://10.0.0.210:7125/server/info
+curl -sf -o /tmp/cam.jpg 'http://10.0.0.210:8080/?action=snapshot' && file /tmp/cam.jpg
+ssh k1-max 'pidof moonraker.py mjpg_streamer cam_app'
 ```
+
+## K1 Max (`10.0.0.210`) — lab notes
+
+| Item | Value |
+|------|-------|
+| Hostname | `K1Max-Printy-Baby` |
+| Moonraker | `:7125` (required for NC Print / Forge) |
+| Camera | `:8080` via `cam_app` → `mjpg_streamer` (`input_memfd`) |
+| Stock UI | `:80` |
+| SSH | `ssh k1-max` (ECDSA; Dropbear) |
+| Persistence | `S54moonraker_conf_guard`, `S99z_mjpg_http` on printer |
+| NC Print config | `moonraker_internal_url`, camera URL, `discovery_subnet=10.0.0.`, enabled |
 
 ## Docs
 
 - Workflow: [`CLAUDE.md`](../CLAUDE.md)
 - Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Admin / slicer URL: [`ADMIN.md`](ADMIN.md)
+- First-print UX plan: [`plans/first-print-ux-2026-08.md`](plans/first-print-ux-2026-08.md)
 - Forge update: `/media/4TB/3dprintforge/docs/UPDATE.md`
 - Forge pins: `/media/4TB/3dprintforge/docs/VERSIONS.md`
+- Printer verify: `/media/4TB/3dprintforge/docs/PRINTER-VERIFY.md`
