@@ -62,6 +62,14 @@ Moonraker/the sidecar, verify e2e against the live printer (e.g. probe
 smoke-checked by gates G46–G50 against the DEPLOYED files (this also catches the
 opcache-stale-routes bug).
 
+Browser/UI checks: use the operator's logged-in **cursor-ide-browser** tab on
+`https://cloud-vdroners.ddns.net/` (`browser_tabs` list → reuse that tab's
+`viewId`, navigate within it to `/apps/<app_id>/`, reload after deploy). Do not
+browser-test via `10.0.0.84:8080` or localhost, never type or use stored
+credentials (ask the operator to log in if the tab shows the login page), and
+don't log out or change admin settings — it is a real admin session. Full rule:
+`/media/4TB/nc-gcs/.cursor/rules/browser-testing.mdc`.
+
 ## 5. Tests
 
 ```bash
