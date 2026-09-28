@@ -1,0 +1,60 @@
+# forge-webhook-relay — brought under Compose 2026-09-16.
+#
+# Previously a bare `docker run` from scripts/setup-forge-webhook-relay-docker.sh,
+# so the container carried no compose labels and no health check or resource
+# ceiling. This file reproduces that invocation exactly; the setup script still
+# owns building the image and now delegates the run step here.
+#
+# Secrets are NOT duplicated into this file. The relay reads them from
+# /home/vdroners/.openclaw/.env (mode 600) via env_file, which is the same file
+# the previous `--env-file` flag pointed at.
+#
+# Start with:
+#   docker compose -f docker-compose.forge-relay.yml up -d
+# The relay only execs the shared Talk helpers (talk-post.sh, nc-notify.sh),
+# which live in openclaw-alfred; that dir is mounted over ~/.openclaw/scripts
+# because the symlinks there point at host paths the container cannot see.
+# The caddy-proxy-manager network is external because Caddy Proxy Manager must
+# reach the relay by container name (it cannot reach the host's :8790).
+
+name: forge-relay
+
+services:
+  forge-webhook-relay:
+    image: ${FORGE_RELAY_IMAGE:-forge-webhook-relay:local}
+    container_name: forge-webhook-relay
+    restart: unless-stopped
+    working_dir: /relay
+    command: ["python3", "/home/vdroners/.openclaw/forge-webhook-relay.py"]
+    env_file:
+      - /home/vdroners/.openclaw/.env
+    environment:
+      OPENCLAW_DIR: /home/vdroners/.openclaw
+      FORGE_WEBHOOK_BIND: "0.0.0.0"
+      FORGE_WEBHOOK_SECRET_FILE: /home/vdroners/.openclaw/.env.d/forge-webhook.secret
+    volumes:
+      - /home/vdroners/.openclaw:/home/vdroners/.openclaw:ro
+      - /media/4TB/openclaw-alfred/scripts:/home/vdroners/.openclaw/scripts:ro
+    # Loopback only — Caddy reaches it over the shared network, this publish is
+    # for local gates.
+    ports:
+      - "127.0.0.1:8790:8790"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf --max-time 5 http://127.0.0.1:8790/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 8s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          # Observed 25MiB.
+          memory: 256M
+          pids: 128
+    networks:
+      - caddy-network
+
+networks:
+  caddy-network:
+    external: true
+    name: caddy-proxy-manager_caddy-network

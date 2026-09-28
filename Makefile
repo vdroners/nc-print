@@ -174,7 +174,7 @@ appstore: build
 	rsync -a --delete \
 		--exclude node_modules --exclude tests --exclude .git \
 		--exclude .github --exclude tools --exclude scripts --exclude src \
-		--exclude slicer --exclude .phpunit.cache \
+		--exclude slicer --exclude integrations --exclude .phpunit.cache \
 		--exclude 'docs/3D Printing' --exclude 'docs/*.stl' --exclude 'docs/*.STL' \
 		--exclude 'docs/*.3MF' --exclude 'docs/*.3mf' \
 		--exclude '*.map' --exclude .vitest-gate-stamp \
