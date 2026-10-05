@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.61.1] - 2026-10-05
+
+### Fixed
+- The notifier threw `\InvalidArgumentException` for notifications that are
+  not ours, which Nextcloud 30+ logs as deprecated on every notification
+  poll (about 640 warnings every 10 minutes on 35). It now throws
+  `UnknownNotificationException` when that class exists.
+
+### Changed
+- Supports Nextcloud 35 (`max-version="35"`); verified on 35.0.1.
+
 ## [1.61.0] - 2026-08-06
 
 First-print UX program (waves A–D): fewer gates in the way of a first slice,

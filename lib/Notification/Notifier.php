@@ -9,6 +9,7 @@ use OCP\IURLGenerator;
 use OCP\L10N\IFactory;
 use OCP\Notification\INotification;
 use OCP\Notification\INotifier;
+use OCP\Notification\UnknownNotificationException;
 
 /**
  * Renders nc_print notifications for the Nextcloud notification bell.
@@ -40,7 +41,7 @@ class Notifier implements INotifier
 	{
 		if ($notification->getApp() !== Application::APP_ID) {
 			// Not our notification — required by the interface contract.
-			throw new \InvalidArgumentException();
+			$this->throwUnknown();
 		}
 
 		$l = $this->l10nFactory->get(Application::APP_ID, $languageCode);
@@ -68,7 +69,7 @@ class Notifier implements INotifier
 				);
 				break;
 			default:
-				throw new \InvalidArgumentException();
+				$this->throwUnknown();
 		}
 
 		$notification->setIcon(
@@ -79,5 +80,18 @@ class Notifier implements INotifier
 		);
 
 		return $notification;
+	}
+
+	/**
+	 * Nextcloud 30+ expects UnknownNotificationException and logs a
+	 * deprecation warning for every \InvalidArgumentException; older
+	 * servers (min-version 28) only know the legacy exception.
+	 */
+	private function throwUnknown(): never
+	{
+		if (class_exists(UnknownNotificationException::class)) {
+			throw new UnknownNotificationException();
+		}
+		throw new \InvalidArgumentException();
 	}
 }
