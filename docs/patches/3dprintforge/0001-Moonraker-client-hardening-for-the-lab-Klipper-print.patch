@@ -1,0 +1,841 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Sarge <dan@19labs.com>
+Date: Mon, 5 Oct 2026 07:55:07 -0700
+Subject: [PATCH] Moonraker client hardening for the lab Klipper printer
+
+- Subscribe only to objects that expose get_status; configfile,
+  gcode_macro *, secondary mcu nodes etc. made Klipper reject the whole
+  subscription. Core telemetry objects are always kept.
+- Stale-state watchdog, WebSocket keepalive and a 2 s HTTP state poll in
+  the Moonraker client.
+- File browser and controls panel list and start prints through
+  /api/printers/:id/files for Moonraker-type printers, with HTML-escaped
+  error text; matching server routes.
+- Local lab patch on top of upstream v1.1.25; a copy is exported to
+  vdroners/nc-print docs/patches/3dprintforge/.
+
+Co-developed-by: Claude (model: claude-opus-4.7, context: 200k)
+---
+ public/js/components/controls-panel.js       |  26 +-
+ public/js/components/printer-file-browser.js |  86 ++++--
+ server/api-routes.js                         |  75 ++++-
+ server/moonraker-client.js                   | 309 ++++++++++++++++---
+ 4 files changed, 403 insertions(+), 93 deletions(-)
+
+diff --git a/public/js/components/controls-panel.js b/public/js/components/controls-panel.js
+index 3297ceb4..2126bcb5 100644
+--- a/public/js/components/controls-panel.js
++++ b/public/js/components/controls-panel.js
+@@ -781,6 +781,9 @@
+         <div id="ctrl-upload-area" style="display:none"></div>
+         <div id="ctrl-files-list"><span class="text-muted" style="font-size:0.8rem">${t('controls.sd_click_refresh')}</span></div>
+       </div>`;
++      if (typeof getPrinterType === 'function' ? getPrinterType(meta)?.isMoonraker : ['moonraker', 'klipper', 'creality', 'elegoo', 'voron'].includes(meta?.type)) {
++        setTimeout(() => loadPrinterFiles(meta.id), 300);
++      }
+     }
+ 
+     html += '</div>'; // close .ctrl-layout
+@@ -1231,18 +1234,14 @@
+     if (!el) return;
+     el.innerHTML = `<span class="text-muted" style="font-size:0.8rem">${t('common.loading')}...</span>`;
+     try {
+-      // Try Moonraker API first, fall back to Bambu FTP API
+-      const meta = window.printerState?.getActivePrinterMeta();
+-      let files;
+-      if (meta?.type === 'moonraker' || meta?.type === 'klipper' || meta?.type === 'prusalink' || meta?.type === 'creality' || meta?.type === 'elegoo' || meta?.type === 'voron') {
+-        const moonRes = await fetch(`/api/printers/${encodeURIComponent(printerId)}/moonraker/files`);
+-        const moonData = await moonRes.json();
+-        files = (moonData.files || []).map(f => ({ name: f.path, path: f.path, size: f.size }));
+-      } else {
+-        const res = await fetch(`/api/printers/${encodeURIComponent(printerId)}/files`);
+-        files = await res.json();
++      const res = await fetch(`/api/printers/${encodeURIComponent(printerId)}/files`);
++      const data = await res.json();
++      if (!res.ok) {
++        el.innerHTML = `<span class="text-muted" style="font-size:0.8rem">${esc(data?.error || `HTTP ${res.status}`)}</span>`;
++        return;
+       }
+-      if (files.error) { el.innerHTML = `<span class="text-muted" style="font-size:0.8rem">${esc(files.error)}</span>`; return; }
++      const files = Array.isArray(data) ? data : (data.files || []);
++      if (data.error) { el.innerHTML = `<span class="text-muted" style="font-size:0.8rem">${esc(data.error)}</span>`; return; }
+       if (!files.length) { el.innerHTML = `<span class="text-muted" style="font-size:0.8rem">${t('controls.sd_no_files')}</span>`; return; }
+       let h = '<div class="ctrl-files-grid">';
+       for (const f of files) {
+@@ -1270,10 +1269,13 @@
+   window.printFile = function(printerId, filePath) {
+     return confirmAction(t('controls.print_confirm'), async () => {
+       try {
+-        await fetch(`/api/printers/${encodeURIComponent(printerId)}/files/print`, {
++        const res = await fetch(`/api/printers/${encodeURIComponent(printerId)}/files/print`, {
+           method: 'POST', headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({ filename: filePath })
+         });
++        const data = await res.json().catch(() => ({}));
++        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
++        showToast(t('controls.print_started', 'Print started'), 'success');
+       } catch (e) { showToast(e.message, 'error'); }
+     }, {});
+   };
+diff --git a/public/js/components/printer-file-browser.js b/public/js/components/printer-file-browser.js
+index cebb9e57..7beb917d 100644
+--- a/public/js/components/printer-file-browser.js
++++ b/public/js/components/printer-file-browser.js
+@@ -1,10 +1,45 @@
+ /**
+  * Printer File Browser — browse, upload, delete, print files on printer storage.
+- * Works with all printer types that support file management.
++ * Moonraker/Klipper printers use /moonraker/* API routes; Bambu uses /files (FTPS).
+  */
+ (function() {
+   'use strict';
+ 
++  function _esc(s) {
++    return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
++  }
++
++  function _isMoonrakerPrinter() {
++    if (typeof getPrinterType === 'function') {
++      return !!getPrinterType()?.isMoonraker;
++    }
++    const type = String(window.printerState?.getActivePrinterMeta?.()?.type || '').toLowerCase();
++    return ['moonraker', 'klipper', 'creality', 'elegoo', 'voron', 'ratrig', 'qidi', 'sovol', 'anker'].includes(type);
++  }
++
++  async function _fetchPrinterFiles(pid) {
++    const res = await fetch(`/api/printers/${encodeURIComponent(pid)}/files`);
++    const data = await res.json();
++    if (!res.ok) {
++      throw new Error(data?.error || `HTTP ${res.status}`);
++    }
++    if (Array.isArray(data)) {
++      return data;
++    }
++    if (data?.error) {
++      throw new Error(data.error);
++    }
++    if (Array.isArray(data.files)) {
++      return data.files.map(f => ({
++        name: f.path || f.name,
++        path: f.path || f.name,
++        display: f.path || f.display || f.name,
++        size: f.size || 0,
++      }));
++    }
++    return [];
++  }
++
+   window.renderPrinterFileBrowser = function() {
+     return `<div class="ctrl-card" id="printer-files-card">
+       <div class="ctrl-card-title">
+@@ -28,40 +63,36 @@
+     const container = document.getElementById('printer-files-list');
+     if (!container) return;
+     const pid = window.printerState?.getActivePrinterId?.();
+-    if (!pid) { container.innerHTML = '<div class="text-muted" style="font-size:0.72rem;padding:8px">No printer selected</div>'; return; }
++    if (!pid) {
++      container.innerHTML = '<div class="text-muted" style="font-size:0.72rem;padding:8px">No printer selected</div>';
++      return;
++    }
+ 
+     try {
+-      const res = await fetch(`/api/printers/${pid}/files`);
+-      const files = await res.json();
+-      if (!Array.isArray(files) || files.length === 0) {
++      const files = await _fetchPrinterFiles(pid);
++      if (!files.length) {
+         container.innerHTML = '<div class="text-muted" style="font-size:0.72rem;padding:8px">No files on printer</div>';
+         return;
+       }
+ 
+-      // Printer-supplied filenames are untrusted — escape for HTML and
+-      // pass via dataset attributes so click handlers don't reinterpret
+-      // them as JS string literals.
+-      const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+       let html = '<div style="display:flex;flex-direction:column;gap:2px">';
+       for (const f of files.slice(0, 50)) {
+         if (f.type === 'folder') continue;
+         const name = f.display || f.path || f.name || '?';
+         const size = f.size ? `${(f.size / 1024).toFixed(0)} KB` : '';
+-        const safeName = esc(name);
++        const safeName = _esc(name);
+         html += `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;font-size:0.72rem;background:var(--bg-inset)">
+           <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${safeName}">${safeName}</span>
+-          <span class="text-muted" style="font-size:0.6rem;flex-shrink:0">${esc(size)}</span>
++          <span class="text-muted" style="font-size:0.6rem;flex-shrink:0">${_esc(size)}</span>
+           <button class="form-btn form-btn-sm" style="font-size:0.55rem;padding:1px 4px" data-ripple data-pf-action="print" data-pf-name="${safeName}">Print</button>
+-          <button class="form-btn form-btn-sm form-btn-danger" style="font-size:0.55rem;padding:1px 4px" data-ripple data-pf-action="delete" data-pf-name="${safeName}" data-pf-pid="${esc(pid)}">×</button>
++          <button class="form-btn form-btn-sm form-btn-danger" style="font-size:0.55rem;padding:1px 4px" data-ripple data-pf-action="delete" data-pf-name="${safeName}" data-pf-pid="${_esc(pid)}">×</button>
+         </div>`;
+       }
+       html += '</div>';
+       container.innerHTML = html;
+-
+-      // Delegate clicks — keeps untrusted filename out of inline JS context.
+       container.addEventListener('click', _handlePrinterFileClick);
+     } catch (e) {
+-      container.innerHTML = `<div class="text-muted" style="font-size:0.72rem;padding:8px">Error: ${e.message}</div>`;
++      container.innerHTML = `<div class="text-muted" style="font-size:0.72rem;padding:8px">Error: ${_esc(e.message)}</div>`;
+     }
+   };
+ 
+@@ -71,7 +102,9 @@
+     const action = btn.dataset.pfAction;
+     const name = btn.dataset.pfName;
+     if (action === 'print') {
+-      if (typeof sendCommand === 'function') sendCommand('print_file', { filename: name });
++      if (typeof sendCommand === 'function') {
++        sendCommand('print_file', { filename: name });
++      }
+     } else if (action === 'delete') {
+       const pid = btn.dataset.pfPid;
+       if (confirm(`Delete ${name}?`)) {
+@@ -86,11 +119,25 @@
+     const pid = window.printerState?.getActivePrinterId?.();
+     if (!pid) return;
+     const file = input.files[0];
+-    const formData = new FormData();
+-    formData.append('file', file);
+     try {
+       if (typeof showToast === 'function') showToast(`Uploading ${file.name}...`, 'info', 3000);
+-      await fetch(`/api/printers/${pid}/files`, { method: 'POST', body: formData });
++      if (_isMoonrakerPrinter()) {
++        const buf = await file.arrayBuffer();
++        const url = `/api/printers/${encodeURIComponent(pid)}/moonraker/upload?filename=${encodeURIComponent(file.name)}`;
++        const res = await fetch(url, {
++          method: 'POST',
++          headers: { 'Content-Type': 'application/octet-stream' },
++          body: buf,
++        });
++        const data = await res.json().catch(() => ({}));
++        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
++      } else {
++        const formData = new FormData();
++        formData.append('file', file);
++        const res = await fetch(`/api/printers/${encodeURIComponent(pid)}/files`, { method: 'POST', body: formData });
++        const data = await res.json().catch(() => ({}));
++        if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
++      }
+       if (typeof showToast === 'function') showToast(`Uploaded ${file.name}`, 'success');
+       window._refreshPrinterFiles();
+     } catch (e) {
+@@ -99,6 +146,5 @@
+     input.value = '';
+   };
+ 
+-  // Auto-load files when panel renders
+   setTimeout(() => window._refreshPrinterFiles?.(), 500);
+ })();
+diff --git a/server/api-routes.js b/server/api-routes.js
+index 3a7f7f3f..f7a0f7c0 100644
+--- a/server/api-routes.js
++++ b/server/api-routes.js
+@@ -386,6 +386,36 @@ export function setPrinterManager(pm) {
+   _printerManager = pm;
+ }
+ 
++const MOONRAKER_FILE_TYPES = new Set([
++  'moonraker', 'klipper', 'creality', 'elegoo', 'voron', 'ratrig', 'qidi',
++  'sovol', 'anker', 'biqu', 'bigtreetech', 'anycubic', 'twotrees', 'tronxy', 'mingda', 'kywoo',
++]);
++
++function _usesMoonrakerFiles(printer) {
++  if (!printer) return false;
++  const type = String(printer.type || '').toLowerCase();
++  if (MOONRAKER_FILE_TYPES.has(type)) return true;
++  // Same heuristic as PrinterManager._getConnectorType — IP without Bambu serial.
++  return !!(printer.ip && !printer.serial);
++}
++
++function _moonrakerLiveClient(printerId) {
++  const entry = _printerManager?.printers?.get(printerId);
++  if (!entry?.live || !entry.client?.listFiles) return null;
++  return entry.client;
++}
++
++function _normalizeMoonrakerFileEntry(f) {
++  const filePath = f.path || f.filename || f.name || '';
++  return {
++    name: filePath,
++    path: filePath,
++    display: filePath,
++    size: f.size || 0,
++    type: f.type || 'file',
++  };
++}
++
+ export function setFailureDetector(fd) {
+   _failureDetector = fd;
+ }
+@@ -5707,11 +5737,21 @@ export async function handleApiRequest(req, res) {
+       return res.end(html);
+     }
+ 
+-    // ---- SD Card Files ----
++    // ---- SD Card Files (Bambu FTPS + Moonraker gcodes) ----
+     const filesMatch = path.match(/^\/api\/printers\/([a-zA-Z0-9_-]+)\/files$/);
+     if (filesMatch && method === 'GET') {
+-      const printer = getPrinters().find(p => p.id === filesMatch[1]);
+-      if (!printer || !printer.ip || !printer.accessCode) return sendJson(res, { error: 'Printer not found or no access code' }, 400);
++      const printerId = filesMatch[1];
++      const printer = getPrinters().find(p => p.id === printerId);
++      if (!printer) return sendJson(res, { error: 'Printer not found' }, 404);
++      if (_usesMoonrakerFiles(printer)) {
++        const client = _moonrakerLiveClient(printerId);
++        if (!client) return sendJson(res, { error: 'Printer offline' }, 503);
++        try {
++          const raw = await client.listFiles();
++          return sendJson(res, (raw || []).map(_normalizeMoonrakerFileEntry));
++        } catch (e) { return sendJson(res, { error: e.message }, 500); }
++      }
++      if (!printer.ip || !printer.accessCode) return sendJson(res, { error: 'Printer not found or no access code' }, 400);
+       try {
+         const files = await listPrinterFiles(printer.ip, printer.accessCode);
+         return sendJson(res, files);
+@@ -5719,11 +5759,22 @@ export async function handleApiRequest(req, res) {
+     }
+ 
+     const fileDeleteMatch = path.match(/^\/api\/printers\/([a-zA-Z0-9_-]+)\/files\/(.+)$/);
+-    if (fileDeleteMatch && method === 'DELETE') {
+-      const printer = getPrinters().find(p => p.id === fileDeleteMatch[1]);
+-      if (!printer || !printer.ip || !printer.accessCode) return sendJson(res, { error: 'Printer not found' }, 400);
++    if (fileDeleteMatch && method === 'DELETE' && fileDeleteMatch[2] !== 'print') {
++      const printerId = fileDeleteMatch[1];
++      const printer = getPrinters().find(p => p.id === printerId);
++      if (!printer) return sendJson(res, { error: 'Printer not found' }, 404);
++      const filename = decodeURIComponent(fileDeleteMatch[2]);
++      if (_usesMoonrakerFiles(printer)) {
++        const client = _moonrakerLiveClient(printerId);
++        if (!client) return sendJson(res, { error: 'Printer offline' }, 503);
++        try {
++          await client.deleteFile(filename);
++          return sendJson(res, { ok: true });
++        } catch (e) { return sendJson(res, { error: e.message }, 500); }
++      }
++      if (!printer.ip || !printer.accessCode) return sendJson(res, { error: 'Printer not found' }, 400);
+       try {
+-        await deletePrinterFile(printer.ip, printer.accessCode, decodeURIComponent(fileDeleteMatch[2]));
++        await deletePrinterFile(printer.ip, printer.accessCode, filename);
+         return sendJson(res, { ok: true });
+       } catch (e) { return sendJson(res, { error: e.message }, 500); }
+     }
+@@ -5732,9 +5783,13 @@ export async function handleApiRequest(req, res) {
+     if (filePrintMatch && method === 'POST') {
+       return readBody(req, res, (body) => {
+         if (!body.filename) return sendJson(res, { error: 'filename required' }, 400);
+-        // Send print command via WebSocket to client which forwards to MQTT
+-        if (_broadcastFn) {
+-          _broadcastFn({ type: 'command', printerId: filePrintMatch[1], command: { action: 'print_file', filename: body.filename, plate_id: body.plate_id } });
++        if (_printerManager) {
++          _printerManager.handleCommand({
++            printer_id: filePrintMatch[1],
++            action: 'print_file',
++            filename: body.filename,
++            plate_id: body.plate_id,
++          });
+         }
+         return sendJson(res, { ok: true });
+       });
+diff --git a/server/moonraker-client.js b/server/moonraker-client.js
+index 8bea0a1c..59f0837d 100644
+--- a/server/moonraker-client.js
++++ b/server/moonraker-client.js
+@@ -149,6 +149,50 @@ const STATE_MAP = {
+   disconnected: 'IDLE',
+ };
+ 
++// Objects that cannot be status-subscribed (no get_status). Subscribing to
++// any one of these causes Klipper to reject the entire subscribe request.
++const SUBSCRIPTION_DENY_EXACT = new Set([
++  'configfile', 'query_endstops', 'manual_probe', 'custom_macro',
++  'product_param', 'exclude_object', 'respond',
++]);
++
++// Core telemetry objects for HTTP polling and static WS fallback.
++const CORE_TELEMETRY_OBJECTS = [
++  'print_stats', 'virtual_sdcard', 'display_status',
++  'heater_bed', 'extruder', 'extruder1', 'extruder2', 'extruder3',
++  'fan', 'toolhead', 'gcode_move', 'motion_report',
++  'heaters', 'system_stats', 'webhooks', 'idle_timeout',
++  'bed_mesh', 'mcu', 'probe', 'pause_resume',
++  'filament_switch_sensor filament_sensor',
++  'filament_switch_sensor filament_sensor_2',
++  'filament_switch_sensor runout',
++  'filament_motion_sensor filament_sensor',
++  'heater_fan hotend_fan',
++  'temperature_sensor mcu_temp',
++  'temperature_sensor chamber_temp',
++  'temperature_fan chamber_fan',
++  'output_pin fan0', 'output_pin fan1', 'output_pin fan2',
++  'output_pin LED', 'output_pin power',
++  'fan_feedback',
++];
++
++function isSubscribableKlipperObject(name) {
++  if (SUBSCRIPTION_DENY_EXACT.has(name)) return false;
++  if (name.startsWith('gcode_macro ')) return false;
++  // Secondary MCU nodes (mcu nozzle_mcu, etc.) have no get_status.
++  if (name.startsWith('mcu ') && name !== 'mcu') return false;
++  return true;
++}
++
++function filterSubscribableObjects(available) {
++  const filtered = available.filter(isSubscribableKlipperObject);
++  const set = new Set(filtered);
++  for (const obj of CORE_TELEMETRY_OBJECTS) {
++    if (available.includes(obj)) set.add(obj);
++  }
++  return [...set];
++}
++
+ export class MoonrakerClient {
+   constructor(config, hub) {
+     this.ip = config.printer.ip;
+@@ -166,6 +210,12 @@ export class MoonrakerClient {
+     this.onXcamEvent = null;
+     this._reconnectTimer = null;
+     this._pollTimer = null;
++    this._watchdogTimer = null;
++    this._pingTimer = null;
++    this._lastStatusUpdate = 0;
++    this._pendingSubscribeId = null;
++    this._subscribedObjects = null;
++    this._subscribeStaticAttempted = false;
+     this._lastPrintState = null;
+     this._subscriptionId = 0;
+     this._ledName = null;       // Detected Klipper LED object name
+@@ -218,7 +268,9 @@ export class MoonrakerClient {
+ 
+   disconnect() {
+     if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+-    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
++    this._stopPolling();
++    this._stopWatchdog();
++    this._stopWsPing();
+     if (this.ws) {
+       this.ws.removeAllListeners();
+       this.ws.close();
+@@ -228,6 +280,9 @@ export class MoonrakerClient {
+   }
+ 
+   async _connectWebSocket() {
++    this._stopPolling();
++    this._stopWatchdog();
++    this._stopWsPing();
+     if (this.ws) {
+       this.ws.removeAllListeners();
+       this.ws.close();
+@@ -247,6 +302,8 @@ export class MoonrakerClient {
+ 
+     this.ws.on('open', () => {
+       this.connected = true;
++      this._subscribeStaticAttempted = false;
++      this._lastStatusUpdate = Date.now();
+       log.info(`Moonraker WebSocket connected: ${this.ip}`);
+       this.hub.broadcast('connection', { status: 'connected' });
+       this._sendIdentify();
+@@ -255,6 +312,9 @@ export class MoonrakerClient {
+       this._autoDetectModel();
+       this._autoDetectWebcam();
+       this._detectLightObjects();
++      this._startPolling();
++      this._startWatchdog();
++      this._startWsPing(this.ws);
+     });
+ 
+     this.ws.on('message', (raw) => {
+@@ -269,6 +329,9 @@ export class MoonrakerClient {
+     });
+ 
+     this.ws.on('close', () => {
++      this._stopPolling();
++      this._stopWatchdog();
++      this._stopWsPing();
+       if (this.connected) {
+         this.connected = false;
+         log.info('Moonraker disconnected — reconnecting in 5s...');
+@@ -310,6 +373,30 @@ export class MoonrakerClient {
+ 
+   // ---- WebSocket subscription ----
+ 
++  _getTelemetryQueryObjects() {
++    if (this._subscribedObjects?.length) return this._subscribedObjects;
++    if (this._availableObjects?.length) {
++      return filterSubscribableObjects(this._availableObjects);
++    }
++    return CORE_TELEMETRY_OBJECTS;
++  }
++
++  _sendObjectSubscribe(objectNames) {
++    const objects = {};
++    for (const obj of objectNames) objects[obj] = null;
++    const id = ++this._subscriptionId;
++    this._pendingSubscribeId = id;
++    this._subscribedObjects = objectNames;
++    this._wsSend({
++      jsonrpc: '2.0',
++      method: 'printer.objects.subscribe',
++      params: { objects },
++      id,
++    });
++    log.info(`Subscribing to ${objectNames.length} Klipper objects`);
++    return id;
++  }
++
+   async _subscribe() {
+     // Capture the socket reference at subscription time. If the printer
+     // reconnects flapping over Wi-Fi, `this.ws` is replaced before this
+@@ -336,20 +423,10 @@ export class MoonrakerClient {
+         // fingerprint what's wired to this printer (probes, accelerometers,
+         // MMU, filament sensors, chamber, LEDs, fans, etc.).
+         this.state._klipper_objects = available;
+-        log.info(`Klipper objects discovered: ${available.length}`);
++        const subscribable = filterSubscribableObjects(available);
++        log.info(`Klipper objects discovered: ${available.length} (${subscribable.length} subscribable)`);
+ 
+-        // Subscribe to ALL discovered objects (null = all fields)
+-        const objects = {};
+-        for (const obj of available) {
+-          objects[obj] = null;
+-        }
+-
+-        this._wsSend({
+-          jsonrpc: '2.0',
+-          method: 'printer.objects.subscribe',
+-          params: { objects },
+-          id: ++this._subscriptionId,
+-        });
++        this._sendObjectSubscribe(subscribable);
+ 
+         // Store discovered object categories for the dashboard
+         this.state._discovered_objects = this._categorizeObjects(available);
+@@ -384,14 +461,17 @@ export class MoonrakerClient {
+ 
+   // Static fallback subscription (used if object list query fails)
+   _subscribeStatic() {
+-    const objects = {
++    if (this._subscribeStaticAttempted) return;
++    this._subscribeStaticAttempted = true;
++    const available = this._availableObjects || [];
++    const fromStatic = Object.keys({
+       'print_stats': null, 'display_status': null, 'heater_bed': null,
+       'extruder': null, 'extruder1': null, 'extruder2': null, 'extruder3': null,
+       'fan': null, 'toolhead': null, 'gcode_move': null, 'motion_report': null,
+       'heaters': null, 'system_stats': null, 'webhooks': null, 'idle_timeout': null,
+       'virtual_sdcard': null, 'bed_mesh': null, 'mcu': null, 'probe': null,
+-      'firmware_retraction': null, 'input_shaper': null, 'exclude_object': null,
+-      'quad_gantry_level': null, 'z_tilt': null, 'respond': null, 'purifier': null,
++      'firmware_retraction': null, 'input_shaper': null,
++      'quad_gantry_level': null, 'z_tilt': null, 'purifier': null,
+       'fan_generic cavity_fan': null, 'temperature_sensor cavity': null,
+       'temperature_sensor mcu_temp': null, 'temperature_sensor raspberry_pi': null,
+       'tmc2209 stepper_x': null, 'tmc2209 stepper_y': null,
+@@ -401,8 +481,7 @@ export class MoonrakerClient {
+       'temperature_fan controller_fan': null, 'temperature_fan exhaust_fan': null,
+       'fan_generic nevermore_internal': null, 'ercf': null, 'afc': null,
+       'neopixel sb_leds': null, 'neopixel my_neopixel': null, 'led chamber_led': null,
+-      'screws_tilt_adjust': null, 'z_thermal_adjust': null, 'manual_probe': null,
+-      // Snapmaker U1 specific
++      'screws_tilt_adjust': null, 'z_thermal_adjust': null,
+       'machine_state_manager': null, 'filament_detect': null,
+       'filament_feed left': null, 'filament_feed right': null,
+       'filament_entangle_detect e0_filament': null, 'filament_entangle_detect e1_filament': null,
+@@ -412,29 +491,86 @@ export class MoonrakerClient {
+       'power_loss_check e0': null, 'power_loss_check e1': null,
+       'power_loss_check e2': null, 'power_loss_check e3': null,
+       'adc_current_sensor heater_bed': null, 'adc_current_sensor extruder': null,
+-      // Snapmaker U1 V1.3.0 — confirmed objects from live V1.3.0 printer.
+-      // Tool pin state (park/active/grab) is on each extruder object, not a
+-      // separate park_detector object. Flow calibrator is a gcode macro only.
+-      'exception_manager': null, 'filament_parameters': null, 'configfile': null,
++      'exception_manager': null, 'filament_parameters': null,
+       'extruder_offset_calibration': null, 'auto_screws_tilt_adjust': null,
+       'pause_resume': null,
+-    };
+-    this._wsSend({
+-      jsonrpc: '2.0',
+-      method: 'printer.objects.subscribe',
+-      params: { objects },
+-      id: ++this._subscriptionId,
+     });
++    const objectNames = available.length
++      ? fromStatic.filter(o => available.includes(o))
++      : CORE_TELEMETRY_OBJECTS;
++    this._sendObjectSubscribe(objectNames.length ? objectNames : CORE_TELEMETRY_OBJECTS);
++  }
++
++  // ---- HTTP polling fallback (keeps /state live when WS notifications stall) ----
++
++  _startPolling() {
++    this._stopPolling();
++    this._pollTimer = setInterval(() => this._pollState(), 2000);
++  }
++
++  _stopPolling() {
++    if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
++  }
++
++  async _pollState() {
++    if (!this.connected) return;
++    try {
++      const queryObjects = this._getTelemetryQueryObjects()
++        .map(o => encodeURIComponent(o))
++        .join('&');
++      const status = await this._apiGet(`/printer/objects/query?${queryObjects}`);
++      if (status?.result?.status) {
++        this._mergeKlipperState(status.result.status);
++        this._lastStatusUpdate = Date.now();
++        this.hub.broadcast('status', { print: this.state });
++      }
++    } catch (e) {
++      log.warn(`Poll state failed: ${e.message}`);
++    }
++  }
++
++  // ---- Stale-state watchdog + WS keepalive ----
++
++  _startWatchdog() {
++    this._stopWatchdog();
++    this._watchdogTimer = setInterval(() => {
++      if (!this.connected) return;
++      const staleMs = Date.now() - (this._lastStatusUpdate || 0);
++      if (staleMs > 15000) {
++        log.warn(`No status update for ${Math.round(staleMs / 1000)}s — re-subscribing`);
++        this._lastStatusUpdate = Date.now();
++        this._subscribeStaticAttempted = false;
++        this._subscribe();
++        this._requestFullState();
++      }
++    }, 5000);
++  }
++
++  _stopWatchdog() {
++    if (this._watchdogTimer) { clearInterval(this._watchdogTimer); this._watchdogTimer = null; }
++  }
++
++  _startWsPing(ws) {
++    this._stopWsPing();
++    this._pingTimer = setInterval(() => {
++      if (ws?.readyState === WebSocket.OPEN) {
++        try { ws.ping(); } catch { /* ignore */ }
++      }
++    }, 10000);
++  }
++
++  _stopWsPing() {
++    if (this._pingTimer) { clearInterval(this._pingTimer); this._pingTimer = null; }
+   }
+ 
+   // ---- Full state fetch ----
+ 
+   async _requestFullState() {
+     try {
+-      // Build query from discovered objects or use core set
+-      const queryObjects = this._availableObjects
+-        ? this._availableObjects.map(o => encodeURIComponent(o)).join('&')
+-        : 'print_stats&display_status&heater_bed&extruder&extruder1&extruder2&extruder3&fan&toolhead&gcode_move&virtual_sdcard&idle_timeout&system_stats&purifier&exclude_object&machine_state_manager&filament_detect&defect_detection&timelapse&print_task_config&power_loss_check&flow_calibrator';
++      // Build query from curated subscribable objects (not the full raw list)
++      const queryObjects = this._getTelemetryQueryObjects()
++        .map(o => encodeURIComponent(o))
++        .join('&');
+       const [info, status, history] = await Promise.all([
+         this._apiGet('/printer/info'),
+         this._apiGet(`/printer/objects/query?${queryObjects}`),
+@@ -465,6 +601,7 @@ export class MoonrakerClient {
+       // Current state
+       if (status?.result?.status) {
+         this._mergeKlipperState(status.result.status);
++        this._lastStatusUpdate = Date.now();
+       }
+ 
+       // Last print info + slicer metadata
+@@ -575,11 +712,11 @@ export class MoonrakerClient {
+       this.state.gcode_state = newState;
+     }
+ 
+-    // Progress
+-    if (ds.progress !== undefined) {
+-      this.state.mc_percent = Math.round((ds.progress || 0) * 100);
+-    } else if (vsd.progress !== undefined) {
++    // Progress — prefer virtual_sdcard (finer on Creality K1) over display_status
++    if (vsd.progress !== undefined) {
+       this.state.mc_percent = Math.round((vsd.progress || 0) * 100);
++    } else if (ds.progress !== undefined) {
++      this.state.mc_percent = Math.round((ds.progress || 0) * 100);
+     }
+ 
+     // Time
+@@ -618,9 +755,17 @@ export class MoonrakerClient {
+       }
+     }
+ 
+-    // Layers
+-    if (ps.info?.current_layer !== undefined) this.state.layer_num = ps.info.current_layer;
+-    if (ps.info?.total_layer !== undefined) this.state.total_layer_num = ps.info.total_layer;
++    // Layers — print_stats.info on some firmware; virtual_sdcard on Creality K1
++    if (ps.info?.current_layer != null) {
++      this.state.layer_num = ps.info.current_layer;
++    } else if (vsd.layer != null) {
++      this.state.layer_num = vsd.layer;
++    }
++    if (ps.info?.total_layer != null) {
++      this.state.total_layer_num = ps.info.total_layer;
++    } else if (vsd.layer_count != null) {
++      this.state.total_layer_num = vsd.layer_count;
++    }
+ 
+     // Temperatures — primary extruder
+     if (ext.temperature !== undefined) this.state.nozzle_temper = Math.round(ext.temperature);
+@@ -682,7 +827,10 @@ export class MoonrakerClient {
+     }
+ 
+     // Filename
+-    if (ps.filename) this.state.subtask_name = ps.filename;
++    if (ps.filename) {
++      this.state.subtask_name = ps.filename;
++      this.state.gcode_file = ps.filename;
++    }
+ 
+     // Position
+     if (th.position) {
+@@ -1095,11 +1243,13 @@ export class MoonrakerClient {
+           measuredMinTemp: ts.measured_min_temp != null ? Math.round(ts.measured_min_temp * 10) / 10 : null,
+           measuredMaxTemp: ts.measured_max_temp != null ? Math.round(ts.measured_max_temp * 10) / 10 : null,
+         };
+-        // Keep legacy system_temps
+-        if (name === 'mcu_temp' || name === 'raspberry_pi' || name === 'cavity') {
++        // Keep legacy system_temps + chamber promotion
++        if (name === 'mcu_temp' || name === 'raspberry_pi' || name === 'cavity' || /chamber|cavity/i.test(name)) {
+           if (!this.state._system_temps) this.state._system_temps = {};
+           this.state._system_temps[name] = { temp: Math.round((ts.temperature || 0) * 10) / 10 };
+-          if (name === 'cavity') this.state.chamber_temper = Math.round(ts.temperature || 0);
++          if (name === 'cavity' || /chamber|cavity/i.test(name)) {
++            this.state.chamber_temper = Math.round(ts.temperature || 0);
++          }
+         }
+       }
+     }
+@@ -1345,6 +1495,13 @@ export class MoonrakerClient {
+         homedAxes: th.homed_axes || '',
+       };
+     }
++    if (th.axis_maximum && th.axis_minimum) {
++      this.state._buildVolume = {
++        x: Math.round((th.axis_maximum[0] || 0) - (th.axis_minimum[0] || 0)),
++        y: Math.round((th.axis_maximum[1] || 0) - (th.axis_minimum[1] || 0)),
++        z: Math.round((th.axis_maximum[2] || 0) - (th.axis_minimum[2] || 0)),
++      };
++    }
+ 
+     // G-code coordinate system (gcode position vs physical position)
+     if (gm.gcode_position) {
+@@ -1392,14 +1549,65 @@ export class MoonrakerClient {
+       this.state._available_sensors = heaters.available_sensors || [];
+     }
+ 
++    this._updateIdentityFields();
++  }
++
++  // Populate Bambu-shaped identity/feature fields the dashboard UI expects.
++  _updateIdentityFields() {
++    const profileName = this._printerModel
++      || (this.state._detected_brand && this.state._info?.hostname
++        ? `${this.state._detected_brand} ${this.state._info.hostname}`.trim()
++        : null)
++      || this.state._info?.hostname
++      || null;
++    if (profileName) {
++      this.state._printerProfile = { name: profileName };
++    }
++
++    const objs = this._availableObjects || this.state._klipper_objects || [];
++    const extruderCount = objs.filter(o => o === 'extruder' || /^extruder\d+$/.test(o)).length;
++    if (extruderCount > 0) {
++      this.state._extruderCount = extruderCount;
++    } else if (this.state.nozzle_temper !== undefined) {
++      this.state._extruderCount = 1;
++    }
++
++    if (this.state._webcam || this.state._brand_camera_confirmed) {
++      this.state._camera_state = {
++        connected: true,
++        source: this.state._webcam ? 'webcam' : 'brand',
++      };
++    }
+   }
+ 
+   // ---- WebSocket message handler ----
+ 
+   _handleWsMessage(msg) {
++    // JSON-RPC error (e.g. subscribe rejected because of bad object)
++    if (msg.id && msg.error) {
++      if (msg.id === this._pendingSubscribeId) {
++        this._pendingSubscribeId = null;
++        log.warn(`Object subscribe failed: ${msg.error.message || JSON.stringify(msg.error)} — falling back to static`);
++        this._subscribeStatic();
++        return;
++      }
++    }
++
++    // JSON-RPC response (subscription ack, query results)
++    if (msg.id && msg.result?.status) {
++      if (msg.id === this._pendingSubscribeId) {
++        this._pendingSubscribeId = null;
++        log.info('Object subscribe acknowledged');
++      }
++      this._mergeKlipperState(msg.result.status);
++      this._lastStatusUpdate = Date.now();
++      this.hub.broadcast('status', { print: this.state });
++    }
++
+     // JSON-RPC notification: printer object status update
+     if (msg.method === 'notify_status_update' && msg.params?.[0]) {
+       this._mergeKlipperState(msg.params[0]);
++      this._lastStatusUpdate = Date.now();
+       this.hub.broadcast('status', { print: this.state });
+     }
+ 
+@@ -1520,12 +1728,6 @@ export class MoonrakerClient {
+     if (msg.method === 'notify_active_spool_set' && msg.params?.[0]) {
+       this.hub?.broadcast?.('spoolman_active_spool', msg.params[0]);
+     }
+-
+-    // JSON-RPC response (subscription ack, query results)
+-    if (msg.id && msg.result?.status) {
+-      this._mergeKlipperState(msg.result.status);
+-      this.hub.broadcast('status', { print: this.state });
+-    }
+   }
+ 
+   // ---- Light detection ----
+@@ -1690,7 +1892,10 @@ export class MoonrakerClient {
+         // Try Creality-specific camera endpoints
+         try {
+           const camRes = await fetch(`http://${this.ip}:4408/?action=snapshot`, { signal: AbortSignal.timeout(2000) });
+-          if (camRes.ok) this.state._brand_camera_confirmed = true;
++          if (camRes.ok) {
++            this.state._brand_camera_confirmed = true;
++            this._updateIdentityFields();
++          }
+         } catch {}
+         // Sonic Pad firmware detection
+         const mcuInfo = await this._apiGet('/printer/objects/query?mcu');
+@@ -1754,6 +1959,7 @@ export class MoonrakerClient {
+           rotation: cam.rotation,
+         };
+         log.info(`Webcam detected: ${cam.name} (${cam.service})`);
++        this._updateIdentityFields();
+         return;
+       }
+     } catch { /* no webcam API */ }
+@@ -1770,6 +1976,7 @@ export class MoonrakerClient {
+             streamUrl: `http://${this.ip}:${port}/?action=stream`,
+           };
+           log.info(`Webcam found on port ${port}`);
++          this._updateIdentityFields();
+           return;
+         }
+       } catch { /* next */ }
+-- 
+2.43.0
+
