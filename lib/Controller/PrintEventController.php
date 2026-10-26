@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\Activity\Provider;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
+use OCA\NcPrint\Service\OutboundWebhookService;
 use OCA\NcPrint\Service\PrintHistoryService;
 use OCP\Activity\IManager as IActivityManager;
 use OCP\AppFramework\Controller;
@@ -43,6 +44,7 @@ class PrintEventController extends Controller
 		private INotificationManager $notificationManager,
 		private IActivityManager $activityManager,
 		private PrintHistoryService $history,
+		private OutboundWebhookService $webhooks,
 		private LoggerInterface $logger,
 	) {
 		parent::__construct(Application::APP_ID, $request);
@@ -96,18 +98,44 @@ class PrintEventController extends Controller
 		// Cancel is history-only: the user knows they cancelled, so we don't fire
 		// a "failed" bell/activity entry for it.
 		if ($transition === 'cancel') {
+			$this->fireWebhook($transition, $filename, $printer, $params);
 			return new JSONResponse(['ok' => true, 'published' => false, 'recorded' => true]);
 		}
 
+		$published = true;
 		try {
 			$this->publishNotification($uid, $transition, $filename, $durationHuman);
 			$this->publishActivity($uid, $transition, $filename, $printer, $durationHuman);
 		} catch (\Throwable $e) {
 			// Never let a notification/activity failure surface as a UI error.
 			$this->logger->warning('nc_print notifyTransition publish failed', ['exception' => $e]);
-			return new JSONResponse(['ok' => true, 'published' => false]);
+			$published = false;
 		}
-		return new JSONResponse(['ok' => true, 'published' => true]);
+		$this->fireWebhook($transition, $filename, $printer, $params);
+		return new JSONResponse(['ok' => true, 'published' => $published]);
+	}
+
+	/** @param array<string, mixed> $params */
+	private function fireWebhook(string $transition, string $filename, string $printer, array $params): void
+	{
+		try {
+			$title = match ($transition) {
+				'started' => 'Print Started',
+				'complete' => 'Print Finished',
+				'error' => 'Print Failed',
+				'cancel' => 'Print Cancelled',
+				default => 'Print event',
+			};
+			$this->webhooks->dispatch($transition, $title, $filename, [
+				'printer_id' => (string) ($params['printer_id'] ?? $printer),
+				'printer_name' => (string) ($params['printer_name'] ?? $printer),
+				'filename' => $filename,
+				'duration_s' => $params['duration_s'] ?? null,
+				'failure_reason' => $params['failure_reason'] ?? null,
+			]);
+		} catch (\Throwable $e) {
+			$this->logger->warning('nc_print webhook dispatch failed', ['exception' => $e]);
+		}
 	}
 
 	private function publishNotification(string $uid, string $transition, string $filename, string $duration): void

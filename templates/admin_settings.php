@@ -94,5 +94,21 @@ $discoverUrl = htmlspecialchars((string)($_['discover_url'] ?? ''), ENT_QUOTES, 
 		</p>
 		<button type="submit" class="primary">Save</button>
 		<p id="nc-print-admin-status" class="settings-hint" aria-live="polite"></p>
-	</form>
+	
+	<p>
+		<label>
+			<input type="checkbox" name="<?php echo \OCA\NcPrint\Service\ConfigService::KEY_OUTBOUND_WEBHOOK_ENABLED; ?>" value="yes" <?php echo !empty($_['outbound_webhook_enabled']) ? 'checked' : ''; ?>>
+			Enable outbound HMAC webhooks (Alfred / forge-webhook-relay)
+		</label>
+	</p>
+	<p>
+		<label for="nc-print-webhook-url">Outbound webhook URL</label>
+		<input id="nc-print-webhook-url" type="url" name="<?php echo \OCA\NcPrint\Service\ConfigService::KEY_OUTBOUND_WEBHOOK_URL; ?>" value="<?php echo htmlspecialchars((string)($_['outbound_webhook_url'] ?? ''), ENT_QUOTES, 'UTF-8'); ?>" placeholder="https://alfred-vdroners.ddns.net/forge-webhook">
+	</p>
+	<p>
+		<label for="nc-print-webhook-secret">Outbound webhook HMAC secret</label>
+		<input id="nc-print-webhook-secret" type="password" name="<?php echo \OCA\NcPrint\Service\ConfigService::KEY_OUTBOUND_WEBHOOK_SECRET; ?>" value="" placeholder="leave blank to keep existing" autocomplete="new-password">
+		<em>Must match <code>FORGE_WEBHOOK_SECRET</code> / <code>NC_PRINT_WEBHOOK_SECRET</code> on the relay.</em>
+	</p>
+</form>
 </div>

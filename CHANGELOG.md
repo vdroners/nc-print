@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.62.0] - 2026-10-25
+
+### Added
+- Outbound HMAC-signed webhooks for print lifecycle transitions (start / finish / fail / cancel), for Alfred's forge-webhook-relay (Forge → NC Print port Wave 2).
+- Admin settings for webhook URL, secret, and enable flag (`outbound_webhook_*`).
+
 ## [1.61.1] - 2026-10-05
 
 ### Fixed
