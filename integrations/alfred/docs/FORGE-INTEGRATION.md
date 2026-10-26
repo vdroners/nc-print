@@ -1,3 +1,8 @@
+> **Renamed (Wave 3):** Primary integration is **NC 3D Print**. Dashboard:
+> https://cloud-vdroners.ddns.net/apps/nc_print/
+> Env: prefer `NC_PRINT_*` (see `env.example`). `FORGE_*` aliases still work.
+> Skill: `nc-print` (this file kept for operator continuity; Forge Studio optional fallback).
+
 # Forge + Alfred + Nextcloud Talk — Operator Guide
 
 Connect **3DPrintForge** (K1 Max) print events to Alfred via Talk notifications and `@alfred print` commands.
@@ -6,7 +11,7 @@ Connect **3DPrintForge** (K1 Max) print events to Alfred via Talk notifications 
 
 | Use | URL |
 |-----|-----|
-| Forge dashboard | https://forge-vdroners.ddns.net |
+| NC Print dashboard | https://cloud-vdroners.ddns.net/apps/nc_print/ |
 | Webhook (public) | https://alfred-vdroners.ddns.net/forge-webhook |
 | Relay health (local) | http://127.0.0.1:8790/health |
 

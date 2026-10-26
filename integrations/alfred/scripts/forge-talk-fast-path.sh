@@ -42,7 +42,7 @@ PY
 summary="$(bash "${SCRIPT_DIR}/forge-dispatch-exec.sh" "$clean_msg" 2>/dev/null || true)"
 if [[ -z "$summary" ]]; then
   M="${OPENCLAW_AGENT_MENTION:-@alfred}"
-  summary="[forge] could not parse that command. Try: ${M} print help"
+  summary="[nc_print] could not parse that command. Try: ${M} print help"
 fi
 summary="$(printf '%s' "$summary" | head -c 4000)"
 

@@ -18,8 +18,10 @@ fi
 source "$LIB"
 
 link_script_dir "${ROOT}/scripts"
+sync_skill "${ROOT}/skills/nc-print" "${OPENCLAW_DIR}/workspace/skills/nc-print"
+patch_skill_mentions "${OPENCLAW_DIR}/workspace/skills/nc-print"
+check_skills_i3 nc-print
+# Keep deprecated alias skill for older OpenClaw skill lists
 sync_skill "${ROOT}/skills/forge-print" "${OPENCLAW_DIR}/workspace/skills/forge-print"
-patch_skill_mentions "${OPENCLAW_DIR}/workspace/skills/forge-print"
-check_skills_i3 forge-print
 
 echo "Gate I1: nc-print forge integration install ok — ROOT=$ROOT"
