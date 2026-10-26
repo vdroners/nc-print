@@ -13,7 +13,7 @@
 
 ## Goal
 
-Port every remaining Forge feature that still forces the 3DPrintForge stack to stay up into **NC 3D Print** (`nc_print`), so Alfred and operators use NC Print only. After Sarge signs off that coverage is complete, retire Forge Studio UI / `:3040` / host forge-slicer in a **separate** PR. Keep `ENGINE_SRC` (or a relocated copy) available for `make slicer-fetch` — the engine binary tree must not vanish with the UI.
+Port every remaining Forge feature that still forces the 3DPrintForge stack to stay up into **NC 3D Print** (`nc_print`), so Alfred and operators use NC Print only. Wave 8 (`chore/retire-forge`) executed **2026-10-26** after Sarge t11u — Forge Studio UI / `:3040` / host forge-slicer stopped; ENGINE_SRC kept. Keep `ENGINE_SRC` (or a relocated copy) available for `make slicer-fetch` — the engine binary tree must not vanish with the UI.
 
 Sarge verbal order (2026-10-25): **All** — full port including Alfred cutover, outbound webhooks, parts library, Model Forge subset, Print Guard lite. Forge teardown only after sign-off.
 
@@ -152,48 +152,53 @@ Each wave: branch from up-to-date `main` → implement → bump (`make bump-mino
 - If off: close gap as **deferred**, add `docs/plans/spoolman-nc-print.md` stub, no feature code.
 - If on: minimal NC integration parity with Forge’s Spoolman/notify hooks only.
 
-### Wave 8 — `chore/retire-forge` (**separate**, after Sarge sign-off)
+### Wave 8 — `chore/retire-forge` (**executed 2026-10-26**, Sarge t11u "Tear down forge")
 
-**Does not start until Sarge explicitly says NC Print covers needed Forge features.**
+**ENGINE_SRC decision: keep-engine** — leave `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/` in place; Makefile `ENGINE_SRC` unchanged. Do not delete the tree; do not start Forge UI compose.
 
-- Stop advertising Forge Studio in STACK_MAP / OPERATOR docs; mark `:3040` / forge-slicer deprecated.
-- Tear down compose / systemd unit / reverse-proxy routes only with Sarge OK.
-- **ENGINE_SRC decision** (relocate vs keep slim tree) landed in the same PR.
-- Do **not** `git add -A` a 380 MB binary; do not delete `/media/4TB/3dprints`.
-- Final browser + Alfred monitor verification on NC-only path for ≥ one print cycle preferred.
-
----
-
-## Teardown checklist (for Wave 8 only — do not run now)
-
-Use this as the PR checklist later; **all items default unchecked today**.
-
-- [ ] Sarge written OK that Waves 1–7 (or agreed subset) meet ops needs
-- [ ] Alfred monitor + Talk path verified NC-only for a full print or dry-run cycle
-- [ ] Outbound webhooks delivering from NC; Forge webhook disabled
-- [ ] Parts library + Model Forge v1 used successfully from `cloud-vdroners.ddns.net/apps/nc_print/`
-- [ ] Print Guard lite exercised on idle printer
-- [ ] `ENGINE_SRC` relocated **or** slim tree retained; `make slicer-fetch` still works
-- [ ] `docker compose` / systemd for Forge Studio and forge-slicer stopped
-- [ ] STACK_MAP, CLAUDE.md cross-links, Alfred env examples updated
-- [ ] No open process still binding `:3040` / `:8766` unless intentionally kept for engine
-- [ ] Backup note: `/media/4TB/3dprintforge` tarball or git remote known before delete
-- [ ] **Not deleted yet:** `/media/4TB/3dprints`, NC Print slicer compose, Moonraker on printer
+- [x] Stop advertising Forge Studio in STACK_MAP; mark `:3040` / forge-slicer retired.
+- [x] `docker compose down` for `/media/4TB/3dprintforge` (container `3dprintforge`).
+- [x] `systemctl --user stop+disable` `forge-slicer` + `forge-slicer-docker-relay`.
+- [x] CPM `forge-vdroners.ddns.net` (proxy_hosts id=8) `enabled=0`; live Caddy routes removed.
+- [x] Keep `forge-webhook-relay` + CPM `alfred-vdroners` (NC HMAC path).
+- [x] Keep `/media/4TB/3dprints` and ENGINE_SRC tree.
+- [x] Stop+disable `alfred-cron-forge-print-monitor.timer` (Alfred must cut OpenClaw `FORGE_*` → `:3040` over to NC Print).
+- [ ] Alfred OpenClaw env / skill re-gate on NC-only path (Alfred follow-up).
+- [ ] Optional: one full print-cycle NC-only monitor verify after Alfred re-gate.
 
 ---
 
-## What NOT to delete or stop yet
+## Teardown checklist (Wave 8 — lab actions 2026-10-26)
 
-Until Wave 8 is merged by Sarge:
+- [x] Sarge written OK — t11u "Tear down forge"
+- [ ] Alfred monitor + Talk path verified NC-only for a full print or dry-run cycle (**Alfred follow-up**: OpenClaw still had `FORGE_*` → `127.0.0.1:3040` at teardown)
+- [x] Outbound webhooks from NC; Forge Studio webhook source gone; `forge-webhook-relay` kept for NC events
+- [x] Parts library + Model Forge v1 + Print Guard lite shipped in Waves 4–6 (lab 1.63.0)
+- [x] `ENGINE_SRC` **slim keep** at `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/`; `make slicer-fetch` still points there
+- [x] Forge Studio compose + forge-slicer systemd stopped/disabled
+- [x] STACK_MAP updated; this plan Wave 8 marked executed
+- [x] No process binding `:3040` / `:8766` after stop
+- [x] Tree retained (no full delete); `/media/4TB/3dprints` untouched
+- [x] **Not deleted:** `/media/4TB/3dprints`, NC Print slicer compose, Moonraker on printer, `forge-webhook-relay`
 
-| Keep running / on disk | Why |
-|------------------------|-----|
-| `/media/4TB/3dprintforge` tree | ENGINE_SRC + rollback |
-| Forge Studio `:3040` | Alfred / operator fallback |
-| Host `forge-slicer` `:8766` | Forge UI dependency |
-| `forge-webhook-relay` | Dual-run during Waves 1–3 |
+---
+
+## Post-retirement keep list (after Wave 8)
+
+| Keep | Why |
+|------|-----|
+| `/media/4TB/3dprintforge/slicer/` (`ENGINE_SRC`) | `make slicer-fetch` + rollback |
+| Rest of `/media/4TB/3dprintforge` tree (compose/src stopped) | Rollback; do not `compose up` without Sarge |
+| `forge-webhook-relay` `:8790` | NC outbound HMAC → Alfred Talk |
 | `/media/4TB/3dprints` | Shared library data |
 | `nc-print-slicer` + `cloud_app` | Primary path |
+
+| Stopped (do not restart without Sarge) | |
+|----------------------------------------|---|
+| Forge Studio `:3040` | Retired |
+| Host `forge-slicer` `:8766` + docker-relay | Retired |
+| CPM `forge-vdroners.ddns.net` | Disabled |
+| `alfred-cron-forge-print-monitor.timer` | Disabled pending Alfred NC re-gate |
 
 ---
 
