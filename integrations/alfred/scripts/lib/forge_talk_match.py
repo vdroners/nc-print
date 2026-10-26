@@ -62,7 +62,19 @@ def is_forge_command(text: str, agent_name: str = "alfred") -> bool:
 def parse_forge_subcommand(text: str, agent_name: str = "alfred") -> str:
     norm = extract_user_message(text)
     agent = re.escape(agent_name.lstrip("@"))
-    norm = re.sub(rf"(?i)@?{agent}\s+(print|forge|k1|k1-max)\s*", "", norm, count=1).strip()
+    # @alfred print|forge|… OR bare "print|forge|nc-print|nc_print …"
+    norm = re.sub(
+        rf"(?i)@?{agent}\s+(print|forge|k1|k1-max|nc-print|nc_print)\s*",
+        "",
+        norm,
+        count=1,
+    ).strip()
+    norm = re.sub(
+        r"(?i)^(print|forge|k1|k1-max|nc-print|nc_print)\s+",
+        "",
+        norm,
+        count=1,
+    ).strip()
     if not norm or norm.lower() in ("help", "?"):
         return "help"
     first = norm.split()[0].lower()

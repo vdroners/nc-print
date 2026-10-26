@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""3DPrintForge REST client for Alfred shell-direct scripts."""
+"""Alfred print API — NC Print / Moonraker first (Forge optional fallback).
+
+Wave 1 of docs/plans/forge-port.md. Prefer nc_print_api; set
+NC_PRINT_USE_FORGE_FALLBACK=1 to keep hitting Forge Studio :3040.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +13,18 @@ import ssl
 import urllib.error
 import urllib.request
 from typing import Any
+
+import nc_print_api as nc
+
+
+def _use_nc() -> bool:
+    # Default ON — Forge fallback only when explicitly enabled.
+    flag = (os.environ.get("NC_PRINT_BACKEND") or "1").strip().lower()
+    if flag in ("0", "false", "no", "forge"):
+        return False
+    if nc.use_forge_fallback() and flag in ("auto",):
+        return True
+    return flag not in ("0", "false", "no", "forge")
 
 
 def _api_url(path: str) -> str:
@@ -36,6 +52,7 @@ def _ssl_context() -> ssl.SSLContext:
 
 
 def forge_request(method: str, path: str, body: dict | None = None, timeout: int = 20) -> tuple[int, Any]:
+    """Legacy Forge REST. Used only when NC backend is off or fallback is forced."""
     url = _api_url(path)
     data = None
     hdrs = _headers()
@@ -62,44 +79,66 @@ def forge_request(method: str, path: str, body: dict | None = None, timeout: int
 
 
 def printer_id() -> str:
-    return (os.environ.get("FORGE_PRINTER_ID") or "k1-max").strip()
+    return nc.printer_id()
 
 
 def get_printers() -> tuple[int, Any]:
+    if _use_nc():
+        code, data = nc.get_printers()
+        if code == 200 or not nc.use_forge_fallback():
+            return code, data
     return forge_request("GET", "/api/printers")
 
 
 def get_printer_state(pid: str | None = None) -> tuple[int, Any]:
+    if _use_nc():
+        code, data = nc.get_printer_state(pid)
+        if code == 200 or not nc.use_forge_fallback():
+            return code, data
     pid = pid or printer_id()
     return forge_request("GET", f"/api/printers/{pid}/state")
 
 
 def get_telemetry(pid: str | None = None) -> tuple[int, Any]:
+    if _use_nc():
+        return nc.get_telemetry(pid)
     pid = pid or printer_id()
     return forge_request("GET", f"/api/telemetry?printer_id={pid}")
 
 
 def get_slicer_status() -> tuple[int, Any]:
+    if _use_nc():
+        code, data = nc.get_slicer_status()
+        if (isinstance(data, dict) and data.get("ok")) or not nc.use_forge_fallback():
+            return code, data
     return forge_request("GET", "/api/slicer/forge/status?force=1")
 
 
 def get_moonraker_queue(pid: str | None = None) -> tuple[int, Any]:
+    if _use_nc():
+        code, data = nc.get_moonraker_queue(pid)
+        if code == 200 or not nc.use_forge_fallback():
+            return code, data
     pid = pid or printer_id()
     return forge_request("GET", f"/api/printers/{pid}/moonraker/queue")
 
 
 def slicer_health_direct() -> tuple[int, Any]:
+    if _use_nc():
+        code, data = nc.slicer_health_direct()
+        if (isinstance(data, dict) and data.get("ok")) or not nc.use_forge_fallback():
+            return code, data
     url = "http://127.0.0.1:8766/api/health"
     req = urllib.request.Request(url, headers={"Accept": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=5) as resp:
             return resp.getcode(), json.loads(resp.read().decode())
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         return 0, {"error": str(e)}
 
 
 def normalize_print_state(state_payload: dict) -> dict[str, Any]:
-    """Extract useful fields from /state response."""
+    """Extract useful fields from /state response (NC-wrapped or Forge)."""
     out: dict[str, Any] = {
         "online": False,
         "status": "unknown",
@@ -109,6 +148,15 @@ def normalize_print_state(state_payload: dict) -> dict[str, Any]:
         "nozzle_temp": None,
     }
     if not isinstance(state_payload, dict):
+        return out
+
+    if isinstance(state_payload.get("raw"), dict):
+        raw = state_payload["raw"]
+        for k in out:
+            if k in raw:
+                out[k] = raw[k]
+        if state_payload.get("printer_id"):
+            out["online"] = bool(raw.get("online", True))
         return out
 
     print_block = state_payload.get("print") or {}
@@ -134,6 +182,9 @@ def normalize_print_state(state_payload: dict) -> dict[str, Any]:
 
 
 def summarize_status() -> str:
+    if _use_nc():
+        return nc.summarize_status()
+    # Legacy Forge formatting
     pid = printer_id()
     code_p, printers = get_printers()
     online = "offline"

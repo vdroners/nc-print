@@ -64,7 +64,7 @@ if code_p == 200 and isinstance(printers, list):
             online = str(p.get("state") or "offline").lower()
             break
 elif code_p == 0:
-    online = "forge_down"
+    online = "nc_down" if (os.environ.get("NC_PRINT_BACKEND") or "1") not in ("0", "false", "forge") else "forge_down"
 
 code_s, state_raw = get_printer_state(pid)
 st = normalize_print_state(state_raw if isinstance(state_raw, dict) else {})
@@ -109,10 +109,10 @@ else:
 alerts = []
 if force:
     alerts.append(("high", "FORGE TEST ALERT: monitor force-alert gate check"))
-elif online == "forge_down":
-    alerts.append(("high", "3DPrintForge API unreachable"))
+elif online in ("forge_down", "nc_down"):
+    alerts.append(("high", "NC Print / Moonraker unreachable"))
 elif online == "offline" and prev.get("online") == "online":
-    alerts.append(("high", f"Printer {pid} offline in Forge"))
+    alerts.append(("high", f"Printer {pid} offline (NC Print / Moonraker)"))
 elif status in ("error", "failed") and prev.get("status") not in ("error", "failed"):
     alerts.append(("high", f"Print failed on {pid}: {filename or 'unknown file'}"))
 elif status in ("cancelled",) and prev.get("status") not in ("cancelled",):
@@ -128,7 +128,7 @@ elif (
     alerts.append(("medium", f"Print may be stuck on {pid} ({filename or 'unknown'}) — no progress in {stuck_h}h"))
 elif snap.get("slicer_down_since") and (now - int(snap["slicer_down_since"])) > slicer_down_m:
     if prev.get("slicer_alert_sent_at") is None or (now - int(prev.get("slicer_alert_sent_at"))) > min_interval:
-        alerts.append(("medium", "Forge Slicer down > threshold"))
+        alerts.append(("medium", "nc-print-slicer down > threshold"))
         snap["slicer_alert_sent_at"] = now
 
 severity = "none"
@@ -172,7 +172,7 @@ if [[ "$should_post" != "1" ]]; then
   exit 0
 fi
 
-MSG="[forge] ${summary}. ${FORGE_DASHBOARD_URL:-https://forge-vdroners.ddns.net}"
+MSG="[nc_print] ${summary}. ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}"
 if [[ "$DRY" -eq 1 ]]; then
   echo "FORGE_MONITOR_DRY_RUN ${MSG}"
   echo "FORGE_MONITOR_OK"

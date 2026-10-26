@@ -26,16 +26,16 @@ case "$SUBCMD" in
   help)
     M="${OPENCLAW_AGENT_MENTION:-@alfred}"
     cat <<EOF
-[forge] Commands (read-only):
+[nc_print] Commands (read-only):
 - ${M} print status — K1 Max state, file, temps
 - ${M} print queue — Moonraker job queue
-- ${M} print slicer — Forge Slicer health
+- ${M} print slicer — nc-print-slicer health
 - ${M} print help — this message
-Dashboard: ${FORGE_DASHBOARD_URL:-https://forge-vdroners.ddns.net}
+Dashboard: ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}
 EOF
     ;;
   status)
-    python3 "${SCRIPT_DIR}/lib/forge_api.py" status
+    python3 "${SCRIPT_DIR}/lib/nc_print_api.py" status 2>/dev/null || python3 "${SCRIPT_DIR}/lib/forge_api.py" status
     ;;
   queue)
     python3 - "$SCRIPT_DIR" <<'PY'
@@ -45,13 +45,13 @@ from forge_api import get_moonraker_queue, printer_id
 code, data = get_moonraker_queue()
 name = printer_id()
 if code != 200:
-    print(f"[forge] Queue unavailable (HTTP {code}).")
+    print(f"[nc_print] Queue unavailable (HTTP {code}).")
     raise SystemExit(0)
 jobs = data.get("queue") if isinstance(data, dict) else data
 if not jobs:
-    print(f"[forge] {name} — queue empty.")
+    print(f"[nc_print] {name} — queue empty.")
 else:
-    print(f"[forge] {name} queue:")
+    print(f"[nc_print] {name} queue:")
     if isinstance(jobs, list):
         for j in jobs[:10]:
             if isinstance(j, dict):
@@ -72,11 +72,14 @@ f_code, f = get_slicer_status()
 ok_d = isinstance(d, dict) and d.get("ok")
 probe = (f.get("probe") or {}) if isinstance(f, dict) else {}
 ok_f = probe.get("ok") if isinstance(probe, dict) else f.get("ok")
+ver = ""
+if isinstance(d, dict):
+    eng = d.get("engine") if isinstance(d.get("engine"), dict) else {}
+    ver = eng.get("version") or d.get("version") or d.get("service") or ""
 if ok_d or ok_f:
-    ver = d.get("version") if isinstance(d, dict) else ""
-    print(f"[forge] Forge Slicer OK (direct={ok_d}, forge={ok_f}) {ver}".strip())
+    print(f"[nc_print] nc-print-slicer OK (direct={ok_d}, probe={ok_f}) {ver}".strip())
 else:
-    print("[forge] Forge Slicer DOWN — check: systemctl --user status forge-slicer")
+    print("[nc_print] nc-print-slicer DOWN — check: docker ps --filter name=nc-print-slicer")
 PY
     ;;
   camera)
@@ -84,6 +87,6 @@ PY
     echo "[forge] Camera snapshot: ${FORGE_DASHBOARD_URL}/#printer/${pid}"
     ;;
   *)
-    python3 "${SCRIPT_DIR}/lib/forge_api.py" status
+    python3 "${SCRIPT_DIR}/lib/nc_print_api.py" status 2>/dev/null || python3 "${SCRIPT_DIR}/lib/forge_api.py" status
     ;;
 esac
