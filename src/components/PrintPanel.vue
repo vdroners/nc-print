@@ -1,6 +1,7 @@
 <script>
 import NcPrintIcon from './NcPrintIcon.vue'
 import { loadCollapsibleState, saveCollapsibleState } from '@/utils/collapsible.js'
+import { resolvePanelOpen } from '@/utils/print-honesty.js'
 
 /**
  * Collapse + pin wrapper for a Print-tab panel. It renders a slim header strip
@@ -30,12 +31,24 @@ export default {
 		pinned: { type: Boolean, default: false },
 		/** Render nothing when false (mirrors the inner panel's self-gate). */
 		when: { type: Boolean, default: true },
+		/**
+		 * Idle machines collapse Temperature / motion / bed mesh even when
+		 * localStorage saved them open. Does not write that collapse back.
+		 */
+		forceCollapsed: { type: Boolean, default: false },
 	},
 	data() {
+		const savedOpen = loadCollapsibleState(`print-${this.id}`, this.defaultOpen)
 		return {
-			open: loadCollapsibleState(`print-${this.id}`, this.defaultOpen),
+			savedOpen,
+			open: resolvePanelOpen(savedOpen, this.forceCollapsed),
 			bodyId: `nc-print-panel-${uid++}`,
 		}
+	},
+	watch: {
+		forceCollapsed(collapsed) {
+			this.open = resolvePanelOpen(this.savedOpen, collapsed)
+		},
 	},
 	mounted() {
 		window.addEventListener('nc-print-focus-panel', this.onFocusRequest)
@@ -55,11 +68,13 @@ export default {
 		},
 		toggle() {
 			this.open = !this.open
+			this.savedOpen = this.open
 			saveCollapsibleState(`print-${this.id}`, this.open)
 		},
 		expand() {
 			if (!this.open) {
 				this.open = true
+				this.savedOpen = true
 				saveCollapsibleState(`print-${this.id}`, true)
 			}
 		},

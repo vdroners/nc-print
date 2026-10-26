@@ -51,6 +51,7 @@ import {
 	prepareChecklistProgress,
 } from '@/utils/workflow-gates.js'
 import { TABS } from '@/constants/tabs.js'
+import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
 
 // Re-exported for backward compatibility; the source of truth is the leaf
 // module @/constants/tabs.js (see that file for why).
@@ -906,16 +907,17 @@ export const usePrintStore = defineStore('print', {
 			return prepareChecklistProgress(state)
 		},
 		printStepEnabled(state) {
+			// Filename survives in Moonraker after a job stops. It is not a
+			// live job — do not OR it in here. Navigation stays
+			// (printMonitorReachable || printStepEnabled); this flag keeps
+			// slice-done, a queued upload, and an actually printing/paused
+			// machine.
+			const st = (state.printerState.state || '').toLowerCase()
 			return state.sliceJob.status === 'done'
 				|| !!state.pendingPrintUpload
-				|| state.printerState.filename
-				|| (state.printerState.state || '').toLowerCase().includes('print')
-				|| (state.printerState.state || '').toLowerCase().includes('pause')
+				|| st === 'printing'
+				|| st === 'paused'
 		},
-		// WS8: the Print tab is always a live monitor when a printer is
-		// reachable, independent of slice status. Navigation is gated on
-		// (printMonitorReachable || printStepEnabled); printStepEnabled keeps
-		// the "next step / done ✓" progress semantics only.
 		printMonitorReachable(state) {
 			return printMonitorReachable(state)
 		},
@@ -968,20 +970,8 @@ export const usePrintStore = defineStore('print', {
 					return state.model.file ? 'Ready to slice' : 'Load model first'
 				}
 				if (stepId === TABS.PRINT) {
-					if (state.printerState.filename) {
-						return state.printerState.filename
-					}
-					if (!state.printerState.connected) {
-						return 'Offline'
-					}
-					const st = (state.printerState.state || '').toLowerCase()
-					if (st.includes('print')) {
-						return 'Printing'
-					}
-					if (st.includes('pause')) {
-						return 'Paused'
-					}
-					return state.printerState.state || 'Ready'
+					// Machine state before any leftover gcode filename.
+					return printWorkflowSubtitle(state.printerState)
 				}
 				return ''
 			}

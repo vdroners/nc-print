@@ -25,6 +25,8 @@ vi.mock('@/services/mesh-convert.js', async (importOriginal) => {
 })
 
 import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
+import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
 import { pausePrint, resumePrint, cancelPrint, fetchState } from '@/services/moonraker-api.js'
 import { toastError } from '@/services/toast.js'
 
@@ -74,5 +76,41 @@ describe('print store shared print controls', () => {
 		expect(ok).toBe(false)
 		expect(toastError).toHaveBeenCalled()
 		expect(store.printControlBusy).toBe(false)
+	})
+
+	it('print subtitle delegates to machine state, not a leftover filename', () => {
+		const store = usePrintStore()
+		Object.assign(store.printerState, {
+			connected: true,
+			state: 'error',
+			filename: 'door.gcode',
+			progress: 0.4,
+		})
+		expect(store.workflowStepSubtitle(TABS.PRINT)).toBe('Error')
+		expect(store.workflowStepSubtitle(TABS.PRINT)).toBe(printWorkflowSubtitle(store.printerState))
+	})
+
+	it('printStepEnabled ignores a leftover filename', () => {
+		const store = usePrintStore()
+		store.printerState.filename = 'door.gcode'
+		store.printerState.state = 'standby'
+		store.printerState.connected = true
+		store.sliceJob.status = 'idle'
+		store.pendingPrintUpload = null
+		expect(store.printStepEnabled).toBe(false)
+
+		store.sliceJob.status = 'done'
+		expect(store.printStepEnabled).toBe(true)
+
+		store.sliceJob.status = 'idle'
+		store.pendingPrintUpload = { blob: new Blob(['x']), filename: 'job.gcode' }
+		expect(store.printStepEnabled).toBe(true)
+
+		store.pendingPrintUpload = null
+		store.printerState.state = 'printing'
+		expect(store.printStepEnabled).toBe(true)
+
+		store.printerState.state = 'paused'
+		expect(store.printStepEnabled).toBe(true)
 	})
 })

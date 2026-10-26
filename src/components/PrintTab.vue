@@ -9,6 +9,14 @@ import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
+import {
+	formatProgressPercent,
+	lastJobMessage,
+	panelForceCollapsed as panelShouldForceCollapse,
+	showIdlePrintGuide,
+	showLastJobCard,
+	showLivePrintControls,
+} from '@/utils/print-honesty.js'
 import WorkspaceRail from './WorkspaceRail.vue'
 import PrintStatusBar from './PrintStatusBar.vue'
 import PrintPanel from './PrintPanel.vue'
@@ -121,7 +129,6 @@ export default {
 		return {
 			uploadBusy: false,
 			startAfterUpload: true,
-			cancelConfirmOpen: false,
 			cameraFullscreen: false,
 			pinned: loadPinned(),
 			// Live visibility reported by self-gating panels (reports: true).
@@ -151,15 +158,18 @@ export default {
 				&& (this.printStore.printerState.state || '').toLowerCase() === 'reconnecting'
 		},
 		showIdleGuide() {
-			return this.printStore.printerState.connected
-				&& !this.controls.isActive
-				&& !this.printStore.printerState.filename
-				&& !this.controls.isComplete
+			return showIdlePrintGuide(this.printStore.printerState, this.controls)
 		},
+		/** Live stat card. Pause / Resume / Cancel live on the sticky bar only. */
 		showPrintControl() {
-			return this.printStore.printerState.connected
-				&& (this.controls.isActive || this.printStore.printerState.filename)
-				&& !this.controls.isComplete
+			return showLivePrintControls(this.controls)
+		},
+		/** Leftover filename while the machine is not printing or paused. */
+		showLastJob() {
+			return showLastJobCard(this.printStore.printerState, this.controls)
+		},
+		lastJobDetail() {
+			return lastJobMessage(this.printStore.printerState)
 		},
 		elapsedLabel() {
 			const d = this.printStore.printerState.printDuration
@@ -200,11 +210,7 @@ export default {
 			return this.printStore.printerProgressSource === 'ws' ? 'Live (WebSocket)' : 'Polling'
 		},
 		progressPercentLabel() {
-			const pct = this.printStore.printerState.progress * 100
-			if (pct > 0 && pct < 1) {
-				return `${pct.toFixed(1)}%`
-			}
-			return `${Math.round(pct)}%`
+			return formatProgressPercent(this.printStore.printerState.progress)
 		},
 		layerStatValue() {
 			const layer = this.printStore.printerState.layer
@@ -253,13 +259,16 @@ export default {
 			)
 		},
 		cameraPlaceholderText() {
-			if (!this.streamUrl) {
-				return 'No camera URL configured — set webcam URL in NC Print settings.'
-			}
+			// Empty, failed, or not-yet-painted frames all say "No stream".
+			// A configured-but-dead URL may add the failure after that.
 			if (this.cameraError) {
-				return this.cameraErrorMessage || 'Camera unavailable'
+				const detail = this.cameraErrorMessage || 'Camera stream unavailable'
+				return `No stream — ${detail}`
 			}
-			return 'Loading camera…'
+			if (!this.streamUrl) {
+				return 'No stream — set a webcam URL in NC Print settings.'
+			}
+			return 'No stream'
 		},
 		/**
 		 * Every panel, resolved to a `visible` flag:
@@ -352,21 +361,13 @@ export default {
 		goPrepare() {
 			this.printStore.setActiveTab(TABS.PREPARE)
 		},
-		onPause() {
-			return this.printStore.printPause()
+		panelForceCollapsed(panel) {
+			return panelShouldForceCollapse(panel.id, this.controls.isActive)
 		},
-		onResume() {
-			return this.printStore.printResume()
-		},
-		openCancelConfirm() {
-			this.cancelConfirmOpen = true
-		},
-		closeCancelConfirm() {
-			this.cancelConfirmOpen = false
-		},
-		onCancelConfirmed() {
-			this.cancelConfirmOpen = false
-			return this.printStore.printCancel()
+		onCameraClick() {
+			if (this.cameraFrameReady && !this.cameraError) {
+				this.openCameraFullscreen()
+			}
 		},
 		onGcodeInput(e) {
 			const file = e.target.files?.[0]
@@ -422,8 +423,6 @@ export default {
 
 <template>
 	<WorkspaceRail class="nc-print-print-tab">
-		<PrintStatusBar />
-
 		<MultiPrinterPicker />
 
 		<UpdateStatusBanner />
@@ -472,6 +471,40 @@ export default {
 				</button>
 				<ReopenMenu />
 			</div>
+		</div>
+
+		<div v-if="showLastJob" class="nc-print-card" data-last-job-card>
+			<div class="nc-print-card__header">
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="printer" :size="18" />
+						Last job
+					</span>
+				</h2>
+			</div>
+			<div class="nc-print-print-jobhead">
+				<GcodeThumbnail :filename="printStore.printerState.filename" :size="72" />
+				<p class="nc-print-print-meta">
+					<strong>{{ printStore.printerState.filename }}</strong>
+				</p>
+			</div>
+			<div class="nc-print-stat-grid">
+				<div class="nc-print-stat">
+					<span class="nc-print-stat__label">Progress</span>
+					<span class="nc-print-stat__value">{{ progressPercentLabel }}</span>
+				</div>
+				<div v-if="layerStatValue" class="nc-print-stat">
+					<span class="nc-print-stat__label">Stopped at</span>
+					<span class="nc-print-stat__value">Layer {{ layerStatValue }}</span>
+				</div>
+				<div v-if="elapsedLabel" class="nc-print-stat">
+					<span class="nc-print-stat__label">Duration</span>
+					<span class="nc-print-stat__value">{{ elapsedLabel }}</span>
+				</div>
+			</div>
+			<p v-if="lastJobDetail" class="nc-print-print-meta">
+				{{ lastJobDetail }}
+			</p>
 		</div>
 
 		<div v-if="showPrintControl" class="nc-print-card" data-print-control-card>
@@ -537,37 +570,10 @@ export default {
 				</div>
 			</div>
 
-			<div v-if="controls.isActive" class="nc-print-progress">
+			<div class="nc-print-progress">
 				<div
 					class="nc-print-progress__bar"
 					:style="{ width: (printStore.printerState.progress * 100) + '%' }" />
-			</div>
-
-			<div class="nc-print-actions">
-				<button
-					type="button"
-					class="nc-print-btn"
-					:disabled="printStore.printControlBusy || !controls.canPause"
-					@click="onPause">
-					<NcPrintIcon name="pause" :size="14" />
-					Pause
-				</button>
-				<button
-					type="button"
-					class="nc-print-btn nc-print-btn--primary"
-					:disabled="printStore.printControlBusy || !controls.canResume"
-					@click="onResume">
-					<NcPrintIcon name="play" :size="14" />
-					Resume
-				</button>
-				<button
-					type="button"
-					class="nc-print-btn nc-print-btn--danger"
-					:disabled="printStore.printControlBusy || !controls.canCancel"
-					@click="openCancelConfirm">
-					<NcPrintIcon name="stop" :size="14" />
-					Cancel
-				</button>
 			</div>
 		</div>
 
@@ -583,6 +589,7 @@ export default {
 				:title="p.title"
 				:icon="p.icon"
 				:default-open="p.open"
+				:force-collapsed="panelForceCollapsed(p)"
 				:pinned="true"
 				:when="p.visible"
 				@toggle-pin="onTogglePin">
@@ -609,6 +616,7 @@ export default {
 				:title="p.title"
 				:icon="p.icon"
 				:default-open="p.open"
+				:force-collapsed="panelForceCollapsed(p)"
 				:pinned="false"
 				:when="p.visible"
 				@toggle-pin="onTogglePin">
@@ -643,24 +651,14 @@ export default {
 			</div>
 		</div>
 
-		<EmergencyStopButton />
-
-		<div v-if="cancelConfirmOpen" class="nc-print-dialog-backdrop" role="alertdialog" aria-labelledby="nc-print-cancel-title">
-			<div class="nc-print-dialog">
-				<h3 id="nc-print-cancel-title">Cancel print?</h3>
-				<p>This will stop the current job on the printer. The partial print may need to be removed from the bed.</p>
-				<div class="nc-print-actions">
-					<button type="button" class="nc-print-btn" @click="closeCancelConfirm">
-						Keep printing
-					</button>
-					<button type="button" class="nc-print-btn nc-print-btn--danger" @click="onCancelConfirmed">
-						Cancel print
-					</button>
-				</div>
-			</div>
-		</div>
-
-		<template #rail>
+		<template #monitor>
+			<PrintStatusBar />
+			<p v-if="showLastJob" class="nc-print-monitor-last" data-last-job-summary>
+				<span class="nc-print-monitor-last__kicker">Last job</span>
+				<span class="nc-print-monitor-last__name" :title="printStore.printerState.filename">{{ printStore.printerState.filename }}</span>
+				<span class="nc-print-monitor-last__pct">{{ progressPercentLabel }}</span>
+				<span v-if="layerStatValue" class="nc-print-monitor-last__where">Layer {{ layerStatValue }}</span>
+			</p>
 			<div class="nc-print-card">
 				<div class="nc-print-card__header">
 					<h2 class="nc-print-card__title">
@@ -670,7 +668,7 @@ export default {
 						</span>
 					</h2>
 					<button
-						v-if="cameraFrameUrl && !cameraError"
+						v-if="cameraFrameReady && !cameraError"
 						type="button"
 						class="nc-print-btn nc-print-btn--sm"
 						title="Fullscreen camera"
@@ -681,12 +679,14 @@ export default {
 				</div>
 				<div class="nc-print-camera-panel">
 					<img
-						v-if="cameraFrameUrl && !cameraError"
+						v-if="cameraFrameUrl"
+						:class="{ 'nc-print-camera-panel__frame--pending': !cameraFrameReady || cameraError }"
 						:src="cameraFrameUrl"
 						alt="Printer camera stream"
+						@load="onCameraLoad"
 						@error="onCameraError"
-						@click="openCameraFullscreen">
-					<div v-else class="nc-print-camera-placeholder">
+						@click="onCameraClick">
+					<div v-if="!cameraFrameReady || cameraError" class="nc-print-camera-placeholder">
 						<p>{{ cameraPlaceholderText }}</p>
 						<button v-if="cameraError && streamUrl" type="button" class="nc-print-btn" @click="retryCamera">
 							Retry camera
@@ -694,7 +694,10 @@ export default {
 					</div>
 				</div>
 			</div>
+			<EmergencyStopButton />
+		</template>
 
+		<template #rail>
 			<JobHistoryPanel compact :limit="5" />
 		</template>
 
@@ -713,7 +716,7 @@ export default {
 					Close
 				</button>
 				<img
-					v-if="cameraFrameUrl && !cameraError"
+					v-if="cameraFrameReady && cameraFrameUrl && !cameraError"
 					:src="cameraFrameUrl"
 					alt="Printer camera stream (fullscreen)"
 					@error="onCameraError">
@@ -768,34 +771,45 @@ export default {
 	gap: 6px;
 }
 
-.nc-print-dialog-backdrop {
+.nc-print-monitor-last {
 	align-items: center;
-	background: rgba(0, 0, 0, 0.45);
-	display: flex;
-	inset: 0;
-	justify-content: center;
-	padding: 16px;
-	position: fixed;
-	z-index: 9999;
-}
-
-.nc-print-dialog {
-	background: var(--nc-gcs-bg-surface);
+	background: var(--nc-gcs-surface, var(--color-main-background));
 	border: 1px solid var(--nc-gcs-border);
-	border-radius: var(--nc-gcs-radius);
-	max-width: 420px;
-	padding: var(--nc-gcs-space-lg);
-	width: 100%;
+	border-radius: var(--nc-gcs-radius, 8px);
+	display: flex;
+	gap: 8px;
+	margin: 0;
+	min-width: 0;
+	padding: 8px 12px;
 }
 
-.nc-print-dialog h3 {
-	margin: 0 0 8px;
+.nc-print-monitor-last__kicker {
+	color: var(--nc-gcs-text-muted);
+	flex: 0 0 auto;
+	font-size: 11px;
+	font-weight: 700;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
 }
 
-.nc-print-dialog p {
-	color: var(--nc-gcs-text-secondary);
+.nc-print-monitor-last__name {
+	font-weight: 600;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.nc-print-monitor-last__pct {
+	flex: 0 0 auto;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+}
+
+.nc-print-monitor-last__where {
+	color: var(--nc-gcs-text-muted);
+	flex: 0 0 auto;
 	font-size: var(--nc-gcs-text-sm);
-	margin: 0 0 16px;
 }
 
 .nc-print-camera-placeholder p {
@@ -804,6 +818,14 @@ export default {
 
 .nc-print-camera-panel img {
 	cursor: zoom-in;
+}
+
+/* At the single-column reflow the camera would otherwise be full-bleed 16:9
+   and push E-STOP below the fold. Cap it so progress, camera, and E-STOP fit. */
+@media (max-width: 1200px) {
+	.nc-print-camera-panel {
+		max-height: min(40vh, 280px);
+	}
 }
 
 .nc-print-camera-fullscreen {

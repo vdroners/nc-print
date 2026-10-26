@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
+import { formatProgressPercent, showLivePrintControls } from '@/utils/print-honesty.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
 /**
@@ -11,8 +12,10 @@ import NcPrintIcon from './NcPrintIcon.vue'
  * IntersectionObserver: while the card is on-screen the bar collapses to a slim
  * one-liner (filename + % + controls); once the card scrolls off it expands to
  * add ETA. The full progress bar lives only on the control card — not repeated
- * here. Controls delegate to the shared store actions (single source of truth
- * with the control card + command palette). Idle → renders nothing.
+ * here. This is the only Pause / Resume / Cancel row — the detail card
+ * below keeps stats and does not repeat the buttons. Live only while
+ * printerControls.isActive (printing | paused). A leftover filename is not
+ * a job. Idle / error / standby → renders nothing.
  */
 export default {
 	name: 'PrintStatusBar',
@@ -31,10 +34,7 @@ export default {
 			return this.printStore.printerControls
 		},
 		visible() {
-			const st = this.printStore.printerState
-			return st.connected
-				&& (this.controls.isActive || !!st.filename)
-				&& !this.controls.isComplete
+			return showLivePrintControls(this.controls)
 		},
 		filename() {
 			return this.printStore.printerState.filename || 'Print job'
@@ -42,12 +42,8 @@ export default {
 		paused() {
 			return (this.printStore.printerState.state || '').toLowerCase() === 'paused'
 		},
-		pct() {
-			const p = (this.printStore.printerState.progress || 0) * 100
-			return Math.max(0, Math.min(100, p))
-		},
 		pctLabel() {
-			return this.pct > 0 && this.pct < 1 ? `${this.pct.toFixed(1)}%` : `${Math.round(this.pct)}%`
+			return formatProgressPercent(this.printStore.printerState.progress)
 		},
 		etaLabel() {
 			const remaining = this.printStore.remainingPrintSeconds
@@ -152,11 +148,11 @@ export default {
 	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm, 8px);
 	padding: 8px 12px;
-	position: sticky;
-	/* Stick BELOW the chrome/workflow bar (which is sticky top:0 z-index:3), not
-	   over it — same pattern as WorkspaceRail. */
-	top: var(--nc-print-chrome-h, 0px);
-	z-index: 2;
+	/* Stickiness lives on the monitor cluster (WorkspaceRail), which already
+	   sits below the chrome bar. A sticky bar here would double-offset and
+	   cover the camera while the side column scrolls. */
+	position: relative;
+	z-index: 1;
 }
 
 .nc-print-statusbar__info {
