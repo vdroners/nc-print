@@ -235,7 +235,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         body = self.rfile.read(length)
         secret = _load_secret()
-        sig = self.headers.get("X-Webhook-Signature")
+        sig = self.headers.get("X-Webhook-Signature") or self.headers.get("X-Hub-Signature-256")
         if not _verify_hmac(body, sig, secret):
             _log("rejected unsigned/invalid webhook")
             self._json(401, {"error": "invalid signature"})

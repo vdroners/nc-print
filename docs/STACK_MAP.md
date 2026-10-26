@@ -1,6 +1,6 @@
-# NC Print + 3DPrintForge — stack map
+# NC Print stack map
 
-Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-08-21**.
+Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-10-26**.
 
 ## What to build
 
@@ -9,9 +9,20 @@ Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-08
 | **Nextcloud app (primary)** | `/media/4TB/nc-print` — app id `nc_print`, product name **NC 3D Print** |
 | Deploy target | `cloud_app:/var/www/html/custom_apps/nc_print/` |
 | Owned slicer sidecar | `/media/4TB/nc-print/slicer/` + `docker-compose.slicer.yml` |
-| Engine source of truth | `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/` (`ENGINE_SRC`) |
-| Forge Studio (parallel UI) | `/media/4TB/3dprintforge` |
+| Engine source of truth | `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/` (`ENGINE_SRC`) — **keep-engine** (slim tree retained after Forge UI retirement; do not delete) |
 | Shared STL/3MF library | `/media/4TB/3dprints` |
+
+## Retired (2026-10-26, Sarge OK)
+
+| Item | Status |
+|------|--------|
+| Forge Studio UI `:3040` (`3dprintforge` compose) | **Stopped** — `docker compose down` in `/media/4TB/3dprintforge` |
+| Host `forge-slicer` `:8766` + `forge-slicer-docker-relay` | **Stopped + disabled** (user systemd) |
+| CPM host `forge-vdroners.ddns.net` → `:3040` | **Disabled** in CPM DB (`proxy_hosts.id=8`) + routes removed from live Caddy |
+| Alfred `alfred-cron-forge-print-monitor.timer` | **Stopped + disabled** — Alfred must run NC Print monitor path |
+| `forge-webhook-relay` (`:8790`, alfred-vdroners) | **Kept running** — NC outbound HMAC webhooks still use this relay |
+| `/media/4TB/3dprintforge` tree (ENGINE_SRC under `slicer/`) | **Kept on disk** for `make slicer-fetch` / rollback — UI compose not started |
+| `/media/4TB/3dprints` | **Untouched** |
 
 ## Runtime topology
 
@@ -22,13 +33,12 @@ Browser ──▶ Nextcloud :8080 (cloud_app / nc_print)
                │                                   └─ /opt/orca/3dprintforge-slicer
                └─ MoonrakerProxy ──▶ printer (e.g. 10.0.0.210:7125)
 
-Browser ──▶ Forge Studio :3040 (3dprintforge, host network)
-               └─ FORGE_SLICER_URL ──▶ host forge-slicer :8766
-                    (same binary tree under /media/4TB/3dprintforge/slicer/)
+Alfred / Talk ──▶ forge-webhook-relay :8790 (CPM alfred-vdroners)
+                    └─ consumes NC Print outbound HMAC webhooks
 ```
 
 NC Print does **not** need Forge Studio or host `:8766` for in-browser slice.
-Forge Studio does **not** use `nc-print-slicer`.
+Forge Studio is retired; do not `docker compose up` it without a new Sarge order.
 
 ## Day-to-day commands
 
@@ -37,13 +47,12 @@ Forge Studio does **not** use `nc-print-slicer`.
 make build
 make ship              # build + slicer-up + deploy + gates
 make ship RESTART=1    # when adding PHP routes/classes
-make slicer-fetch      # refresh engine from ENGINE_SRC
+make slicer-fetch      # refresh engine from ENGINE_SRC (kept under 3dprintforge/slicer/)
 make deploy            # frontend + copy into cloud_app
 
-# Forge Studio — from /media/4TB/3dprintforge
-docker compose build && docker compose up -d
-systemctl --user status forge-slicer
-curl -sf http://127.0.0.1:8766/api/health
+# Retired Forge Studio — DO NOT start unless Sarge orders
+# cd /media/4TB/3dprintforge && docker compose up -d
+# systemctl --user start forge-slicer
 ```
 
 ## Health checks
@@ -51,10 +60,10 @@ curl -sf http://127.0.0.1:8766/api/health
 ```bash
 docker exec cloud_app grep '<version>' /var/www/html/custom_apps/nc_print/appinfo/info.xml
 docker exec cloud_app curl -sS http://nc-print-slicer:8080/api/health
-curl -skI https://127.0.0.1:3040/login.html
-curl -sf http://127.0.0.1:8766/api/health
-docker ps --filter name=nc-print-slicer --filter name=3dprintforge --filter name=cloud_app
-# K1 Max (ssh alias k1-max)
+docker ps --filter name=nc-print-slicer --filter name=cloud_app --filter name=forge-webhook-relay
+# Confirm retired listeners are down:
+ss -ltnp | grep -E ':3040|:8766' || echo '3040/8766 down OK'
+# K1 Max
 curl -sf http://10.0.0.210:7125/server/info
 curl -sf -o /tmp/cam.jpg 'http://10.0.0.210:8080/?action=snapshot' && file /tmp/cam.jpg
 ssh k1-max 'pidof moonraker.py mjpg_streamer cam_app'
@@ -65,7 +74,7 @@ ssh k1-max 'pidof moonraker.py mjpg_streamer cam_app'
 | Item | Value |
 |------|-------|
 | Hostname | `K1Max-Printy-Baby` |
-| Moonraker | `:7125` (required for NC Print / Forge) |
+| Moonraker | `:7125` (required for NC Print) |
 | Camera | `:8080` via `cam_app` → `mjpg_streamer` (`input_memfd`) |
 | Stock UI | `:80` |
 | SSH | `ssh k1-max` (ECDSA; Dropbear) |
@@ -77,7 +86,5 @@ ssh k1-max 'pidof moonraker.py mjpg_streamer cam_app'
 - Workflow: [`CLAUDE.md`](../CLAUDE.md)
 - Architecture: [`ARCHITECTURE.md`](ARCHITECTURE.md)
 - Admin / slicer URL: [`ADMIN.md`](ADMIN.md)
+- Forge → NC Print port plan (incl. Wave 8 retirement): [`plans/forge-port.md`](plans/forge-port.md)
 - First-print UX plan: [`plans/first-print-ux-2026-08.md`](plans/first-print-ux-2026-08.md)
-- Forge update: `/media/4TB/3dprintforge/docs/UPDATE.md`
-- Forge pins: `/media/4TB/3dprintforge/docs/VERSIONS.md`
-- Printer verify: `/media/4TB/3dprintforge/docs/PRINTER-VERIFY.md`

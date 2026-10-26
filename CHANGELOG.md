@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.63.1] - 2026-10-26
+
+### Changed
+- Retired 3DPrintForge Studio from the lab stack (Sarge Wave 8): Forge UI `:3040` and host forge-slicer `:8766` stopped/disabled; CPM `forge-vdroners` disabled. NC Print + `nc-print-slicer` remain primary.
+- **ENGINE_SRC keep-engine:** `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/` retained for `make slicer-fetch` (tree not deleted).
+- `forge-webhook-relay` kept for NC outbound HMAC → Alfred Talk (`alfred-vdroners`).
+- Docs: `docs/STACK_MAP.md` and `docs/plans/forge-port.md` Wave 8 checklist updated.
+
 ## [1.63.0] - 2026-10-25
 
 ### Added
