@@ -17,6 +17,8 @@ const overview = read('../components/OverviewTab.vue')
 const slice = read('../components/SliceTab.vue')
 const print = read('../components/PrintTab.vue')
 const prepare = read('../components/PrepareTab.vue')
+const modal = read('../components/PrePrintModal.vue')
+const picker = read('../components/TargetPrinterPicker.vue')
 
 describe('Overview tab (v1.55.0)', () => {
 	it('tabs.js defines an OVERVIEW constant', () => {
@@ -68,13 +70,34 @@ describe('Overview tab (v1.55.0)', () => {
 	it('relocations: Print no longer imports History/PrintHistory but keeps live panels', () => {
 		expect(print).not.toMatch(/import HistoryPanel/)
 		expect(print).not.toMatch(/import PrintHistoryPanel/)
-		// Live panels stay.
-		expect(print).toMatch(/MultiPrinterPicker/)
+		// Live panels stay. The fleet Scan/IP picker does not — Print shows
+		// the printer name and status only.
+		expect(print).not.toMatch(/MultiPrinterPicker/)
+		expect(print).not.toMatch(/TargetPrinterPicker/)
+		expect(print).not.toMatch(/Scan for printers/)
+		expect(print).not.toMatch(/Connect by IP/)
+		expect(print).toMatch(/PrinterConnectionStatus/)
 		expect(print).toMatch(/JobHistoryPanel/)
 		expect(print).toMatch(/WebcamListPanel/) // dual-hosted
 	})
 
-	it('Prepare keeps its in-flow TargetPrinterPicker (workflow gate)', () => {
-		expect(prepare).toMatch(/TargetPrinterPicker/)
+	it('Prepare shows printer name and status, not the fleet picker', () => {
+		expect(prepare).not.toMatch(/TargetPrinterPicker/)
+		expect(prepare).not.toMatch(/Scan for printers/)
+		expect(prepare).not.toMatch(/Connect by IP/)
+		expect(prepare).toMatch(/PrinterConnectionStatus/)
+	})
+
+	it('Overview fleet still has the full Scan / IP picker', () => {
+		expect(overview).toMatch(/<TargetPrinterPicker/)
+		expect(overview).not.toMatch(/show-scan="false"/)
+		expect(picker).toMatch(/Scan for printers/)
+		expect(picker).toMatch(/Connect by IP/)
+	})
+
+	it('Pre-print modal still changes the target without a scan button', () => {
+		expect(modal).toMatch(/TargetPrinterPicker/)
+		expect(modal).toMatch(/variant="modal"/)
+		expect(modal).toMatch(/:show-scan="false"/)
 	})
 })

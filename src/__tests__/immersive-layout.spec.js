@@ -10,6 +10,7 @@ import { fileURLToPath } from 'node:url'
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
 const layout = read('../components/PrepareStudioLayout.vue')
 const prepare = read('../components/PrepareTab.vue')
+const modelViewport = read('../components/ModelViewport.vue')
 const slice = read('../components/SliceTab.vue')
 const toolpath = read('../components/Toolpath3D.vue')
 const historyBox = read('../components/ViewportHistoryBox.vue')
@@ -99,6 +100,12 @@ describe('Prepare controls overhaul (v1.54.0)', () => {
 		expect(prepare).toMatch(/Import STL\/3MF\/OBJ/)
 		// The old floating center import cluster is gone.
 		expect(prepare).not.toMatch(/nc-print-import-cluster/)
+		// Empty bed has the same primary Import control, wired to the rail picker.
+		expect(modelViewport).toMatch(/Import STL\/3MF\/OBJ/)
+		expect(modelViewport).toMatch(/import-model/)
+		expect(modelViewport).toMatch(/pointer-events:\s*auto/)
+		expect(modelViewport).toMatch(/setModel\(file, 'drop'\)/)
+		expect(prepare).toMatch(/@import-model="triggerImport"/)
 	})
 
 	it('history box (undo/redo/reset) is docked top-right in immersive', () => {

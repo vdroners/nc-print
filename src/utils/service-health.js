@@ -44,7 +44,7 @@ export function buildRecoveryCards(status = {}, ctx = {}) {
 	if (status.loaded && status.moonraker_enabled && status.moonraker_configured === false && !hasTarget) {
 		cards.push({
 			kind: 'moonraker_setup',
-			detail: 'Scan for printers on Prepare and click Use, or set a Moonraker URL in Admin.',
+			detail: 'Scan for printers on Overview (Printer fleet) and click Use, or set a Moonraker URL in Admin.',
 		})
 	} else if (status.loaded && status.moonraker_enabled && !status.moonraker_ok && !targetLive) {
 		cards.push({ kind: 'moonraker_offline', detail: status.moonraker_error || '' })

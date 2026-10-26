@@ -12,7 +12,7 @@ import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
 import WorkspaceRail from './WorkspaceRail.vue'
 import PrintStatusBar from './PrintStatusBar.vue'
 import PrintPanel from './PrintPanel.vue'
-import MultiPrinterPicker from './MultiPrinterPicker.vue'
+import PrinterConnectionStatus from './PrinterConnectionStatus.vue'
 import TemperatureControl from './TemperatureControl.vue'
 import InPrintTuningPanel from './InPrintTuningPanel.vue'
 import ManualMotionPanel from './ManualMotionPanel.vue'
@@ -93,7 +93,7 @@ export default {
 		WorkspaceRail,
 		PrintStatusBar,
 		PrintPanel,
-		MultiPrinterPicker,
+		PrinterConnectionStatus,
 		TemperatureControl,
 		InPrintTuningPanel,
 		ManualMotionPanel,
@@ -424,7 +424,7 @@ export default {
 	<WorkspaceRail class="nc-print-print-tab">
 		<PrintStatusBar />
 
-		<MultiPrinterPicker />
+		<PrinterConnectionStatus />
 
 		<UpdateStatusBanner />
 		<UpdateControlPanel />

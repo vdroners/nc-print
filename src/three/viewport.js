@@ -4,6 +4,7 @@
  */
 import { colorForSpeed } from '@/services/toolpath-3d.js'
 import { normalizeZone, rectInAnyZone } from '@/utils/bed-zones.js'
+import { bedGuidePositions, emptyBedFrame, plateClipPlanes } from '@/three/bed-guides.js'
 
 let _threePromise = null
 
@@ -401,8 +402,12 @@ export async function createViewport(canvas, wrap) {
 			controls.target.copy(center)
 		} else {
 			const [bx, by, bz] = bedVolume
-			controls.target.set(bx / 2, by / 2, bz / 4)
-			camera.position.set(bx + 100, by + 100, bz + 60)
+			const frame = emptyBedFrame(bx, by, bz, {
+				aspect: camera.aspect,
+				fovDeg: camera.fov,
+			})
+			controls.target.set(frame.target[0], frame.target[1], frame.target[2])
+			camera.position.set(frame.position[0], frame.position[1], frame.position[2])
 		}
 		camera.lookAt(controls.target)
 		controls.update()
@@ -414,29 +419,65 @@ export async function createViewport(canvas, wrap) {
 		}
 	}
 
+	function disposeObject3D(obj) {
+		if (!obj) {
+			return
+		}
+		scene.remove(obj)
+		obj.traverse((child) => {
+			child.geometry?.dispose?.()
+			const mats = child.material
+			if (Array.isArray(mats)) {
+				mats.forEach((m) => m.dispose?.())
+			} else {
+				mats?.dispose?.()
+			}
+		})
+	}
+
+	// Clip grid + volume edges to the plate rectangle so a non-square bed
+	// cannot draw axis lines past the plate (those used to run off the top
+	// of the viewport). The volume cage stays full height; only XY is clipped.
+	function bedClipPlanes(bx, by) {
+		return plateClipPlanes(bx, by).map((p) => new THREE.Plane(
+			new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]),
+			p.constant,
+		))
+	}
+
+	function lineSegmentsFromPositions(positions, material) {
+		const geo = new THREE.BufferGeometry()
+		geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+		return new THREE.LineSegments(geo, material)
+	}
+
 	function drawBed(volume) {
 		bedVolume = volume
-		if (bedHelper) {
-			scene.remove(bedHelper)
-			bedHelper = null
-		}
+		disposeObject3D(bedHelper)
+		bedHelper = null
 		const [bx, by, bz] = volume
+		const { grid, edges } = bedGuidePositions(bx, by, bz)
+		const clip = bedClipPlanes(bx, by)
+		renderer.localClippingEnabled = true
 		const group = new THREE.Group()
-		const boxGeo = new THREE.BoxGeometry(bx, by, bz)
-		const edges = new THREE.EdgesGeometry(boxGeo)
-		const lines = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0xfacc15 }))
-		lines.position.set(bx / 2, by / 2, bz / 2)
-		group.add(lines)
+		if (edges.length) {
+			group.add(lineSegmentsFromPositions(edges, new THREE.LineBasicMaterial({
+				color: 0xfacc15,
+				clippingPlanes: clip,
+			})))
+		}
 		const plate = new THREE.Mesh(
 			new THREE.PlaneGeometry(bx, by),
 			new THREE.MeshBasicMaterial({ color: 0x3b3b3b, transparent: true, opacity: 0.4, side: THREE.DoubleSide }),
 		)
 		plate.position.set(bx / 2, by / 2, 0)
 		group.add(plate)
-		const grid = new THREE.GridHelper(Math.max(bx, by), Math.floor(Math.max(bx, by) / 10), 0x4b5563, 0x2a2f3a)
-		grid.rotation.x = Math.PI / 2
-		grid.position.set(bx / 2, by / 2, 0.01)
-		group.add(grid)
+		if (grid.length) {
+			group.add(lineSegmentsFromPositions(grid, new THREE.LineBasicMaterial({
+				color: 0x4b5563,
+				clippingPlanes: clip,
+			})))
+		}
 		scene.add(group)
 		bedHelper = group
 		updateBedVisibility()
