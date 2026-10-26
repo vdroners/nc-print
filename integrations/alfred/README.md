@@ -1,8 +1,13 @@
-# Alfred forge integration
+# Alfred NC Print integration
 
 Host-side glue that lets Alfred (the OpenClaw agent) watch and answer for the
-K1 Max through 3DPrintForge. This is **not** part of the Nextcloud app: it is
-excluded from `make deploy` and the appstore tarball.
+K1 Max through **NC 3D Print** / Moonraker (Forge Studio is optional fallback).
+This is **not** part of the Nextcloud app: it is excluded from `make deploy`
+and the appstore tarball.
+
+Backend default (Wave 1+): Moonraker at `NC_PRINT_MOONRAKER_URL` +
+`nc-print-slicer` health. Set `NC_PRINT_USE_FORGE_FALLBACK=1` to keep Forge
+`:3040` / `:8766` as backup until Waves 2–3 finish cutover.
 
 Moved here from `openclaw-skylight` on 2026-09-28
 (plan: `openclaw-skylight/docs/plans/repo-split-2026-09.md`).

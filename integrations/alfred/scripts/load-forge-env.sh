@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Load 3DPrintForge / Alfred forge integration env.
+# Load NC Print / Alfred forge-port integration env (NC-first, Forge aliases).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -7,6 +7,7 @@ OPENCLAW_DIR="${OPENCLAW_DIR:-$HOME/.openclaw}"
 ROOT="${OPENCLAW_SKYLIGHT_ROOT:-}"
 
 _preserve_enabled="${FORGE_ENABLED-__unset__}"
+_preserve_nc="${NC_PRINT_ENABLED-__unset__}"
 
 if [[ -z "$ROOT" && -d "${SCRIPT_DIR}/../config" ]]; then
   ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
@@ -29,22 +30,46 @@ _read_secret() {
 }
 
 export OPENCLAW_DIR
-export FORGE_ENABLED="${FORGE_ENABLED:-0}"
+
+# Master enable: NC_PRINT_ENABLED preferred; FORGE_ENABLED still accepted.
+export NC_PRINT_ENABLED="${NC_PRINT_ENABLED:-${FORGE_ENABLED:-0}}"
+export FORGE_ENABLED="${FORGE_ENABLED:-$NC_PRINT_ENABLED}"
+
+# Backend: nc (default) | forge. NC_PRINT_BACKEND=1 means NC Moonraker path.
+export NC_PRINT_BACKEND="${NC_PRINT_BACKEND:-1}"
+export NC_PRINT_USE_FORGE_FALLBACK="${NC_PRINT_USE_FORGE_FALLBACK:-0}"
+
+export NC_PRINT_MOONRAKER_URL="${NC_PRINT_MOONRAKER_URL:-${FORGE_MOONRAKER_URL:-http://10.0.0.210:7125}}"
+export NC_PRINT_PRINTER_ID="${NC_PRINT_PRINTER_ID:-${FORGE_PRINTER_ID:-k1-max}}"
+export NC_PRINT_PRINTER_NAME="${NC_PRINT_PRINTER_NAME:-K1Max-Printy-Baby}"
+export NC_PRINT_DASHBOARD_URL="${NC_PRINT_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}"
+export NC_PRINT_SLICER_URL="${NC_PRINT_SLICER_URL:-}"
+
+# Legacy Forge keys (fallback / webhook relay still uses some)
 export FORGE_API_URL="${FORGE_API_URL:-https://127.0.0.1:3040}"
 export FORGE_API_KEY_FILE="${FORGE_API_KEY_FILE:-${OPENCLAW_DIR}/.env.d/forge-api.secret}"
-export FORGE_PRINTER_ID="${FORGE_PRINTER_ID:-k1-max}"
-export FORGE_DASHBOARD_URL="${FORGE_DASHBOARD_URL:-https://forge-vdroners.ddns.net}"
-export FORGE_ALERT_TALK_ROOM="${FORGE_ALERT_TALK_ROOM:-${SKYLIGHT_OPS_TALK_ROOM:-}}"
-export FORGE_WEBHOOK_SECRET_FILE="${FORGE_WEBHOOK_SECRET_FILE:-${OPENCLAW_DIR}/.env.d/forge-webhook.secret}"
-export FORGE_WEBHOOK_BIND="${FORGE_WEBHOOK_BIND:-127.0.0.1}"
+export FORGE_PRINTER_ID="${FORGE_PRINTER_ID:-$NC_PRINT_PRINTER_ID}"
+export FORGE_DASHBOARD_URL="${FORGE_DASHBOARD_URL:-$NC_PRINT_DASHBOARD_URL}"
+export FORGE_ALERT_TALK_ROOM="${FORGE_ALERT_TALK_ROOM:-${NC_PRINT_ALERT_TALK_ROOM:-${SKYLIGHT_OPS_TALK_ROOM:-}}}"
+export NC_PRINT_ALERT_TALK_ROOM="${NC_PRINT_ALERT_TALK_ROOM:-$FORGE_ALERT_TALK_ROOM}"
+export FORGE_WEBHOOK_SECRET_FILE="${FORGE_WEBHOOK_SECRET_FILE:-${NC_PRINT_WEBHOOK_SECRET_FILE:-${OPENCLAW_DIR}/.env.d/forge-webhook.secret}}"
+export NC_PRINT_WEBHOOK_SECRET_FILE="${NC_PRINT_WEBHOOK_SECRET_FILE:-$FORGE_WEBHOOK_SECRET_FILE}"
+export FORGE_WEBHOOK_BIND="${FORGE_WEBHOOK_BIND:-0.0.0.0}"
 export FORGE_WEBHOOK_PORT="${FORGE_WEBHOOK_PORT:-8790}"
-export FORGE_PUBLIC_WEBHOOK_URL="${FORGE_PUBLIC_WEBHOOK_URL:-https://alfred-vdroners.ddns.net/forge-webhook}"
+export FORGE_PUBLIC_WEBHOOK_URL="${FORGE_PUBLIC_WEBHOOK_URL:-${NC_PRINT_PUBLIC_WEBHOOK_URL:-https://alfred-vdroners.ddns.net/forge-webhook}}"
+export NC_PRINT_PUBLIC_WEBHOOK_URL="${NC_PRINT_PUBLIC_WEBHOOK_URL:-$FORGE_PUBLIC_WEBHOOK_URL}"
+export FORGE_CPM_UPSTREAM_HOST="${FORGE_CPM_UPSTREAM_HOST:-forge-webhook-relay}"
 export FORGE_QUIET_HOURS="${FORGE_QUIET_HOURS:-23:00-07:00}"
 export FORGE_QUIET_CRITICAL_OVERRIDE="${FORGE_QUIET_CRITICAL_OVERRIDE:-1}"
 export FORGE_ALERT_MIN_INTERVAL_M="${FORGE_ALERT_MIN_INTERVAL_M:-15}"
 export FORGE_STUCK_PRINT_H="${FORGE_STUCK_PRINT_H:-2}"
 export FORGE_SLICER_DOWN_M="${FORGE_SLICER_DOWN_M:-10}"
 export FORGE_NATIVE_NOTIFY="${FORGE_NATIVE_NOTIFY:-0}"
+
+# Alias monitor thresholds under NC_PRINT_* too
+export NC_PRINT_ALERT_MIN_INTERVAL_M="${NC_PRINT_ALERT_MIN_INTERVAL_M:-$FORGE_ALERT_MIN_INTERVAL_M}"
+export NC_PRINT_STUCK_PRINT_H="${NC_PRINT_STUCK_PRINT_H:-$FORGE_STUCK_PRINT_H}"
+export NC_PRINT_SLICER_DOWN_M="${NC_PRINT_SLICER_DOWN_M:-$FORGE_SLICER_DOWN_M}"
 
 if [[ -z "${FORGE_API_KEY:-}" ]]; then
   FORGE_API_KEY="$(_read_secret "$FORGE_API_KEY_FILE")"
@@ -54,14 +79,21 @@ if [[ -z "${FORGE_WEBHOOK_SECRET:-}" ]]; then
   FORGE_WEBHOOK_SECRET="$(_read_secret "$FORGE_WEBHOOK_SECRET_FILE")"
   export FORGE_WEBHOOK_SECRET
 fi
+export NC_PRINT_WEBHOOK_SECRET="${NC_PRINT_WEBHOOK_SECRET:-$FORGE_WEBHOOK_SECRET}"
 
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/load-nextcloud-env.sh" 2>/dev/null || true
 
 if [[ "$_preserve_enabled" != "__unset__" ]]; then
   export FORGE_ENABLED="$_preserve_enabled"
+  export NC_PRINT_ENABLED="${NC_PRINT_ENABLED:-$_preserve_enabled}"
+fi
+if [[ "$_preserve_nc" != "__unset__" ]]; then
+  export NC_PRINT_ENABLED="$_preserve_nc"
+  export FORGE_ENABLED="${FORGE_ENABLED:-$_preserve_nc}"
 fi
 
 if [[ -z "${FORGE_ALERT_TALK_ROOM:-}" && -n "${SKYLIGHT_OPS_TALK_ROOM:-}" ]]; then
   export FORGE_ALERT_TALK_ROOM="$SKYLIGHT_OPS_TALK_ROOM"
+  export NC_PRINT_ALERT_TALK_ROOM="$SKYLIGHT_OPS_TALK_ROOM"
 fi
