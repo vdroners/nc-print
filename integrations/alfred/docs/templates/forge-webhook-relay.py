@@ -31,14 +31,17 @@ TALK_ROOM = os.environ.get("FORGE_ALERT_TALK_ROOM", os.environ.get("SKYLIGHT_OPS
 DASHBOARD = os.environ.get("FORGE_DASHBOARD_URL", "https://forge-vdroners.ddns.net")
 DEDUPE_SECONDS = float(os.environ.get("FORGE_ALERT_MIN_INTERVAL_M", "15")) * 60
 RATE_LIMIT_PER_MIN = int(os.environ.get("FORGE_WEBHOOK_RATE_LIMIT", "10"))
-QUIET_HOURS = os.environ.get("FORGE_QUIET_HOURS", "23:00-07:00")
+QUIET_HOURS = os.environ.get("NC_PRINT_QUIET_HOURS") or os.environ.get("FORGE_QUIET_HOURS", "23:00-07:00")
 QUIET_CRITICAL = os.environ.get("FORGE_QUIET_CRITICAL_OVERRIDE", "1") == "1"
 NATIVE_NOTIFY = os.environ.get("FORGE_NATIVE_NOTIFY", "0") == "1"
 LOG_FILE = OPENCLAW_DIR / "logs" / "forge-webhook-relay.log"
 STATE_FILE = OPENCLAW_DIR / "state" / "forge-webhook-dedupe.json"
 
-CRITICAL_EVENTS = frozenset({"print_failed", "printer_error", "protection_alert"})
-QUIET_SUPPRESS = frozenset({"print_started", "bed_cooled", "print_finished"})
+CRITICAL_EVENTS = frozenset({"print_failed", "printer_error", "protection_alert", "printer_offline"})
+# Digests are timer-owned. Drop progress webhooks entirely. Quiet hours only
+# suppress low-value bed_cooled — start/finish/fail/guard still post.
+QUIET_SUPPRESS = frozenset({"bed_cooled"})
+PROGRESS_DROP = frozenset({"print_progress"})
 
 _dedupe: dict[str, float] = {}
 _dedupe_lock = Lock()
@@ -127,10 +130,30 @@ def _rate_ok() -> bool:
     return True
 
 
+def _human_duration(seconds: object) -> str:
+    try:
+        total = int(round(float(seconds)))  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return ""
+    if total <= 0:
+        return ""
+    hours, rem = divmod(total, 3600)
+    mins = rem // 60
+    if hours and mins:
+        return f"{hours}h {mins}m"
+    if hours:
+        return f"{hours}h"
+    if mins:
+        return f"{mins}m"
+    return f"{total}s"
+
+
 def _format_message(payload: dict) -> str:
-    title = str(payload.get("title") or payload.get("event") or "Print event")
+    event = str(payload.get("event") or "")
+    title = str(payload.get("title") or event or "Print event")
     message = str(payload.get("message") or "").strip()
     source = str(payload.get("source") or "").lower()
+    data = payload.get("data") if isinstance(payload.get("data"), dict) else {}
     prefix = "[nc_print]" if source == "nc_print" else "[forge]"
     dash = os.environ.get(
         "NC_PRINT_DASHBOARD_URL",
@@ -141,9 +164,33 @@ def _format_message(payload: dict) -> str:
             "NC_PRINT_DASHBOARD_URL",
             "https://cloud-vdroners.ddns.net/apps/nc_print/",
         )
-    lines = [f"{prefix} {title}"]
+    head = f"{prefix} HIGH {title}" if event == "protection_alert" else f"{prefix} {title}"
+    lines = [head]
+    bits: list[str] = []
+    filename = str(data.get("filename") or "").strip()
+    if filename and filename not in message:
+        bits.append(filename)
     if message:
-        lines.append(message)
+        bits.append(message)
+    progress = data.get("progress")
+    if progress is not None and str(progress).strip() != "":
+        try:
+            pct = float(progress)
+            if pct <= 1.0:
+                pct *= 100.0
+            bits.append(f"{int(round(pct))}%")
+        except (TypeError, ValueError):
+            pass
+    duration = _human_duration(data.get("duration_s"))
+    if duration:
+        bits.append(duration)
+    if bits:
+        # De-dupe when message is already the filename.
+        seen: list[str] = []
+        for bit in bits:
+            if bit not in seen:
+                seen.append(bit)
+        lines.append(" · ".join(seen))
     lines.append(dash)
     return "\n".join(lines)
 
@@ -251,7 +298,15 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         event = str(payload.get("event") or "unknown")
-        if _in_quiet_hours() and event in QUIET_SUPPRESS and not (QUIET_CRITICAL and event in CRITICAL_EVENTS):
+        if event in PROGRESS_DROP:
+            _log(f"ignored progress event={event}")
+            self._json(200, {"status": "ignored", "reason": "progress_not_digest"})
+            return
+
+        # Guard / fail / offline stay loud through quiet hours and are not digests.
+        if event in CRITICAL_EVENTS:
+            pass
+        elif _in_quiet_hours() and event in QUIET_SUPPRESS and not (QUIET_CRITICAL and event in CRITICAL_EVENTS):
             _log(f"suppressed quiet hours event={event}")
             self._json(200, {"status": "suppressed", "reason": "quiet_hours"})
             return

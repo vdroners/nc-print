@@ -1,0 +1,10 @@
+[Unit]
+Description=Timer for Alfred shell-direct cron: nc-print-monitor
+
+[Timer]
+OnCalendar=*-*-* *:0/15
+Persistent=true
+Unit=alfred-cron-nc-print-monitor.service
+
+[Install]
+WantedBy=timers.target

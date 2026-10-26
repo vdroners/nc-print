@@ -2760,6 +2760,9 @@ export const usePrintStore = defineStore('print', {
 				this.notifyPrintFailed(this.printerState.message)
 				toastError('Print failed', new Error(this.printerState.message || 'Printer error'))
 				this._publishPrintTransition('error', durationS)
+			} else if (nextState === 'printing' && !['printing', 'paused'].includes(prevState)) {
+				this._lastNotifiedPrintState = key
+				this._publishPrintTransition('started', durationS)
 			} else if ((nextState === 'cancelled' || nextState === 'canceled') && fromActive) {
 				// Cancel is a terminal state for history, but not a bell/activity
 				// event (the user knows they cancelled). The controller maps the
@@ -2784,6 +2787,10 @@ export const usePrintStore = defineStore('print', {
 				const slicerS = this.sliceJob.estimatedTimeS || 0
 				const filamentG = this.sliceJob.filamentUsedG || 0
 				const layerH = parseFloat(this.overrides.layerHeight)
+				const rawProgress = Number(this.printerState.progress)
+				const progressPct = Number.isFinite(rawProgress)
+					? (rawProgress <= 1 ? Math.round(rawProgress * 100) : Math.round(rawProgress))
+					: undefined
 				void notifyPrintTransitionApi({
 					transition,
 					filename: this.printerState.filename || this.sliceJob.gcodeFilename || '',
@@ -2797,6 +2804,7 @@ export const usePrintStore = defineStore('print', {
 					slicerDurationS: slicerS > 0 ? slicerS : undefined,
 					filamentG: filamentG > 0 ? filamentG : undefined,
 					layerHeight: Number.isFinite(layerH) && layerH > 0 ? layerH : undefined,
+					progress: progressPct,
 				})
 			} catch (e) {
 				// ignore — bell/activity/history is non-critical

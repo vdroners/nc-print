@@ -55,6 +55,8 @@ def is_forge_command(text: str, agent_name: str = "alfred") -> bool:
         rf"(?i)@?{agent}\s+forge\b",
         rf"(?i)@?{agent}\s+k1\b",
         rf"(?i)@?{agent}\s+k1-max\b",
+        rf"(?i)@?{agent}\s+nc-print\b",
+        rf"(?i)@?{agent}\s+nc_print\b",
     ]
     return any(re.search(p, norm) for p in patterns)
 
@@ -78,7 +80,7 @@ def parse_forge_subcommand(text: str, agent_name: str = "alfred") -> str:
     if not norm or norm.lower() in ("help", "?"):
         return "help"
     first = norm.split()[0].lower()
-    if first in ("status", "queue", "slicer", "camera", "help"):
+    if first in ("status", "queue", "slicer", "camera", "help", "eta", "temps", "job"):
         return first
     if "status" in norm.lower():
         return "status"

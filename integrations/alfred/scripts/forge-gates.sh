@@ -293,6 +293,21 @@ gate_monitor() {
   else
     warn "G-FORGE-M3 state file not yet created"
   fi
+  if python3 "${SCRIPT_DIR}/lib/nc_print_api.py" digest-selftest 2>/dev/null | grep -q NC_PRINT_DIGEST_SELFTEST_OK; then
+    ok "G-NC-PRINT-M5 hourly digest selftest"
+  else
+    bad "G-NC-PRINT-M5 hourly digest selftest failed"
+  fi
+  if systemctl --user is-enabled alfred-cron-nc-print-monitor.timer >/dev/null 2>&1; then
+    ok "G-NC-PRINT-M6 nc-print monitor timer enabled"
+  else
+    bad "G-NC-PRINT-M6 alfred-cron-nc-print-monitor.timer not enabled"
+  fi
+  if ss -ltn 2>/dev/null | grep -qE ':3040 |:8766 '; then
+    bad "G-NC-PRINT-M7 retired Forge port still listening"
+  else
+    ok "G-NC-PRINT-M7 no listener on :3040 or :8766"
+  fi
 }
 
 gate_fastpath() {
@@ -310,14 +325,29 @@ gate_fastpath() {
   if python3 - "$SCRIPT_DIR" <<'PY'
 import sys
 sys.path.insert(0, sys.argv[1] + "/lib")
-from forge_talk_match import is_forge_command
+from forge_talk_match import is_forge_command, parse_forge_subcommand
 assert not is_forge_command("@alfred what's for dinner")
 assert is_forge_command("@alfred print status")
+assert is_forge_command("@alfred nc-print status")
+assert parse_forge_subcommand("@alfred print eta") == "eta"
+assert parse_forge_subcommand("@alfred print temps") == "temps"
+assert parse_forge_subcommand("@alfred print job") == "job"
+assert parse_forge_subcommand("@alfred forge help") == "help"
 PY
   then
     ok "G-FORGE-F3 matcher specificity"
   else
     bad "G-FORGE-F3 matcher failed"
+  fi
+  if bash "${SCRIPT_DIR}/forge-dispatch-exec.sh" "@alfred print eta" 2>/dev/null | grep -q '\[nc_print\]'; then
+    ok "G-NC-PRINT-F4 print eta dispatch"
+  else
+    bad "G-NC-PRINT-F4 print eta dispatch failed"
+  fi
+  if bash "${SCRIPT_DIR}/forge-dispatch-exec.sh" help 2>/dev/null | grep -q 'print eta'; then
+    ok "G-NC-PRINT-F5 help lists eta"
+  else
+    bad "G-NC-PRINT-F5 help missing eta"
   fi
 }
 

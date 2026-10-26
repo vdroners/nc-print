@@ -25,13 +25,14 @@ const apiBase = () => generateUrl('/apps/nc_print/api/events')
  * @param {number} [opts.filamentG] slicer filament estimate in grams
  * @param {number} [opts.filamentMm] slicer filament estimate in mm
  * @param {number} [opts.layerHeight]
+ * @param {number} [opts.progress] percent 0–100 when known
  * @returns {Promise<object>}
  */
 export async function notifyPrintTransition(opts) {
 	const {
 		transition, filename, printer, durationS,
 		printerId, printerName, material, nozzleDiameter, failureReason,
-		slicerDurationS, filamentG, filamentMm, layerHeight,
+		slicerDurationS, filamentG, filamentMm, layerHeight, progress,
 	} = opts
 	const { data } = await axios.post(`${apiBase()}/print-transition`, {
 		transition,
@@ -48,6 +49,7 @@ export async function notifyPrintTransition(opts) {
 		filament_g: filamentG ?? '',
 		filament_mm: filamentMm ?? '',
 		layer_height: layerHeight ?? '',
+		progress: progress ?? '',
 	})
 	return data
 }

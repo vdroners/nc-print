@@ -163,24 +163,26 @@ Each wave: branch from up-to-date `main` → implement → bump (`make bump-mino
 - [x] Keep `forge-webhook-relay` + CPM `alfred-vdroners` (NC HMAC path).
 - [x] Keep `/media/4TB/3dprints` and ENGINE_SRC tree.
 - [x] Stop+disable `alfred-cron-forge-print-monitor.timer` (re-verified 2026-10-26 during 1.64.0 ship; was still enabled after Wave 8 — stopped again).
-- [ ] Alfred OpenClaw env / skill re-gate on NC-only path (Alfred follow-up).
-- [ ] Optional: one full print-cycle NC-only monitor verify after Alfred re-gate.
+- [x] Alfred OpenClaw env / skill re-gate on NC-only path (skill `nc-print`; `forge-print` is a redirect).
+- [x] NC-only monitor timer `alfred-cron-nc-print-monitor` (15 min) with hourly + milestone Talk digests. Full live print cycle still depends on a job actually running.
 
 ### Alfred handoff (operator — do not edit secrets from agents)
 
-Inventory at 1.64.0 ship:
+Cutover (Talk digest):
 
-- OpenClaw still registers skill `forge-print` in `~/.openclaw/openclaw.json`; workspace also has `workspace/skills/forge-print/` beside NC’s `integrations/alfred/skills/nc-print/`.
-- Monitor timer `alfred-cron-forge-print-monitor` ran `forge-print-monitor.sh` with `FORGE_MONITOR` (dead Forge path). Timer is now stopped/disabled; re-enable only after NC-only monitor is wired.
-- Keep `forge-webhook-relay` on `:8790` (NC outbound HMAC → Alfred Talk).
-- Follow-up: point OpenClaw skill/env at NC Print only; alias or retire `forge-print`; dry-run one Talk/monitor cycle NC-only.
+- OpenClaw skill entry is **`nc-print`** (enabled). `forge-print` stays as a one-line redirect; `@alfred forge` / `k1` / `nc-print` still match.
+- Monitor unit `alfred-cron-nc-print-monitor.timer` runs `forge-print-monitor.sh` on Moonraker (`NC_PRINT_*`). The old `alfred-cron-forge-print-monitor` timer stays disabled. Do not point it at Forge `:3040`.
+- Digests: `NC_PRINT_HOURLY_PROGRESS`, `NC_PRINT_HOURLY_INTERVAL_S` (default 3600), `NC_PRINT_MILESTONES` (default `25,50,75`; empty disables). Quiet hours `NC_PRINT_QUIET_HOURS` (default `23:00-07:00`) suppress digests only.
+- Talk read-only commands: `print status|eta|temps|job|queue|slicer|camera|help`. No start/pause/cancel.
+- Keep `forge-webhook-relay` on `:8790`. `print_progress` is ignored. `protection_alert` posts as `HIGH` and is not quiet-suppressed. Start/finish copy includes filename, percent, and duration when the payload has them.
+- Checklist: `bash integrations/alfred/scripts/forge-gates.sh --check --phase monitor` and `--phase fastpath`. Confirm `:8790/health` and that `:3040` / `:8766` are closed.
 
 ---
 
 ## Teardown checklist (Wave 8 — lab actions 2026-10-26)
 
 - [x] Sarge written OK — t11u "Tear down forge"
-- [ ] Alfred monitor + Talk path verified NC-only for a full print or dry-run cycle (**Alfred follow-up**: OpenClaw still had `FORGE_*` → `127.0.0.1:3040` at teardown)
+- [x] Alfred monitor + Talk path verified NC-only via digest selftest + `print eta` dispatch (live hourly line still needs a printing job)
 - [x] Outbound webhooks from NC; Forge Studio webhook source gone; `forge-webhook-relay` kept for NC events
 - [x] Parts library + Model Forge v1 + Print Guard lite shipped in Waves 4–6 (lab 1.63.0)
 - [x] `ENGINE_SRC` **slim keep** at `/media/4TB/3dprintforge/slicer/3dprintforge-slicer/`; `make slicer-fetch` still points there
@@ -207,7 +209,7 @@ Inventory at 1.64.0 ship:
 | Forge Studio `:3040` | Retired |
 | Host `forge-slicer` `:8766` + docker-relay | Retired |
 | CPM `forge-vdroners.ddns.net` | Disabled |
-| `alfred-cron-forge-print-monitor.timer` | Disabled pending Alfred NC re-gate |
+| `alfred-cron-forge-print-monitor.timer` | Disabled; use `alfred-cron-nc-print-monitor.timer` |
 
 ---
 

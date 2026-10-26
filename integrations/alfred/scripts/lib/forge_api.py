@@ -146,6 +146,12 @@ def normalize_print_state(state_payload: dict) -> dict[str, Any]:
         "progress": None,
         "bed_temp": None,
         "nozzle_temp": None,
+        "bed_target": None,
+        "nozzle_target": None,
+        "layer": None,
+        "layer_count": None,
+        "print_duration": None,
+        "eta_s": None,
     }
     if not isinstance(state_payload, dict):
         return out
@@ -175,6 +181,9 @@ def normalize_print_state(state_payload: dict) -> dict[str, Any]:
             out["bed_temp"] = bed
         if nozzle is not None:
             out["nozzle_temp"] = nozzle
+        for key in ("bed_target", "nozzle_target", "layer", "layer_count", "print_duration", "eta_s"):
+            if print_block.get(key) is not None:
+                out[key] = print_block.get(key)
 
     if state_payload.get("printer_id"):
         out["online"] = True

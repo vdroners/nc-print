@@ -19,7 +19,7 @@ Operator / agent orientation for the lab at `10.0.0.84`. Last verified **2026-10
 | Forge Studio UI `:3040` (`3dprintforge` compose) | **Stopped** — `docker compose down` in `/media/4TB/3dprintforge` |
 | Host `forge-slicer` `:8766` + `forge-slicer-docker-relay` | **Stopped + disabled** (user systemd) |
 | CPM host `forge-vdroners.ddns.net` → `:3040` | **Disabled** in CPM DB (`proxy_hosts.id=8`) + routes removed from live Caddy |
-| Alfred `alfred-cron-forge-print-monitor.timer` | **Stopped + disabled** — Alfred must run NC Print monitor path |
+| Alfred `alfred-cron-forge-print-monitor.timer` | **Stopped + disabled** — replaced by `alfred-cron-nc-print-monitor.timer` |
 | `forge-webhook-relay` (`:8790`, alfred-vdroners) | **Kept running** — NC outbound HMAC webhooks still use this relay |
 | `/media/4TB/3dprintforge` tree (ENGINE_SRC under `slicer/`) | **Kept on disk** for `make slicer-fetch` / rollback — UI compose not started |
 | `/media/4TB/3dprints` | **Untouched** |
@@ -35,6 +35,8 @@ Browser ──▶ Nextcloud :8080 (cloud_app / nc_print)
 
 Alfred / Talk ──▶ forge-webhook-relay :8790 (CPM alfred-vdroners)
                     └─ consumes NC Print outbound HMAC webhooks
+               alfred-cron-nc-print-monitor.timer (15 min)
+                    └─ Moonraker hourly + 25/50/75% Talk digests; quiet hours skip digests only
 ```
 
 NC Print does **not** need Forge Studio or host `:8766` for in-browser slice.

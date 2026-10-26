@@ -28,14 +28,27 @@ case "$SUBCMD" in
     cat <<EOF
 [nc_print] Commands (read-only):
 - ${M} print status — K1 Max state, file, temps
+- ${M} print eta — remaining time, percent, layer
+- ${M} print temps — nozzle and bed actual/target
+- ${M} print job — filename, percent, elapsed, dashboard
 - ${M} print queue — Moonraker job queue
 - ${M} print slicer — nc-print-slicer health
+- ${M} print camera — dashboard only (no frames in Talk)
 - ${M} print help — this message
 Dashboard: ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}
 EOF
     ;;
   status)
     python3 "${SCRIPT_DIR}/lib/nc_print_api.py" status 2>/dev/null || python3 "${SCRIPT_DIR}/lib/forge_api.py" status
+    ;;
+  eta)
+    python3 "${SCRIPT_DIR}/lib/nc_print_api.py" eta
+    ;;
+  temps)
+    python3 "${SCRIPT_DIR}/lib/nc_print_api.py" temps
+    ;;
+  job)
+    python3 "${SCRIPT_DIR}/lib/nc_print_api.py" job
     ;;
   queue)
     python3 - "$SCRIPT_DIR" <<'PY'
@@ -83,8 +96,7 @@ else:
 PY
     ;;
   camera)
-    pid="${FORGE_PRINTER_ID:-k1-max}"
-    echo "[forge] Camera snapshot: ${FORGE_DASHBOARD_URL}/#printer/${pid}"
+    echo "[nc_print] Camera: use the NC Print dashboard (no frames in Talk). ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}"
     ;;
   *)
     python3 "${SCRIPT_DIR}/lib/nc_print_api.py" status 2>/dev/null || python3 "${SCRIPT_DIR}/lib/forge_api.py" status

@@ -43,8 +43,9 @@ bash scripts/setup-ddclient-alfred-forge-dns.sh   # adds hostname to ddclient (s
 # Configure Forge outgoing webhook
 bash scripts/forge-configure-webhook.sh
 
-# Cron monitor (every 5 min)
-(cd /media/4TB/openclaw-alfred && make shell-cron)
+# Cron monitor (every 15 min) — unit alfred-cron-nc-print-monitor
+# Templates: docs/templates/alfred-cron-nc-print-monitor.{service,timer}
+# Do not re-enable alfred-cron-forge-print-monitor (retired Forge schedule).
 
 # Gates
 bash scripts/forge-gates.sh --check --phase all
@@ -55,15 +56,22 @@ bash scripts/forge-gates.sh --check --phase all
 | Command | Action |
 |---------|--------|
 | `@alfred print status` | K1 Max state, file, temps |
+| `@alfred print eta` | Remaining time, percent, layer |
+| `@alfred print temps` | Nozzle and bed actual/target |
+| `@alfred print job` | Filename, percent, elapsed, dashboard |
 | `@alfred print queue` | Moonraker queue |
-| `@alfred print slicer` | Forge Slicer health |
+| `@alfred print slicer` | nc-print-slicer health |
+| `@alfred print camera` | Dashboard link only (no frames) |
 | `@alfred print help` | Command list |
+
+Aliases: `@alfred forge`, `@alfred k1`, `@alfred nc-print`. Read-only — no start, pause, or cancel.
 
 ## Alert routing
 
-- **Primary:** `[forge]` messages via `talk-post.sh` → `FORGE_ALERT_TALK_ROOM` (default: Skylight Ops `jf7zijqp`)
-- **Real-time:** Forge DB webhook → CPM → `forge-webhook-relay.py`
-- **Resilience:** `forge-print-monitor.sh` cron (offline, stuck print, slicer down)
+- **Primary:** `[nc_print]` messages via `talk-post.sh` → `NC_PRINT_ALERT_TALK_ROOM` / `FORGE_ALERT_TALK_ROOM`
+- **Real-time:** NC Print outbound HMAC → CPM → `forge-webhook-relay.py` (`:8790`). Start/finish lines include filename, percent, and duration when present. `print_progress` is ignored. Print Guard `protection_alert` posts as `HIGH` and is not quiet-suppressed.
+- **Digests:** `alfred-cron-nc-print-monitor.timer` every 15 minutes. While printing: one hourly line (`NC_PRINT_HOURLY_INTERVAL_S`, default 3600) and one-time 25/50/75% milestones. Quiet hours (`NC_PRINT_QUIET_HOURS`, default 23:00–07:00) skip digests only.
+- **Edges from the same timer:** offline, fail, cancel, complete, stuck print, slicer down — these still post during quiet hours.
 - **Optional native push:** set `FORGE_NATIVE_NOTIFY=1` (uses nc_gcs `/api/notify` subject `forge_alert`)
 
 Enable Talk push notifications for the alert room on mobile/desktop.

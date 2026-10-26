@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.64.1] - 2026-10-26
+
+### Added
+- Alfred Talk digests: hourly progress and 25/50/75% milestones from the NC Print monitor, plus read-only `print eta` / `temps` / `job`. Quiet hours suppress digests only.
+- Print start posts the outbound webhook (with progress percent) so Talk can announce a job beginning.
+
+### Changed
+- Webhook relay ignores `print_progress` (digests stay on the timer) and labels Print Guard alerts `HIGH`. Start/finish Talk lines include filename, percent, and duration when present.
+
 ## [1.64.0] - 2026-10-26
 
 ### Added

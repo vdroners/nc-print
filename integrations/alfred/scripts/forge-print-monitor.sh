@@ -26,13 +26,12 @@ STATE_DIR="${OPENCLAW_DIR}/state"
 STATE_FILE="${STATE_DIR}/forge-monitor-last-alert.json"
 mkdir -p "$STATE_DIR"
 
-eval "$(python3 - "$SCRIPT_DIR" "$STATE_FILE" "$FORCE" <<'PY'
+eval "$(python3 - "$SCRIPT_DIR" "$STATE_FILE" "$FORCE" "$DRY" <<'PY'
 import json, os, sys, time
 from pathlib import Path
 
 sys.path.insert(0, os.path.join(sys.argv[1], "lib"))
 from forge_api import (
-    forge_request,
     get_printer_state,
     get_printers,
     get_slicer_status,
@@ -40,9 +39,17 @@ from forge_api import (
     printer_id,
     slicer_health_direct,
 )
+from nc_print_api import (
+    decide_digest,
+    hourly_interval_s,
+    hourly_progress_enabled,
+    in_quiet_hours,
+    milestone_percents,
+)
 
 state_path = Path(sys.argv[2])
 force = sys.argv[3] == "1"
+dry = sys.argv[4] == "1"
 pid = printer_id()
 min_interval = int(os.environ.get("FORGE_ALERT_MIN_INTERVAL_M", "15")) * 60
 stuck_h = float(os.environ.get("FORGE_STUCK_PRINT_H", "2"))
@@ -131,31 +138,66 @@ elif snap.get("slicer_down_since") and (now - int(snap["slicer_down_since"])) > 
         alerts.append(("medium", "nc-print-slicer down > threshold"))
         snap["slicer_alert_sent_at"] = now
 
+# Digests are timer-owned. Quiet hours skip them only; edge alerts still post.
+# One milestone per tick, and a due milestone consumes the hourly slot.
+dash = os.environ.get("NC_PRINT_DASHBOARD_URL") or os.environ.get("FORGE_DASHBOARD_URL") or ""
+digest = decide_digest(
+    status=status,
+    filename=filename,
+    st=st,
+    prev=prev,
+    now=now,
+    quiet=in_quiet_hours(),
+    hourly_enabled=hourly_progress_enabled(),
+    interval_s=hourly_interval_s(),
+    milestones=milestone_percents(),
+    post_allowed=not alerts and not force,
+    dashboard=dash,
+)
+# Dry-run must not consume the hourly slot or a milestone.
+if dry and digest.get("post"):
+    snap["milestones_sent"] = prev.get("milestones_sent") or []
+    snap["last_hourly_at"] = prev.get("last_hourly_at") or 0
+else:
+    snap["milestones_sent"] = digest["milestones_sent"]
+    snap["last_hourly_at"] = digest["last_hourly_at"]
+
 severity = "none"
 summary = ""
+message_ready = "0"
 if alerts:
     severity = alerts[0][0]
     summary = alerts[0][1]
+elif digest.get("post"):
+    severity = "low"
+    summary = digest["line"]
+    message_ready = "1"
 
 last_alert = prev.get("last_alert") or {}
 last_sig = last_alert.get("signature") or ""
 last_at = int(last_alert.get("posted_at") or 0)
 sig = f"{severity}:{summary}"
 should_post = "0"
-if summary and (sig != last_sig or (now - last_at) > min_interval or force):
+# Digest interval is its own gate — do not apply the 15-minute alert dedupe to it.
+if message_ready == "1" and summary:
+    should_post = "1"
+    snap["last_alert"] = {"signature": sig, "posted_at": now, "severity": severity}
+elif summary and (sig != last_sig or (now - last_at) > min_interval or force):
     should_post = "1"
     snap["last_alert"] = {"signature": sig, "posted_at": now, "severity": severity}
 
 # Persist rolling state (not just on alert)
 keep = {k: snap.get(k) for k in (
     "online", "status", "filename", "progress", "slicer_ok", "updated_at",
-    "last_progress", "last_progress_at", "slicer_down_since", "slicer_alert_sent_at", "last_alert",
+    "last_progress", "last_progress_at", "slicer_down_since", "slicer_alert_sent_at",
+    "last_alert", "milestones_sent", "last_hourly_at",
 )}
 state_path.write_text(json.dumps(keep, indent=2))
 import shlex
 print(f"summary={shlex.quote(summary)}")
 print(f"severity={shlex.quote(severity)}")
 print(f"should_post={shlex.quote(should_post)}")
+print(f"message_ready={shlex.quote(message_ready)}")
 PY
 )" || {
   echo "FORGE_MONITOR_PARSE_FAIL" >&2
@@ -164,20 +206,30 @@ PY
 
 if [[ -z "$summary" ]]; then
   echo "FORGE_MONITOR_OK online=ok"
+  echo "NC_PRINT_MONITOR_OK"
   exit 0
 fi
 
 if [[ "$should_post" != "1" ]]; then
   echo "FORGE_MONITOR_DEDUPED summary=${summary}"
+  echo "FORGE_MONITOR_OK"
+  echo "NC_PRINT_MONITOR_OK"
   exit 0
 fi
 
-MSG="[nc_print] ${summary}. ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}"
+if [[ "${message_ready:-0}" == "1" ]]; then
+  MSG="$summary"
+else
+  MSG="[nc_print] ${summary}. ${NC_PRINT_DASHBOARD_URL:-${FORGE_DASHBOARD_URL:-https://cloud-vdroners.ddns.net/apps/nc_print/}}"
+fi
 if [[ "$DRY" -eq 1 ]]; then
   echo "FORGE_MONITOR_DRY_RUN ${MSG}"
   echo "FORGE_MONITOR_OK"
+  echo "NC_PRINT_MONITOR_OK"
   exit 0
 fi
 
 bash "${SCRIPT_DIR}/talk-post.sh" "$MSG" "$ALERT_ROOM"
 echo "FORGE_ALERT_POSTED room=${ALERT_ROOM} summary=${summary}"
+echo "FORGE_MONITOR_OK"
+echo "NC_PRINT_MONITOR_OK"

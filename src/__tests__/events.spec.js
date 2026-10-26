@@ -86,9 +86,18 @@ describe('print store publishes print transitions', () => {
 		expect(call[1]).toMatchObject({ transition: 'error', filename: 'part.gcode' })
 	})
 
-	it('does not publish on non-terminal transitions', () => {
+	it('publishes started when a job begins', () => {
 		const store = usePrintStore()
+		store.printerState.filename = 'door.gcode'
+		store.printerState.progress = 0
 		store._maybeNotifyPrintTransition('standby', 'printing')
+		const call = axios.post.mock.calls.find(c => c[0].endsWith('/api/events/print-transition'))
+		expect(call[1]).toMatchObject({ transition: 'started', filename: 'door.gcode', progress: 0 })
+	})
+
+	it('does not publish started again on resume from pause', () => {
+		const store = usePrintStore()
+		store._maybeNotifyPrintTransition('paused', 'printing')
 		const call = axios.post.mock.calls.find(c => c[0].endsWith('/api/events/print-transition'))
 		expect(call).toBeUndefined()
 	})

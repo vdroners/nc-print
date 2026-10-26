@@ -17,7 +17,8 @@ Moved here from `openclaw-skylight` on 2026-09-28
 | `scripts/forge-*.sh` | Print monitor cron, `@alfred forge` fast path + dispatch, gates, secrets bootstrap, webhook config |
 | `scripts/setup-*.sh` | Relay container, CPM route, ddclient hostname |
 | `scripts/lib/` | `forge_api.py` (Forge REST client), `forge_talk_match.py` (Talk router matcher) |
-| `skills/forge-print/` | OpenClaw skill |
+| `skills/nc-print/` | OpenClaw skill (register this) |
+| `skills/forge-print/` | Redirect to `nc-print` |
 | `docker-compose.forge-relay.yml` | `forge-webhook-relay` container (CPM network, :8790) |
 | `docs/` | Setup guide, relay templates, original integration plan |
 | `env.example` | `FORGE_*` keys for `~/.openclaw/.env` |

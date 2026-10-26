@@ -131,6 +131,7 @@ class PrintEventController extends Controller
 				'printer_name' => (string) ($params['printer_name'] ?? $printer),
 				'filename' => $filename,
 				'duration_s' => $params['duration_s'] ?? null,
+				'progress' => is_numeric($params['progress'] ?? null) ? (float) $params['progress'] : null,
 				'failure_reason' => $params['failure_reason'] ?? null,
 			]);
 		} catch (\Throwable $e) {

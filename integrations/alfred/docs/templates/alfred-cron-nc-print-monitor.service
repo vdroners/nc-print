@@ -1,0 +1,9 @@
+[Unit]
+Description=Alfred shell-direct cron: nc-print-monitor
+After=network-online.target openclaw-gateway.service
+
+[Service]
+Type=oneshot
+Environment=OPENCLAW_DIR=/home/vdroners/.openclaw
+Environment=TZ=America/Los_Angeles
+ExecStart=/home/vdroners/.openclaw/scripts/run-openclaw-cron-shell.sh f1a2b3c4-forge-print-monitor nc-print-monitor /home/vdroners/.openclaw/scripts/forge-print-monitor.sh 'FORGE_MONITOR'
