@@ -26,6 +26,7 @@ import NcPrintIcon from './NcPrintIcon.vue'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { resolveFile } from '@/services/files-api.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
+import { openOverviewSection, OVERVIEW_FORGE_ID, OVERVIEW_LIBRARY_ID } from '@/utils/overview-nav.js'
 
 export default {
 	name: 'PrepareTab',
@@ -472,6 +473,12 @@ export default {
 		triggerImport() {
 			this.$refs.importInput?.click()
 		},
+		openPartsLibrary() {
+			openOverviewSection(this.printStore, OVERVIEW_LIBRARY_ID)
+		},
+		openModelForge() {
+			openOverviewSection(this.printStore, OVERVIEW_FORGE_ID)
+		},
 		onImportFile(e) {
 			const file = e.target.files?.[0]
 			if (file) {
@@ -564,6 +571,22 @@ export default {
 				</button>
 				<button type="button" class="nc-print-btn" @click="pickFromFiles">
 					From Files
+				</button>
+				<button
+					type="button"
+					class="nc-print-btn"
+					aria-label="Parts Library"
+					title="Open a saved part in Parts Library"
+					@click="openPartsLibrary">
+					Library
+				</button>
+				<button
+					type="button"
+					class="nc-print-btn"
+					aria-label="Model Forge"
+					title="Generate a model in Model Forge"
+					@click="openModelForge">
+					Model Forge
 				</button>
 				<ReopenMenu inline />
 				<button

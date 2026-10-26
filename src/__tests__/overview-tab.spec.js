@@ -33,6 +33,8 @@ describe('Overview tab (v1.55.0)', () => {
 		expect(chrome).toMatch(/nc-print-chrome-bar__overview/)
 		expect(chrome).toMatch(/onOverviewClick/)
 		expect(chrome).toMatch(/TABS\.OVERVIEW/)
+		// Visible label, so the cog is not a generic settings icon.
+		expect(chrome).toMatch(/nc-print-chrome-bar__overview-label">Overview/)
 	})
 
 	it('PrintWorkflowBanner still has exactly 3 workflow steps (Overview is NOT a step)', () => {
@@ -76,5 +78,43 @@ describe('Overview tab (v1.55.0)', () => {
 
 	it('Prepare keeps its in-flow TargetPrinterPicker (workflow gate)', () => {
 		expect(prepare).toMatch(/TargetPrinterPicker/)
+	})
+
+	it('Prepare import section opens Parts Library and Model Forge', () => {
+		expect(prepare).toMatch(/openPartsLibrary/)
+		expect(prepare).toMatch(/openModelForge/)
+		expect(prepare).toMatch(/aria-label="Parts Library"/)
+		expect(prepare).toMatch(/>\s*Library\s*</)
+		expect(prepare).toMatch(/aria-label="Model Forge"/)
+		expect(prepare).toMatch(/>\s*Model Forge\s*</)
+		expect(prepare).toMatch(/openOverviewSection\(this\.printStore, OVERVIEW_LIBRARY_ID\)/)
+		expect(prepare).toMatch(/openOverviewSection\(this\.printStore, OVERVIEW_FORGE_ID\)/)
+		// Left-rail import stays.
+		expect(prepare).toMatch(/Import STL\/3MF\/OBJ/)
+		// Management sections are not start-job buttons on Prepare.
+		expect(prepare).not.toMatch(/Achievements/)
+		expect(prepare).not.toMatch(/Print Guard/)
+		expect(prepare).not.toMatch(/Materials &amp; calibration/)
+		expect(prepare).not.toMatch(/Printer fleet/)
+	})
+
+	it('Overview still hosts library and forge and can expand them in place', () => {
+		expect(overview).toMatch(/id="overview-library"/)
+		expect(overview).toMatch(/id="overview-modelforge"/)
+		expect(overview).toMatch(/ref="overview-library"/)
+		expect(overview).toMatch(/ref="overview-modelforge"/)
+		expect(overview).toMatch(/OVERVIEW_FOCUS_EVENT/)
+		expect(overview).toMatch(/consumePendingOverviewSection/)
+		expect(overview).toMatch(/section\?\.expand\?\.\(\)/)
+		const achievements = overview.indexOf('id="overview-achievements"')
+		const library = overview.indexOf('id="overview-library"')
+		const forge = overview.indexOf('id="overview-modelforge"')
+		const guard = overview.indexOf('id="overview-guard"')
+		const cameras = overview.indexOf('id="overview-cameras"')
+		expect(achievements).toBeGreaterThan(-1)
+		expect(achievements).toBeLessThan(library)
+		expect(library).toBeLessThan(forge)
+		expect(forge).toBeLessThan(guard)
+		expect(guard).toBeLessThan(cameras)
 	})
 })

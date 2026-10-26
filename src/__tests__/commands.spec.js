@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { buildCommands, PALETTE_PANELS } from '@/utils/commands.js'
 import { TABS } from '@/constants/tabs.js'
+import { consumePendingOverviewSection } from '@/utils/overview-nav.js'
 
 /** Minimal mock store; override per test. */
 function mockStore(over = {}) {
@@ -28,6 +29,12 @@ function byId(cmds, id) {
 }
 
 describe('buildCommands', () => {
+	afterEach(() => {
+		consumePendingOverviewSection()
+		localStorage.removeItem('nc_print_collapsible_overview-library')
+		localStorage.removeItem('nc_print_collapsible_overview-modelforge')
+	})
+
 	it('always includes the three navigation commands', () => {
 		const cmds = buildCommands(mockStore())
 		expect(byId(cmds, 'nav-prepare')).toBeTruthy()
@@ -44,6 +51,59 @@ describe('buildCommands', () => {
 		const store = mockStore()
 		byId(buildCommands(store), 'nav-print').run()
 		expect(store.setActiveTab).toHaveBeenCalledWith(TABS.PRINT)
+	})
+
+	it('lists Library, Model Forge, and Overview under Navigation', () => {
+		const cmds = buildCommands(mockStore())
+		expect(byId(cmds, 'nav-library')).toMatchObject({
+			title: 'Open Parts Library', group: 'Navigation', enabled: true,
+		})
+		expect(byId(cmds, 'nav-modelforge')).toMatchObject({
+			title: 'Open Model Forge', group: 'Navigation', enabled: true,
+		})
+		expect(byId(cmds, 'nav-overview')).toMatchObject({
+			title: 'Go to Overview', group: 'Navigation', enabled: true,
+		})
+	})
+
+	it('Library and Model Forge open Overview and persist the section', () => {
+		const store = mockStore()
+		const seen = []
+		const onFocus = (e) => seen.push(e.detail.id)
+		window.addEventListener('nc-print-focus-overview', onFocus)
+		try {
+			byId(buildCommands(store), 'nav-library').run()
+			expect(store.setActiveTab).toHaveBeenCalledWith(TABS.OVERVIEW)
+			expect(localStorage.getItem('nc_print_collapsible_overview-library')).toBe('1')
+			expect(seen).toEqual(['overview-library'])
+			expect(consumePendingOverviewSection()).toBe('overview-library')
+
+			store.setActiveTab.mockClear()
+			byId(buildCommands(store), 'nav-modelforge').run()
+			expect(store.setActiveTab).toHaveBeenCalledWith(TABS.OVERVIEW)
+			expect(localStorage.getItem('nc_print_collapsible_overview-modelforge')).toBe('1')
+			expect(seen).toEqual(['overview-library', 'overview-modelforge'])
+			expect(consumePendingOverviewSection()).toBe('overview-modelforge')
+		} finally {
+			window.removeEventListener('nc-print-focus-overview', onFocus)
+		}
+	})
+
+	it('Go to Overview does not force a library or forge section open', () => {
+		const store = mockStore()
+		const seen = []
+		const onFocus = (e) => seen.push(e.detail?.id)
+		window.addEventListener('nc-print-focus-overview', onFocus)
+		try {
+			byId(buildCommands(store), 'nav-overview').run()
+			expect(store.setActiveTab).toHaveBeenCalledWith(TABS.OVERVIEW)
+			expect(localStorage.getItem('nc_print_collapsible_overview-library')).toBeNull()
+			expect(localStorage.getItem('nc_print_collapsible_overview-modelforge')).toBeNull()
+			expect(seen).toEqual([])
+			expect(consumePendingOverviewSection()).toBeNull()
+		} finally {
+			window.removeEventListener('nc-print-focus-overview', onFocus)
+		}
 	})
 
 	it('Slice is enabled only with a model and no block reason', () => {

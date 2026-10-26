@@ -8,11 +8,13 @@
  * it's unavailable. Groups mirror 3DPrintForge: Navigation / Actions / Panels /
  * Printers.
  *
- * Kept as a pure function of the store (+ optional callbacks) so it's testable
- * with a plain mock store. The palette component supplies UI-side callbacks
- * (openImport, focusPanel) via the second arg.
+ * Testable with a plain mock store. The palette supplies UI-side callbacks
+ * (openImport, focusPanel) via the second arg. Parts Library, Model Forge, and
+ * Overview do not need one: they call `openOverviewSection` (tab change plus
+ * collapsible persistence).
  */
 import { TABS } from '@/constants/tabs.js'
+import { openOverviewSection, OVERVIEW_FORGE_ID, OVERVIEW_LIBRARY_ID } from '@/utils/overview-nav.js'
 
 /** Panel ids + titles that the palette can jump to / expand (match PrintTab). */
 export const PALETTE_PANELS = [
@@ -49,6 +51,18 @@ export function buildCommands(store, cb = {}) {
 	cmds.push({
 		id: 'nav-print', title: 'Go to Print', group: 'Navigation', enabled: true,
 		run: () => store.setActiveTab(TABS.PRINT),
+	})
+	cmds.push({
+		id: 'nav-library', title: 'Open Parts Library', group: 'Navigation', enabled: true,
+		run: () => openOverviewSection(store, OVERVIEW_LIBRARY_ID),
+	})
+	cmds.push({
+		id: 'nav-modelforge', title: 'Open Model Forge', group: 'Navigation', enabled: true,
+		run: () => openOverviewSection(store, OVERVIEW_FORGE_ID),
+	})
+	cmds.push({
+		id: 'nav-overview', title: 'Go to Overview', group: 'Navigation', enabled: true,
+		run: () => store.setActiveTab(TABS.OVERVIEW),
 	})
 
 	// ── Actions ─────────────────────────────────────────────────────────────

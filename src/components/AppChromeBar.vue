@@ -64,13 +64,14 @@ export default {
 			<div class="nc-print-chrome-bar__actions">
 				<button
 					type="button"
-					class="nc-print-btn nc-print-btn--icon nc-print-chrome-bar__overview"
+					class="nc-print-btn nc-print-chrome-bar__overview"
 					:class="{ 'nc-print-chrome-bar__overview--on': overviewActive }"
 					:aria-current="overviewActive ? 'page' : undefined"
 					aria-label="Overview — printers, materials, history & more"
 					title="Overview — printers, materials, history & more"
 					@click="onOverviewClick">
-					<NcPrintIcon name="cog" :size="18" />
+					<NcPrintIcon name="cog" :size="16" />
+					<span class="nc-print-chrome-bar__overview-label">Overview</span>
 				</button>
 				<button
 					v-if="notifSupported"
@@ -111,6 +112,19 @@ export default {
 .nc-print-chrome-bar__bell--on {
 	border-color: color-mix(in srgb, var(--nc-app-accent) 60%, var(--nc-gcs-border));
 	color: var(--nc-app-accent);
+}
+
+.nc-print-chrome-bar__overview {
+	flex: 0 0 auto;
+	font-size: 12px;
+	font-weight: 600;
+	gap: 6px;
+	padding: 6px 10px;
+	white-space: nowrap;
+}
+
+.nc-print-chrome-bar__overview-label {
+	line-height: 1;
 }
 
 .nc-print-chrome-bar__overview--on {
