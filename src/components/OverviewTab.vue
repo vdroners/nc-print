@@ -10,6 +10,9 @@ import AchievementsPanel from './AchievementsPanel.vue'
 import PrintHistoryPanel from './PrintHistoryPanel.vue'
 import HistoryPanel from './HistoryPanel.vue'
 import WebcamListPanel from './WebcamListPanel.vue'
+import PartsLibraryPanel from './PartsLibraryPanel.vue'
+import ModelForgePanel from './ModelForgePanel.vue'
+import PrintGuardPanel from './PrintGuardPanel.vue'
 
 /**
  * The management console — everything that isn't the current print project:
@@ -32,6 +35,9 @@ export default {
 		PrintHistoryPanel,
 		HistoryPanel,
 		WebcamListPanel,
+		PartsLibraryPanel,
+		ModelForgePanel,
+		PrintGuardPanel,
 	},
 }
 </script>
@@ -76,6 +82,24 @@ export default {
 			<NcPrintCollapsible id="overview-achievements" title="Achievements" icon="check" :default-open="false">
 				<div class="nc-print-card">
 					<AchievementsPanel />
+				</div>
+			</NcPrintCollapsible>
+
+			<NcPrintCollapsible id="overview-library" title="Parts library" icon="folder" :default-open="false">
+				<div class="nc-print-card">
+					<PartsLibraryPanel />
+				</div>
+			</NcPrintCollapsible>
+
+			<NcPrintCollapsible id="overview-modelforge" title="Model Forge" icon="add" :default-open="false">
+				<div class="nc-print-card">
+					<ModelForgePanel />
+				</div>
+			</NcPrintCollapsible>
+
+			<NcPrintCollapsible id="overview-guard" title="Print Guard" icon="alert" :default-open="false">
+				<div class="nc-print-card">
+					<PrintGuardPanel />
 				</div>
 			</NcPrintCollapsible>
 

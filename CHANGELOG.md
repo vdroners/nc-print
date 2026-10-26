@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.63.0] - 2026-10-25
+
+### Added
+- Parts library panel over `/media/4TB/3dprints` via nc-print-slicer (Forge port Wave 4).
+- Model Forge v1: 10 parametric generators → 3MF into Prepare (Wave 5).
+- Print Guard lite: Moonraker stall/temp/runout checks + optional webhook notify (Wave 6).
+
 ## [1.62.0] - 2026-10-25
 
 ### Added

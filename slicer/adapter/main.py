@@ -57,6 +57,8 @@ from gcode_stats import compute_breakdown
 from gcode_toolpath import parse_toolpath
 from mesh3mf import stl_bytes_to_3mf, stls_to_multiobject_3mf
 from mesh_analyze import analyze_stl
+from library import list_entries as library_list, read_file as library_read
+from model_forge import list_generators, generate as model_generate
 from overrides import apply_overrides
 from presets import PresetIndex, resolve_triple
 from printer_presets import (
@@ -1108,6 +1110,65 @@ async def profile_settings(request: Request) -> JSONResponse:
 
 
 # ── Pass-through (printers, version, …) ───────────────────────────────────
+
+
+
+@app.get("/api/model-forge")
+async def api_model_forge_list():
+    return {"ok": True, "generators": list_generators()}
+
+
+@app.post("/api/model-forge/{gen_id}")
+async def api_model_forge_generate(gen_id: str, request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    if not isinstance(body, dict):
+        body = {}
+    fmt = str(body.get("format") or "3mf").lower()
+    try:
+        stl, filename = model_generate(gen_id, body.get("options") or body)
+    except KeyError:
+        return JSONResponse({"ok": False, "error": "unknown_generator"}, status_code=404)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
+    if fmt == "stl":
+        return Response(
+            content=stl,
+            media_type="model/stl",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
+    # default 3mf
+    import tempfile, os
+    with tempfile.TemporaryDirectory() as td:
+        out = os.path.join(td, "out.3mf")
+        stl_bytes_to_3mf(stl, out)
+        data = open(out, "rb").read()
+    name3 = filename.rsplit(".", 1)[0] + ".3mf"
+    return Response(
+        content=data,
+        media_type="application/vnd.ms-package.3dmanufacturing-3dmodel+xml",
+        headers={"Content-Disposition": f'attachment; filename="{name3}"'},
+    )
+
+
+@app.get("/api/library")
+async def api_library_list(subdir: str = "", q: str = "", limit: int = 100, offset: int = 0):
+    return library_list(subdir=subdir, q=q, limit=limit, offset=offset)
+
+
+@app.get("/api/library/file")
+async def api_library_file(path: str = ""):
+    data, name_or_err, mime = library_read(path)
+    if data is None:
+        return JSONResponse({"ok": False, "error": name_or_err}, status_code=404 if name_or_err == "not_found" else 400)
+    return Response(
+        content=data,
+        media_type=mime,
+        headers={"Content-Disposition": f'attachment; filename="{name_or_err}"'},
+    )
+
 
 @app.api_route("/api/{path:path}",
                methods=["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"])

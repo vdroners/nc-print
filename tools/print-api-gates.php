@@ -539,4 +539,13 @@ $g50 = $printerSrc !== ''
 	&& preg_match('/IDLE_ONLY_ACTIONS[\s\S]*?filament_extrude/', $printerSrc) === 1;
 gate('G50', $g50, $g50 ? 'filament_extrude guarded + idle-only' : 'filament_extrude missing/not idle-gated');
 
+// G51 — print-guard route + library/model-forge slicer allowlist (Forge port Waves 4–6).
+$slicerProxySrc = is_readable(dirname(__DIR__) . '/lib/Controller/SlicerProxyController.php')
+	? (string) file_get_contents(dirname(__DIR__) . '/lib/Controller/SlicerProxyController.php') : '';
+$g51 = gate_routes_contain($routesRaw, "'print_guard#check'")
+	&& str_contains($slicerProxySrc, "'api/library'")
+	&& str_contains($slicerProxySrc, "'api/model-forge'");
+gate('G51', $g51, $g51 ? 'print-guard + library/model-forge allowlist' : 'missing guard/library/model-forge wiring');
+
 exit($fail === 0 ? 0 : 1);
+

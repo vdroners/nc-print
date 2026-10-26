@@ -38,6 +38,8 @@ services:
     volumes:
       # Operator-authored / synced presets survive restarts.
       - nc-print-slicer-user:/data/user-profiles
+      # Shared parts library (host path used by Forge Studio too).
+      - /media/4TB/3dprints:/library:ro
     mem_limit: 4g
     pids_limit: 512
     healthcheck:
