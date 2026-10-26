@@ -584,10 +584,14 @@ input:checked + .nc-print-switch__slider::before {
 }
 
 /* Chrome content shares the centered content cap so it aligns with the
- * scrolling body on ultra-wide displays. */
+ * scrolling body on ultra-wide displays.
+ *
+ * --nc-print-content-max defaults to 1680px (theme). Ultrawide density
+ * (data-density != comfortable) raises it at 1920 / 2560 / 3200.
+ * Comfortable keeps the classic 1680px cap regardless of viewport. */
 .nc-print-chrome > * {
   margin-inline: auto;
-  max-width: min(1680px, 100%);
+  max-width: var(--nc-print-content-max, 1680px);
   width: 100%;
 }
 
@@ -596,10 +600,35 @@ input:checked + .nc-print-switch__slider::before {
    * 1920+ displays don't stretch the 3-column studio edge-to-edge. */
   display: block;
   margin-inline: auto;
-  max-width: min(1680px, 100%);
+  max-width: var(--nc-print-content-max, 1680px);
   width: 100%;
 }
 
+#nc-print-root[data-density=comfortable] {
+  --nc-print-content-max: 1680px;
+}
+
+@media (min-width: 1920px) {
+  #nc-print-root:not([data-density=comfortable]) {
+    --nc-print-content-max: min(2400px, 92vw);
+    --nc-print-side-left: 340px;
+    --nc-print-side-right: 300px;
+    --nc-print-print-rail-min: 420px;
+  }
+  #nc-print-root:not([data-density=comfortable]) .nc-print-workflow__list {
+    max-width: min(96vw, 820px);
+  }
+}
+@media (min-width: 2560px) {
+  #nc-print-root:not([data-density=comfortable]) {
+    --nc-print-content-max: min(2880px, 94vw);
+  }
+}
+@media (min-width: 3200px) {
+  #nc-print-root:not([data-density=comfortable]) {
+    --nc-print-content-max: min(3200px, 96vw);
+  }
+}
 /* ─── Centered workflow banner (NC-GCS gcs-step-banner pattern) ─ */
 .nc-print-workflow {
   display: flex;
@@ -688,12 +717,12 @@ input:checked + .nc-print-switch__slider::before {
 }
 
 .nc-print-viewport-wrap--studio {
-  min-height: clamp(360px, 52vh, 640px);
+  min-height: clamp(360px, 72vh, 900px);
 }
 
 .nc-print-viewport-wrap--studio .nc-print-viewport-inner {
   height: 100%;
-  min-height: clamp(360px, 52vh, 640px);
+  min-height: clamp(360px, 72vh, 900px);
 }
 
 @media (max-width: 1200px) {

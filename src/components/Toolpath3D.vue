@@ -456,7 +456,10 @@ export default {
 	transform: translateX(-50%);
 	z-index: 7;
 	width: max-content;
-	max-width: min(720px, calc(100% - 680px)); /* clear of the 300px side cards + margins */
+	max-width: min(
+		720px,
+		calc(100% - var(--nc-print-side-left, 300px) - var(--nc-print-side-right, 260px) - 80px)
+	); /* clear of immersive side cards + margins */
 	padding: 10px 14px;
 	border: 1px solid var(--nc-gcs-border, #30363d);
 	border-radius: var(--nc-gcs-radius-md, 12px);

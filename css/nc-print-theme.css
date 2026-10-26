@@ -103,6 +103,14 @@
 	--nc-gcs-header-height: 50px;
 	--nc-gcs-app-shell-banner-height: 56px;
 
+	/* Content budget + immersive / Print rail (4K density wave).
+	 * Comfortable mode forces --nc-print-content-max: 1680px via data-density.
+	 * Ultrawide (default) raises the max at 1920 / 2560 / 3200 via style.scss. */
+	--nc-print-content-max: 1680px;
+	--nc-print-side-left: 300px;
+	--nc-print-side-right: 260px;
+	--nc-print-print-rail-min: 280px;
+
 	/* ─── Z-index scale ──────────────────────────────────────────────── */
 	--nc-gcs-z-popover: 100;
 	--nc-gcs-z-floating: 1100;

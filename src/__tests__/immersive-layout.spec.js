@@ -51,11 +51,22 @@ describe('immersive full-bleed layout', () => {
 	it('PrepareTab opts into immersive and offsets rail/panel inboard of the cards', () => {
 		expect(prepare).toMatch(/mode="immersive"/)
 		expect(prepare).toMatch(/nc-print-prepare--immersive/)
-		// rail/panel offset only applies on wide screens.
+		// rail/panel offset only applies on wide screens; widths track side tokens.
 		expect(prepare).toMatch(/@media \(min-width:\s*1201px\)/)
-		expect(prepare).toMatch(/nc-print-tool-rail\)\s*\{\s*left:\s*316px/)
-		// Right offset thinned to 276px in v1.55.0 (right card 260px + margin).
-		expect(prepare).toMatch(/nc-print-tool-panel\)\s*\{\s*right:\s*276px/)
+		expect(prepare).toMatch(
+			/nc-print-tool-rail\)\s*\{\s*left:\s*calc\(var\(--nc-print-side-left/,
+		)
+		expect(prepare).toMatch(
+			/nc-print-tool-panel\)\s*\{\s*right:\s*calc\(var\(--nc-print-side-right/,
+		)
+	})
+
+	it('immersive side cards and studio viewport use density tokens / raised clamp', () => {
+		expect(layout).toMatch(/width:\s*var\(--nc-print-side-left/)
+		expect(layout).toMatch(/width:\s*var\(--nc-print-side-right/)
+		expect(prepare).toMatch(/clamp\(360px,\s*72vh,\s*900px\)/)
+		expect(toolpath).toMatch(/--nc-print-side-left/)
+		expect(toolpath).toMatch(/--nc-print-side-right/)
 	})
 
 	it('SliceTab reuses the immersive studio layout with the toolpath as background', () => {

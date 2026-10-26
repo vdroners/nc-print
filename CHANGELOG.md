@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.65.0] - 2026-10-26
+
+### Added
+- Ultrawide content budget via `--nc-print-content-max` (1920 / 2560 / 3200 steps) with a Comfortable vs Ultrawide density preference (`localStorage` `nc_print_density`, chrome control + Ctrl+K).
+
+### Changed
+- Print hero rail at ≥1600 (`1.4fr | ≥420px`); Live Tuning / Temperature densify to a 2-column control grid (~720px cap).
+- Prepare/Slice immersive side cards track `--nc-print-side-left/right`; studio viewport clamp raised to `min(72vh, 900px)`.
+- Overview collapsibles use a two-column grid at ≥1600; Ultrawide workflow banner widens to 820px.
+
 ## [1.64.1] - 2026-10-26
 
 ### Added

@@ -15,6 +15,13 @@
  */
 import { TABS } from '@/constants/tabs.js'
 import { openOverviewSection, OVERVIEW_FORGE_ID, OVERVIEW_LIBRARY_ID } from '@/utils/overview-nav.js'
+import {
+	DENSITY_COMFORTABLE,
+	densityLabel,
+	readDensityPref,
+	toggleDensityPref,
+	applyDensityToRoot,
+} from '@/utils/density-pref.js'
 
 /** Panel ids + titles that the palette can jump to / expand (match PrintTab). */
 export const PALETTE_PANELS = [
@@ -63,6 +70,20 @@ export function buildCommands(store, cb = {}) {
 	cmds.push({
 		id: 'nav-overview', title: 'Go to Overview', group: 'Navigation', enabled: true,
 		run: () => store.setActiveTab(TABS.OVERVIEW),
+	})
+
+	const density = readDensityPref()
+	const densityNext = density === DENSITY_COMFORTABLE ? 'Ultrawide' : 'Comfortable'
+	cmds.push({
+		id: 'act-density',
+		title: 'Toggle density (Comfortable / Ultrawide)',
+		group: 'Actions',
+		hint: `now ${densityLabel(density)} → ${densityNext}`,
+		enabled: true,
+		run: () => {
+			const next = toggleDensityPref()
+			applyDensityToRoot(next)
+		},
 	})
 
 	// ── Actions ─────────────────────────────────────────────────────────────

@@ -70,7 +70,7 @@ export default {
 	position: absolute;
 	top: var(--nc-gcs-space-md);
 	bottom: var(--nc-gcs-space-md);
-	width: 300px;
+	width: var(--nc-print-side-left, 300px);
 	max-width: 32vw;
 	z-index: 6;
 	display: flex;
@@ -92,9 +92,9 @@ export default {
 
 .nc-print-prepare-studio--immersive .nc-print-prepare-studio__right {
 	right: var(--nc-gcs-space-md);
-	/* Thinner than the left card — the readiness/summary content is narrow, and
-	   this frees viewport width on the Prepare tab. */
-	width: 260px;
+	/* Thinner than the left card — readiness/summary is narrow. At ≥1920
+	   Ultrawide, --nc-print-side-right rises to 300px via style.scss. */
+	width: var(--nc-print-side-right, 260px);
 }
 
 /* ── Responsive: below the multi-column breakpoint, both modes collapse to a

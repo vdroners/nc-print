@@ -10,6 +10,7 @@ import DropZoneOverlay from './components/DropZoneOverlay.vue'
 import { saveCollapsibleState } from '@/utils/collapsible.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
+import { applyDensityToRoot, readDensityPref } from '@/utils/density-pref.js'
 
 const PrepareTab = () => import(/* webpackChunkName: "nc-print-prepare" */ './components/PrepareTab.vue')
 const SliceTab = () => import(/* webpackChunkName: "nc-print-slice" */ './components/SliceTab.vue')
@@ -62,6 +63,7 @@ export default {
 		await this.printStore.bootstrapDeepLink()
 	},
 	mounted() {
+		applyDensityToRoot(readDensityPref())
 		window.addEventListener('keydown', this.onGlobalKeydown)
 		this.$nextTick(this.observeChromeHeight)
 	},

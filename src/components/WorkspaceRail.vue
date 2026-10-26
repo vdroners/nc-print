@@ -30,9 +30,16 @@ export default {
 .nc-print-workspace {
 	display: grid;
 	gap: var(--nc-gcs-space-md);
-	grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+	grid-template-columns: minmax(0, 1fr) minmax(var(--nc-print-print-rail-min, 280px), 360px);
 	align-items: start;
 	min-height: 0;
+}
+
+/* Wide content: camera/monitor cluster is the visual hero; main controls densify. */
+@media (min-width: 1600px) {
+	.nc-print-workspace {
+		grid-template-columns: minmax(0, 1.4fr) minmax(420px, 0.9fr);
+	}
 }
 
 .nc-print-workspace__main {

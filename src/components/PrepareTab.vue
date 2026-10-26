@@ -868,20 +868,21 @@ export default {
 }
 
 .nc-print-viewport-wrap--studio {
-	min-height: clamp(360px, 52vh, 640px);
+	min-height: clamp(360px, 72vh, 900px);
 	position: relative;
 }
 
 .nc-print-viewport-wrap--studio :deep(.nc-print-viewport-inner) {
-	height: clamp(360px, 52vh, 640px);
-	min-height: clamp(360px, 52vh, 640px);
+	height: clamp(360px, 72vh, 900px);
+	min-height: clamp(360px, 72vh, 900px);
 }
 
 /* ── Immersive: the center column IS the viewport; fill it and float the
    toolbar/rail/panel over it. Only applies on wide screens (the studio layout
-   reverts to columns < 1200px, where these overrides must NOT apply). ──────── */
+   reverts to columns < 1200px, where these overrides must NOT apply).
+   Offsets track --nc-print-side-left/right (+ 16px card margin). ──────────── */
 @media (min-width: 1201px) {
-	/* Info/apply chip — top-center, inboard of the 300px side cards. */
+	/* Info/apply chip — top-center, inboard of the side cards. */
 	.nc-print-prepare--immersive .nc-print-viewport-chip {
 		position: absolute;
 		top: 8px;
@@ -889,34 +890,37 @@ export default {
 		transform: translateX(-50%);
 		z-index: 6;
 		margin: 0;
-		max-width: min(560px, calc(100% - 680px));
+		max-width: min(
+			560px,
+			calc(100% - var(--nc-print-side-left, 300px) - var(--nc-print-side-right, 260px) - 80px)
+		);
 		backdrop-filter: blur(8px);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 	}
 
-	/* History box — top-right corner, inboard of the right 260px card. */
+	/* History box — top-right corner, inboard of the right side card. */
 	.nc-print-prepare--immersive .nc-print-viewport-history {
 		position: absolute;
 		top: 8px;
-		right: 276px;
+		right: calc(var(--nc-print-side-right, 260px) + 16px);
 		z-index: 6;
 		margin: 0;
 	}
 
-	/* Orient keypad — bottom-right corner, inboard of the right 260px card. */
+	/* Orient keypad — bottom-right corner, inboard of the right side card. */
 	.nc-print-prepare--immersive .nc-print-viewport-orientpad {
 		position: absolute;
 		bottom: 8px;
-		right: 276px;
+		right: calc(var(--nc-print-side-right, 260px) + 16px);
 		z-index: 6;
 		margin: 0;
 	}
 
-	/* Plate tabs — bottom-left, inboard of the left 300px card. */
+	/* Plate tabs — bottom-left, inboard of the left side card. */
 	.nc-print-prepare--immersive .nc-print-viewport-plates {
 		position: absolute;
 		bottom: 8px;
-		left: 316px;
+		left: calc(var(--nc-print-side-left, 300px) + 16px);
 		z-index: 6;
 		margin: 0;
 	}
@@ -926,7 +930,7 @@ export default {
 		position: absolute;
 		top: 50%;
 		transform: translateY(-50%);
-		right: 276px;
+		right: calc(var(--nc-print-side-right, 260px) + 16px);
 		z-index: 6;
 		margin: 0;
 	}
@@ -941,13 +945,13 @@ export default {
 		min-height: 0;
 	}
 
-	/* Keep the floating tool rail / panel inboard of the 300px side overlays. */
+	/* Keep the floating tool rail / panel inboard of the side overlays. */
 	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-tool-rail) {
-		left: 316px;
+		left: calc(var(--nc-print-side-left, 300px) + 16px);
 	}
 
 	.nc-print-prepare--immersive .nc-print-viewport-wrap--studio :deep(.nc-print-tool-panel) {
-		right: 276px;
+		right: calc(var(--nc-print-side-right, 260px) + 16px);
 	}
 }
 

@@ -745,6 +745,25 @@ export default {
 	text-transform: uppercase;
 }
 
+/* Wide Print: Operate/Analyze/Media panels sit two-up so tuning+temp aren't
+ * full-bleed sparse ribbons; each card still caps field groups ~720px. */
+@media (min-width: 1600px) {
+	.nc-print-zone {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+	}
+
+	.nc-print-zone__label {
+		grid-column: 1 / -1;
+	}
+
+	.nc-print-zone :deep(.nc-print-tuning),
+	.nc-print-zone :deep(.nc-print-temp-control) {
+		max-width: 720px;
+	}
+}
+
 .nc-print-print-meta {
 	font-size: var(--nc-gcs-text-sm);
 	margin: 0 0 8px;
@@ -755,6 +774,22 @@ export default {
 	display: flex;
 	gap: 12px;
 	margin-bottom: 8px;
+	min-width: 0;
+}
+
+@media (min-width: 1600px) {
+	.nc-print-print-jobhead {
+		gap: 16px;
+	}
+
+	.nc-print-print-jobhead .nc-print-print-meta {
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+
+	:deep(.nc-print-stat-grid) {
+		grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+	}
 }
 
 .nc-print-print-jobhead .nc-print-print-meta {

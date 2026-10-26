@@ -224,6 +224,10 @@ export default {
 </template>
 
 <style scoped>
+.nc-print-temp-control {
+	max-width: 720px;
+}
+
 .nc-print-temp-control__readouts {
 	display: flex;
 	flex-direction: column;
@@ -244,5 +248,13 @@ export default {
 	gap: 8px;
 	grid-template-columns: 1fr 1fr;
 	margin-bottom: 12px;
+}
+
+@media (min-width: 1600px) {
+	.nc-print-temp-control__readouts {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 8px 16px;
+	}
 }
 </style>

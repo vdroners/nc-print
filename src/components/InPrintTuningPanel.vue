@@ -100,33 +100,35 @@ export default {
 			Adjust speed, flow, fan, and Z offset while printing.
 		</p>
 
-		<div class="nc-print-card--inset">
-			<p class="nc-print-section-label">Speed &amp; flow</p>
-			<div class="nc-print-tuning__slider">
-				<label>Speed {{ speed }}%</label>
-				<input v-model.number="speed" type="range" min="50" max="200" step="1" :disabled="busy" @change="onSpeedInput">
+		<div class="nc-print-tuning__grid">
+			<div class="nc-print-card--inset">
+				<p class="nc-print-section-label">Speed &amp; flow</p>
+				<div class="nc-print-tuning__slider">
+					<label>Speed {{ speed }}%</label>
+					<input v-model.number="speed" type="range" min="50" max="200" step="1" :disabled="busy" @change="onSpeedInput">
+				</div>
+				<div class="nc-print-tuning__slider">
+					<label>Flow {{ flow }}%</label>
+					<input v-model.number="flow" type="range" min="50" max="200" step="1" :disabled="busy" @change="onFlowInput">
+				</div>
 			</div>
-			<div class="nc-print-tuning__slider">
-				<label>Flow {{ flow }}%</label>
-				<input v-model.number="flow" type="range" min="50" max="200" step="1" :disabled="busy" @change="onFlowInput">
-			</div>
-		</div>
 
-		<div class="nc-print-card--inset nc-print-tuning__inset-gap">
-			<p class="nc-print-section-label">Cooling &amp; Z</p>
-			<div class="nc-print-tuning__slider">
-				<label>Fan {{ fan }}% <span v-if="fanPercent !== fan" class="nc-print-tuning__hint">(live {{ fanPercent }}%)</span></label>
-				<input v-model.number="fan" type="range" min="0" max="100" step="1" :disabled="busy" @change="onFanInput">
-			</div>
-			<div class="nc-print-tuning__babystep">
-				<span>Babystep Z</span>
-				<div class="nc-print-actions">
-					<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(-0.05)">
-						−0.05
-					</button>
-					<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(0.05)">
-						+0.05
-					</button>
+			<div class="nc-print-card--inset">
+				<p class="nc-print-section-label">Cooling &amp; Z</p>
+				<div class="nc-print-tuning__slider">
+					<label>Fan {{ fan }}% <span v-if="fanPercent !== fan" class="nc-print-tuning__hint">(live {{ fanPercent }}%)</span></label>
+					<input v-model.number="fan" type="range" min="0" max="100" step="1" :disabled="busy" @change="onFanInput">
+				</div>
+				<div class="nc-print-tuning__babystep">
+					<span>Babystep Z</span>
+					<div class="nc-print-actions">
+						<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(-0.05)">
+							−0.05
+						</button>
+						<button type="button" class="nc-print-btn" :disabled="busy" @click="onBabystep(0.05)">
+							+0.05
+						</button>
+					</div>
 				</div>
 			</div>
 		</div>
@@ -140,9 +142,20 @@ export default {
 	margin: 0 0 12px;
 }
 
-.nc-print-tuning__inset-gap {
-	margin-top: var(--nc-gcs-space-md);
+.nc-print-tuning__grid {
+	display: flex;
+	flex-direction: column;
+	gap: var(--nc-gcs-space-md);
+	max-width: 720px;
 }
+
+@media (min-width: 1600px) {
+	.nc-print-tuning__grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+	}
+}
+
 .nc-print-tuning__slider {
 	display: flex;
 	flex-direction: column;

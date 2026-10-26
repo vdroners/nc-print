@@ -5,6 +5,13 @@ import PrintWorkflowBanner from './PrintWorkflowBanner.vue'
 import ServiceHealthBanner from './ServiceHealthBanner.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
 import { TABS } from '@/constants/tabs.js'
+import {
+	DENSITY_COMFORTABLE,
+	applyDensityToRoot,
+	densityLabel,
+	readDensityPref,
+	toggleDensityPref,
+} from '@/utils/density-pref.js'
 
 export default {
 	name: 'AppChromeBar',
@@ -12,6 +19,7 @@ export default {
 	data() {
 		return {
 			notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
+			density: readDensityPref(),
 		}
 	},
 	methods: {
@@ -29,11 +37,31 @@ export default {
 			const next = this.printStore.activeTab === TABS.OVERVIEW ? TABS.PREPARE : TABS.OVERVIEW
 			this.printStore.setActiveTab(next)
 		},
+		onDensityClick() {
+			this.density = toggleDensityPref()
+			applyDensityToRoot(this.density)
+		},
+		syncDensityFromRoot() {
+			this.density = readDensityPref()
+		},
+	},
+	mounted() {
+		window.addEventListener('nc-print-density-changed', this.syncDensityFromRoot)
+	},
+	beforeDestroy() {
+		window.removeEventListener('nc-print-density-changed', this.syncDensityFromRoot)
 	},
 	computed: {
 		...mapStores(usePrintStore),
 		overviewActive() {
 			return this.printStore.activeTab === TABS.OVERVIEW
+		},
+		densityTitle() {
+			const next = this.density === DENSITY_COMFORTABLE ? 'Ultrawide' : 'Comfortable'
+			return `Density: ${densityLabel(this.density)} (click for ${next})`
+		},
+		densityShort() {
+			return this.density === DENSITY_COMFORTABLE ? '1680' : 'Wide'
 		},
 		notifSupported() {
 			return this.notifPermission !== 'unsupported'
@@ -62,6 +90,15 @@ export default {
 		<div class="nc-print-chrome-bar__row">
 			<PrintWorkflowBanner class="nc-print-chrome-bar__workflow" />
 			<div class="nc-print-chrome-bar__actions">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-chrome-bar__density"
+					:class="{ 'nc-print-chrome-bar__density--comfortable': density === 'comfortable' }"
+					:aria-label="densityTitle"
+					:title="densityTitle"
+					@click="onDensityClick">
+					<span class="nc-print-chrome-bar__density-label">{{ densityShort }}</span>
+				</button>
 				<button
 					type="button"
 					class="nc-print-btn nc-print-chrome-bar__overview"
@@ -112,6 +149,21 @@ export default {
 .nc-print-chrome-bar__bell--on {
 	border-color: color-mix(in srgb, var(--nc-app-accent) 60%, var(--nc-gcs-border));
 	color: var(--nc-app-accent);
+}
+
+.nc-print-chrome-bar__density {
+	flex: 0 0 auto;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.02em;
+	padding: 6px 8px;
+	white-space: nowrap;
+}
+
+.nc-print-chrome-bar__density--comfortable {
+	background: color-mix(in srgb, var(--nc-gcs-primary) 12%, transparent);
+	border-color: var(--nc-gcs-primary);
+	color: var(--nc-gcs-primary);
 }
 
 .nc-print-chrome-bar__overview {

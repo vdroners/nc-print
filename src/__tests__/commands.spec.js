@@ -42,6 +42,15 @@ describe('buildCommands', () => {
 		expect(byId(cmds, 'nav-print')).toBeTruthy()
 	})
 
+	it('includes Toggle density (Comfortable / Ultrawide)', () => {
+		const cmd = byId(buildCommands(mockStore()), 'act-density')
+		expect(cmd).toMatchObject({
+			title: 'Toggle density (Comfortable / Ultrawide)',
+			group: 'Actions',
+			enabled: true,
+		})
+	})
+
 	it('gates Go to Slice on prepareComplete', () => {
 		expect(byId(buildCommands(mockStore({ prepareComplete: false })), 'nav-slice').enabled).toBe(false)
 		expect(byId(buildCommands(mockStore({ prepareComplete: true })), 'nav-slice').enabled).toBe(true)

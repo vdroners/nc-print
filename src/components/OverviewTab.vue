@@ -146,6 +146,14 @@ export default {
 	gap: var(--nc-gcs-space-md);
 }
 
+@media (min-width: 1600px) {
+	.nc-print-overview {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		align-items: start;
+	}
+}
+
 /* Stack sections' inner cards with breathing room. */
 .nc-print-overview :deep(.nc-print-card + .nc-print-card) {
 	margin-top: var(--nc-gcs-space-md);
