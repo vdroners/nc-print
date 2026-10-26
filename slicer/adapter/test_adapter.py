@@ -1106,6 +1106,32 @@ def test_kill_proc_terminates_running_process():
     assert proc.poll() is not None
 
 
+
+
+def test_library_list_and_safe_path():
+    import library as lib
+    from pathlib import Path
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        (root / "part.stl").write_bytes(b"solid x\nendsolid x\n")
+        (root / "skip.txt").write_text("nope")
+        orig = lib.LIBRARY_ROOT
+        try:
+            lib.LIBRARY_ROOT = root.resolve()
+            out = lib.list_entries()
+            assert out["ok"] is True
+            names = {e["name"] for e in out["entries"]}
+            assert "part.stl" in names
+            assert "skip.txt" not in names
+            data, name, mime = lib.read_file("part.stl")
+            assert data and name == "part.stl"
+            bad, err, _ = lib.read_file("../etc/passwd")
+            assert bad is None and err
+        finally:
+            lib.LIBRARY_ROOT = orig
+
+
 if __name__ == "__main__":
     import traceback
     failures = 0
@@ -1119,20 +1145,3 @@ if __name__ == "__main__":
                 print(f"FAIL {name}")
                 traceback.print_exc()
     sys.exit(1 if failures else 0)
-
-def test_library_list_and_safe_path(tmp_path, monkeypatch):
-    import library as lib
-    root = tmp_path / "libroot"
-    root.mkdir()
-    (root / "part.stl").write_bytes(b"solid x\nendsolid x\n")
-    (root / "skip.txt").write_text("nope")
-    monkeypatch.setattr(lib, "LIBRARY_ROOT", root.resolve())
-    out = lib.list_entries()
-    assert out["ok"] is True
-    names = {e["name"] for e in out["entries"]}
-    assert "part.stl" in names
-    assert "skip.txt" not in names
-    data, name, mime = lib.read_file("part.stl")
-    assert data and name == "part.stl"
-    bad, err, _ = lib.read_file("../etc/passwd")
-    assert bad is None and err
