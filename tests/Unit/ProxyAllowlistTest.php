@@ -56,6 +56,8 @@ class ProxyAllowlistTest extends TestCase
 		$prefixes = [
 			'api/health', 'api/version', 'api/profiles', 'api/profile-settings',
 			'api/printers', 'api/slice', 'api/jobs/', 'api/mesh/', 'api/calibration',
+			'api/library',
+			'api/model-forge',
 		];
 		$allowed = static function (string $p) use ($prefixes): bool {
 			foreach ($prefixes as $prefix) {
