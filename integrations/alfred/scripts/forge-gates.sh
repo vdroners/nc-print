@@ -110,7 +110,7 @@ gate_cfg() {
     bad "G-FORGE-C3 webhook secret file missing/insecure"
   fi
   [[ -n "${FORGE_ALERT_TALK_ROOM:-}" ]] && ok "G-FORGE-C4 talk room set" || bad "G-FORGE-C4 FORGE_ALERT_TALK_ROOM missing"
-  if bash "${SCRIPT_DIR}/talk-post.sh" --dry-run "[forge] gate test" "${FORGE_ALERT_TALK_ROOM}" >/dev/null 2>&1; then
+  if bash "${SCRIPT_DIR}/talk-post.sh" --dry-run "[nc_print] gate test" "${FORGE_ALERT_TALK_ROOM}" >/dev/null 2>&1; then
     ok "G-FORGE-C5 talk-post dry-run"
   else
     bad "G-FORGE-C5 talk-post dry-run failed"
@@ -302,7 +302,7 @@ gate_fastpath() {
   else
     bad "G-FORGE-F1 dispatch help failed"
   fi
-  if FORGE_TALK_DRY_RUN=1 bash "${SCRIPT_DIR}/forge-talk-fast-path.sh" "@alfred print status" "testroom" 2>/dev/null | grep -q '\[forge\]'; then
+  if FORGE_TALK_DRY_RUN=1 bash "${SCRIPT_DIR}/forge-talk-fast-path.sh" "@alfred print status" "testroom" 2>/dev/null | grep -qE '\[(nc_print|forge)\]'; then
     ok "G-FORGE-F2 fast-path dry-run"
   else
     bad "G-FORGE-F2 fast-path dry-run failed"
