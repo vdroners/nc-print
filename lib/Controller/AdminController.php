@@ -40,13 +40,20 @@ class AdminController extends Controller
 			ConfigService::KEY_ALLOWED_GROUPS,
 			ConfigService::KEY_MULTI_PRINTERS,
 			ConfigService::KEY_DISCOVERY_SUBNET,
+			ConfigService::KEY_OUTBOUND_WEBHOOK_URL,
+			ConfigService::KEY_OUTBOUND_WEBHOOK_SECRET,
 		];
 		foreach ($stringKeys as $key) {
 			if (array_key_exists($key, $params)) {
+				$val = trim((string) $params[$key]);
+				// Blank secret means "keep existing" so the admin form can omit it.
+				if ($key === ConfigService::KEY_OUTBOUND_WEBHOOK_SECRET && $val === '') {
+					continue;
+				}
 				$this->config->setAppValue(
 					Application::APP_ID,
 					$key,
-					trim((string) $params[$key]),
+					$val,
 				);
 			}
 		}
@@ -54,6 +61,7 @@ class AdminController extends Controller
 		foreach ([
 			ConfigService::KEY_SLICER_ENABLED,
 			ConfigService::KEY_MOONRAKER_ENABLED,
+			ConfigService::KEY_OUTBOUND_WEBHOOK_ENABLED,
 			// console_enabled is intentionally NOT writable here — occ-only.
 		] as $boolKey) {
 			if (array_key_exists($boolKey, $params)) {

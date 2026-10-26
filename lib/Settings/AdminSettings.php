@@ -66,6 +66,16 @@ class AdminSettings implements ISettings
 				ConfigService::KEY_CONSOLE_ENABLED,
 				false,
 			),
+			ConfigService::KEY_OUTBOUND_WEBHOOK_ENABLED => $this->isEnabled(
+				ConfigService::KEY_OUTBOUND_WEBHOOK_ENABLED,
+				false,
+			),
+			ConfigService::KEY_OUTBOUND_WEBHOOK_URL => $this->getString(
+				ConfigService::KEY_OUTBOUND_WEBHOOK_URL,
+				'',
+			),
+			// never echo secret back — blank means keep existing
+			ConfigService::KEY_OUTBOUND_WEBHOOK_SECRET => '',
 			'save_url' => $this->urlGenerator->linkToRoute(
 				'nc_print.admin.saveSettings',
 			),

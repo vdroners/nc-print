@@ -26,6 +26,11 @@ class ConfigService
 	/** WS11 G-code console: arbitrary command send. Default OFF. */
 	public const KEY_CONSOLE_ENABLED = 'console_enabled';
 
+	/** Outbound HMAC webhook (Alfred / forge-webhook-relay). Default OFF. */
+	public const KEY_OUTBOUND_WEBHOOK_URL = 'outbound_webhook_url';
+	public const KEY_OUTBOUND_WEBHOOK_SECRET = 'outbound_webhook_secret';
+	public const KEY_OUTBOUND_WEBHOOK_ENABLED = 'outbound_webhook_enabled';
+
 	/**
 	 * Owned slicing engine sidecar (nc-print-slicer), reached by container DNS
 	 * over the shared nc-print-net network. Addressing it by container name
@@ -481,6 +486,35 @@ class ConfigService
 		$port = (int) ($parsed['port'] ?? 7125);
 
 		return $host . ':' . $port;
+	}
+
+	public function isOutboundWebhookEnabled(): bool
+	{
+		$v = $this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_OUTBOUND_WEBHOOK_ENABLED,
+			'0',
+		);
+		return $v === '1' || $v === 'yes' || $v === 'true';
+	}
+
+	public function getOutboundWebhookUrl(): string
+	{
+		return trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_OUTBOUND_WEBHOOK_URL,
+			'',
+		));
+	}
+
+	/** Secret is never exposed via publicBootstrap — admin/occ only. */
+	public function getOutboundWebhookSecret(): string
+	{
+		return trim($this->config->getAppValue(
+			Application::APP_ID,
+			self::KEY_OUTBOUND_WEBHOOK_SECRET,
+			'',
+		));
 	}
 
 	/** @return list<string> */

@@ -128,12 +128,23 @@ def _rate_ok() -> bool:
 
 
 def _format_message(payload: dict) -> str:
-    title = str(payload.get("title") or payload.get("event") or "Forge event")
+    title = str(payload.get("title") or payload.get("event") or "Print event")
     message = str(payload.get("message") or "").strip()
-    lines = [f"[forge] {title}"]
+    source = str(payload.get("source") or "").lower()
+    prefix = "[nc_print]" if source == "nc_print" else "[forge]"
+    dash = os.environ.get(
+        "NC_PRINT_DASHBOARD_URL",
+        os.environ.get("FORGE_DASHBOARD_URL", DASHBOARD),
+    )
+    if source == "nc_print":
+        dash = os.environ.get(
+            "NC_PRINT_DASHBOARD_URL",
+            "https://cloud-vdroners.ddns.net/apps/nc_print/",
+        )
+    lines = [f"{prefix} {title}"]
     if message:
         lines.append(message)
-    lines.append(DASHBOARD)
+    lines.append(dash)
     return "\n".join(lines)
 
 
