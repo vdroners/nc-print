@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.63.1** · Nextcloud 28–35 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.64.0** · Nextcloud 28–35 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -13,6 +13,7 @@ external slicer service** and no NC-GCS dependency.
 
 - Outbound HMAC webhooks on print transitions (Alfred Talk relay)
 - Parts library, Model Forge v1 generators, and Print Guard lite (Forge port Waves 4–6)
+- **UI workflow 1.64.0:** honest Print monitor, cold-start Prepare, Library/Forge from Prepare + Ctrl+K
 - **3DPrintForge Studio retired** (lab 2026-10-26): use NC Print only; engine source remains under `/media/4TB/3dprintforge/slicer/` for `make slicer-fetch` — see `docs/STACK_MAP.md`
 
 **Prepare**

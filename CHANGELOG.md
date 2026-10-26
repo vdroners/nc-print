@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.64.0] - 2026-10-26
+
+### Added
+- Prepare entry points for Parts Library and Model Forge, plus Ctrl+K jumps (UI workflow C).
+
+### Changed
+- Print honesty: Pause / Resume / Cancel and job chrome follow `printing`|`paused` only; idle/error shows a Last job card; sticky monitor + camera “No stream” (UI workflow A).
+- Prepare cold start: empty bed asks for a model; advisory checklist rows are amber; short Prepare subtitle; bed cage clipped; Scan/IP stays on Overview (UI workflow B).
+- App footer says `Moonraker + nc-print-slicer` (Forge Studio retired).
+- CI: drop unused `vimeo/psalm` from require-dev so `composer install` matches the lock on Actions.
+
 ## [1.63.1] - 2026-10-26
 
 ### Changed

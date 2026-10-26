@@ -234,7 +234,7 @@ export default {
 		<DropZoneOverlay />
 
 		<template #footer>
-			NC 3D Print v{{ version }} · Moonraker + Forge Slicer
+			NC 3D Print v{{ version }} · Moonraker + nc-print-slicer
 		</template>
 	</PrintAppShell>
 </template>

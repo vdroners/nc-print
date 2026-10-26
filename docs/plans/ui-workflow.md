@@ -1,6 +1,6 @@
 # Operator UI workflow — trust the machine, cold start, start-job paths (2026-10-26)
 
-**Status:** PLANNED (docs only — do not implement A/B/C in the PR that adds this file)
+**Status:** SHIPPED in 1.64.0 (PRs #7–#10 + #6; lab `make ship` same cut)
 **Repo:** `vdroners/nc-print` · app id `nc_print` · UI title **NC 3D Print**
 **Tree this plan was written against:** `1.63.0` (`appinfo/info.xml`, `package.json`). The Oct 26 2026 lab capture footer read **v1.63.1**; the symbols below are in this tree and match that capture.
 **Browser verify URL (implementers, after `make ship`):** `https://cloud-vdroners.ddns.net/apps/nc_print/`
