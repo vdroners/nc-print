@@ -13,13 +13,16 @@ import WebcamListPanel from './WebcamListPanel.vue'
 import PartsLibraryPanel from './PartsLibraryPanel.vue'
 import ModelForgePanel from './ModelForgePanel.vue'
 import PrintGuardPanel from './PrintGuardPanel.vue'
+import { consumePendingOverviewSection, OVERVIEW_FOCUS_EVENT } from '@/utils/overview-nav.js'
 
 /**
  * The management console — everything that isn't the current print project:
  * printer fleet, filament inventory, materials & calibration, history &
- * analytics, maintenance, achievements, and cameras. A document-style page
- * (collapsible sections), NOT the immersive 3D studio layout the workflow tabs
- * use. Reached via the gear button in the chrome bar (not a workflow step).
+ * analytics, maintenance, achievements, parts library, model forge, print
+ * guard, and cameras. A document-style page (collapsible sections), NOT the
+ * immersive 3D studio layout the workflow tabs use. Reached via the Overview
+ * control in the chrome bar (not a workflow step). Prepare and Ctrl+K can
+ * deep-link straight to Parts library or Model Forge.
  */
 export default {
 	name: 'OverviewTab',
@@ -38,6 +41,33 @@ export default {
 		PartsLibraryPanel,
 		ModelForgePanel,
 		PrintGuardPanel,
+	},
+	mounted() {
+		window.addEventListener(OVERVIEW_FOCUS_EVENT, this.onFocusOverview)
+		this.focusSection(consumePendingOverviewSection())
+	},
+	beforeDestroy() {
+		window.removeEventListener(OVERVIEW_FOCUS_EVENT, this.onFocusOverview)
+	},
+	methods: {
+		onFocusOverview(e) {
+			// This instance is already on screen, so drop the token a later
+			// mount would otherwise scroll to.
+			consumePendingOverviewSection()
+			this.focusSection(e?.detail?.id)
+		},
+		focusSection(id) {
+			if (!id) {
+				return
+			}
+			const ref = this.$refs[id]
+			const section = Array.isArray(ref) ? ref[0] : ref
+			section?.expand?.()
+			this.$nextTick(() => {
+				const node = section?.$el || section
+				node?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+			})
+		},
 	},
 }
 </script>
@@ -85,13 +115,13 @@ export default {
 				</div>
 			</NcPrintCollapsible>
 
-			<NcPrintCollapsible id="overview-library" title="Parts library" icon="folder" :default-open="false">
+			<NcPrintCollapsible id="overview-library" ref="overview-library" title="Parts library" icon="folder" :default-open="false">
 				<div class="nc-print-card">
 					<PartsLibraryPanel />
 				</div>
 			</NcPrintCollapsible>
 
-			<NcPrintCollapsible id="overview-modelforge" title="Model Forge" icon="add" :default-open="false">
+			<NcPrintCollapsible id="overview-modelforge" ref="overview-modelforge" title="Model Forge" icon="add" :default-open="false">
 				<div class="nc-print-card">
 					<ModelForgePanel />
 				</div>
