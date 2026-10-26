@@ -1,6 +1,11 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
+import {
+	visiblePrepareChecklist,
+	checklistRowClass,
+	checklistRowMark,
+} from '@/utils/prepare-checklist-ui.js'
 
 export default {
 	name: 'PrepareChecklist',
@@ -17,10 +22,7 @@ export default {
 			return this.printStore.prepareChecklist
 		},
 		displayItems() {
-			if (!this.blockingOnly) {
-				return this.items
-			}
-			return this.items.filter(row => !row.ok && !row.pending)
+			return visiblePrepareChecklist(this.items, { blockingOnly: this.blockingOnly })
 		},
 		allClear() {
 			return this.blockingOnly && this.displayItems.length === 0
@@ -33,18 +35,10 @@ export default {
 			}
 		},
 		rowClass(row) {
-			return [
-				row.pending
-					? 'nc-print-checklist__row--pending'
-					: (row.ok ? 'nc-print-checklist__row--ok' : 'nc-print-checklist__row--missing'),
-				row.action ? 'nc-print-checklist__row--clickable' : '',
-			]
+			return checklistRowClass(row)
 		},
 		rowMark(row) {
-			if (row.pending) {
-				return '–'
-			}
-			return row.ok ? '✓' : '✗'
+			return checklistRowMark(row)
 		},
 	},
 }
@@ -162,6 +156,10 @@ export default {
 
 .nc-print-checklist__row--pending .nc-print-checklist__label {
 	color: var(--nc-gcs-text-muted);
+}
+
+.nc-print-checklist__row--advisory .nc-print-checklist__mark {
+	color: var(--nc-gcs-warning, var(--color-warning, #eab308));
 }
 
 .nc-print-checklist__hint {

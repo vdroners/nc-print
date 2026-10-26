@@ -634,15 +634,18 @@ export const usePrintStore = defineStore('print', {
 			if (!this.selectedPrinterId) {
 				return ''
 			}
+			const failure = String(this.printerState.message || this.printerState.lastError || '').trim()
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
-				if (st === 'reconnecting') {
-					return `${name} · reconnecting…`
-				}
-				return `${name} · offline`
+				const status = st === 'reconnecting' ? 'reconnecting…' : 'offline'
+				return failure ? `${name} · ${status} · ${failure}` : `${name} · ${status}`
 			}
-			const st = this.printerStatusLabel
-			return `${name} · ${st.toLowerCase()}`
+			const stLabel = this.printerStatusLabel.toLowerCase()
+			const raw = (this.printerState.state || '').toLowerCase()
+			if (raw.includes('error') && failure) {
+				return `${name} · ${stLabel} · ${failure}`
+			}
+			return `${name} · ${stLabel}`
 		},
 		targetConnectionClass() {
 			if (!this.selectedPrinterId) {
@@ -651,6 +654,9 @@ export const usePrintStore = defineStore('print', {
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
 				return st === 'reconnecting' ? 'is-reconnecting' : 'is-offline'
+			}
+			if ((this.printerState.state || '').toLowerCase().includes('error')) {
+				return 'is-error'
 			}
 			return 'is-online'
 		},
@@ -923,32 +929,10 @@ export const usePrintStore = defineStore('print', {
 		},
 		workflowStepSubtitle(state) {
 			return (stepId) => {
-				const profileNames = (() => {
-					const find = (list, id) => list.find(p => String(p.id) === String(id))
-					const printer = find(state.profiles.printers, state.selection.printerId)?.name
-					const filament = find(state.profiles.filaments, state.selection.filamentId)?.name
-					const process = find(state.profiles.processes, state.selection.processId)?.name
-					if (printer && filament && process) {
-						return `${printer} · ${filament} · ${process}`
-					}
-					return ''
-				})()
-
 				if (stepId === TABS.PREPARE) {
-					const model = state.model.name || 'Import a model'
-					const target = (() => {
-						const p = state.configuredPrinters.find(x => String(x.id) === String(state.selectedPrinterId))
-						const name = p?.name || state.selectedPrinterId
-						if (!name) {
-							return ''
-						}
-						const st = (state.printerState.state || 'unknown').toLowerCase()
-						return ` → ${name} (${st})`
-					})()
-					if (profileNames) {
-						return `${model} · ${profileNames}${target}`
-					}
-					return `${model}${target}`
+					// Short chrome label. Profiles stay in the left-rail picker;
+					// printer status stays on the header chip and the connection line.
+					return state.model.name || 'No model'
 				}
 				if (stepId === TABS.SLICE) {
 					if (state.sliceJob.status === 'running') {
@@ -992,8 +976,8 @@ export const usePrintStore = defineStore('print', {
 		/**
 		 * Printer-picker groups: Recent (MRU, resolved against configured), then
 		 * the remaining Configured printers, then Found-on-network candidates
-		 * (deduped against configured/recent). Feeds MultiPrinterPicker's
-		 * optgroups so the printers you use float to the top.
+		 * (deduped against configured/recent). Feeds the Overview fleet
+		 * TargetPrinterPicker optgroups so the printers you use float to the top.
 		 */
 		printerPickerGroups(state) {
 			const configured = this.configuredPrinters

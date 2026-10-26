@@ -21,8 +21,9 @@ import PrepareStudioLayout from './PrepareStudioLayout.vue'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import PrepareToolRail from './PrepareToolRail.vue'
 import PrepareToolPanel from './PrepareToolPanel.vue'
-import TargetPrinterPicker from './TargetPrinterPicker.vue'
+import PrinterConnectionStatus from './PrinterConnectionStatus.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
+import { saveCollapsibleState } from '@/utils/collapsible.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { resolveFile } from '@/services/files-api.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
@@ -50,7 +51,7 @@ export default {
 		PrepareToolRail,
 		PrepareToolPanel,
 		NcPrintIcon,
-		TargetPrinterPicker,
+		PrinterConnectionStatus,
 	},
 	data() {
 		return {
@@ -526,8 +527,8 @@ export default {
 				return
 			}
 			if (action === 'target') {
-				this.$refs.targetPrinterCard?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' })
-				document.getElementById('nc-print-target-printer-prepare')?.focus()
+				saveCollapsibleState('overview-printers', true)
+				this.printStore.setActiveTab(TABS.OVERVIEW)
 				return
 			}
 			if (action === 'slicer') {
@@ -619,14 +620,14 @@ export default {
 			</div>
 		</div>
 
-		<div ref="targetPrinterCard" class="nc-print-card">
+		<div class="nc-print-card">
 			<h2 class="nc-print-card__title">
 				<span class="nc-print-card__title-row">
 					<NcPrintIcon name="printer" :size="18" />
 					Send-to printer
 				</span>
 			</h2>
-			<TargetPrinterPicker variant="prepare" select-id="nc-print-target-printer-prepare" />
+			<PrinterConnectionStatus />
 		</div>
 
 		<NcPrintCollapsible id="prepare-model-profiles" ref="modelProfilesCollapsible" title="Model & profiles" icon="layers">
@@ -672,7 +673,8 @@ export default {
 				<ModelViewport
 					ref="viewport"
 					:file="printStore.model.file"
-					:build-volume="buildVolume" />
+					:build-volume="buildVolume"
+					@import-model="triggerImport" />
 
 				<!-- Build-plate switcher (bottom-left, clear of the corner controls). -->
 				<PlateTabs class="nc-print-viewport-plates" />
