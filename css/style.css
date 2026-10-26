@@ -294,6 +294,7 @@
   border: 1px solid var(--nc-gcs-border);
   border-radius: var(--nc-gcs-radius);
   overflow: hidden;
+  position: relative;
 }
 .nc-print-camera-panel img,
 .nc-print-camera-panel video {
@@ -302,15 +303,29 @@
   object-fit: cover;
   width: 100%;
 }
+.nc-print-camera-panel img.nc-print-camera-panel__frame--pending,
+.nc-print-camera-panel video.nc-print-camera-panel__frame--pending {
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
 
 .nc-print-camera-placeholder {
   align-items: center;
   color: var(--nc-gcs-text-muted);
   display: flex;
+  flex-direction: column;
   font-size: var(--nc-gcs-text-sm);
+  gap: 8px;
   height: 100%;
+  inset: 0;
   justify-content: center;
   min-height: 180px;
+  padding: 12px;
+  position: absolute;
+  text-align: center;
+  z-index: 1;
 }
 
 /* ─── Form controls ─────────────────────────────────────────────── */

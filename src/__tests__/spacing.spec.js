@@ -25,11 +25,16 @@ describe('spacing & clipping cleanup (G37a)', () => {
 		expect(rule[1]).not.toMatch(/white-space:\s*nowrap/)
 	})
 
-	it('print status bar sticks BELOW the chrome bar (no clipping) and under its z-index', () => {
+	it('print status bar does not cover the chrome; the monitor cluster owns the offset', () => {
 		const rule = statusBar.match(/\.nc-print-statusbar \{([^}]*)\}/)
 		expect(rule).not.toBeNull()
-		// top offset = chrome height (not top:0), like WorkspaceRail
-		expect(rule[1]).toMatch(/top:\s*var\(--nc-print-chrome-h/)
+		// The bar used to stick with top: chrome-height. It now lives in the
+		// monitor cluster, which sticks below the chrome. A second sticky
+		// offset on the bar covers the camera.
+		expect(rule[1]).not.toMatch(/top:\s*var\(--nc-print-chrome-h/)
+		expect(rule[1]).not.toMatch(/position:\s*sticky/)
+		expect(workspaceRail).toMatch(/position:\s*sticky/)
+		expect(workspaceRail).toMatch(/top:\s*var\(--nc-print-chrome-h/)
 		// z-index below the chrome's 3 (was 20, which caused the overlap).
 		// Match the declaration (ends with ;), not the "z-index:3" in a comment.
 		const z = rule[1].match(/z-index:\s*(\d+)\s*;/)
