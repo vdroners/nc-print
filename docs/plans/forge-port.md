@@ -162,9 +162,18 @@ Each wave: branch from up-to-date `main` → implement → bump (`make bump-mino
 - [x] CPM `forge-vdroners.ddns.net` (proxy_hosts id=8) `enabled=0`; live Caddy routes removed.
 - [x] Keep `forge-webhook-relay` + CPM `alfred-vdroners` (NC HMAC path).
 - [x] Keep `/media/4TB/3dprints` and ENGINE_SRC tree.
-- [x] Stop+disable `alfred-cron-forge-print-monitor.timer` (Alfred must cut OpenClaw `FORGE_*` → `:3040` over to NC Print).
+- [x] Stop+disable `alfred-cron-forge-print-monitor.timer` (re-verified 2026-10-26 during 1.64.0 ship; was still enabled after Wave 8 — stopped again).
 - [ ] Alfred OpenClaw env / skill re-gate on NC-only path (Alfred follow-up).
 - [ ] Optional: one full print-cycle NC-only monitor verify after Alfred re-gate.
+
+### Alfred handoff (operator — do not edit secrets from agents)
+
+Inventory at 1.64.0 ship:
+
+- OpenClaw still registers skill `forge-print` in `~/.openclaw/openclaw.json`; workspace also has `workspace/skills/forge-print/` beside NC’s `integrations/alfred/skills/nc-print/`.
+- Monitor timer `alfred-cron-forge-print-monitor` ran `forge-print-monitor.sh` with `FORGE_MONITOR` (dead Forge path). Timer is now stopped/disabled; re-enable only after NC-only monitor is wired.
+- Keep `forge-webhook-relay` on `:8790` (NC outbound HMAC → Alfred Talk).
+- Follow-up: point OpenClaw skill/env at NC Print only; alias or retire `forge-print`; dry-run one Talk/monitor cycle NC-only.
 
 ---
 
