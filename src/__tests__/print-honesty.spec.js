@@ -77,6 +77,15 @@ describe('print workflow subtitle', () => {
 			connected: false, state: 'printing', filename: 'door.gcode', progress: 0.5,
 		}))).toBe('Offline')
 	})
+
+	it('says Link lost when a last-contact snapshot exists', () => {
+		expect(printWorkflowSubtitle(state({
+			connected: false, state: 'offline', filename: 'door.gcode',
+		}), { atMs: 1 })).toBe('Link lost')
+		expect(printWorkflowSubtitle(state({
+			connected: false, state: 'reconnecting',
+		}), { atMs: 1 })).toBe('Reconnecting')
+	})
 })
 
 describe('live controls vs last job', () => {

@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Service\MoonrakerHttp;
 use OCA\NcPrint\Service\OutboundWebhookService;
 use OCA\NcPrint\Service\PrintGuardService;
 use OCP\AppFramework\Controller;
@@ -51,12 +52,8 @@ class PrintGuardController extends Controller
 		}
 
 		$url = rtrim($base, '/') . '/printer/objects/query?print_stats&display_status&extruder&heater_bed&filament_switch_sensor';
-		try {
-			$client = $this->clientService->newClient();
-			$resp = $client->get($url, ['timeout' => 8, 'connect_timeout' => 3]);
-			$body = json_decode($resp->getBody(), true);
-		} catch (\Throwable $e) {
-			$this->logger->warning('print guard moonraker fetch failed', ['exception' => $e]);
+		$body = $this->fetchGuardStatus($url);
+		if ($body === null) {
 			return new JSONResponse(['ok' => false, 'error' => 'moonraker_unreachable'], Http::STATUS_BAD_GATEWAY);
 		}
 		$status = is_array($body) ? ($body['result']['status'] ?? []) : [];
@@ -94,5 +91,35 @@ class PrintGuardController extends Controller
 			'alerts' => $result['alerts'],
 			'snapshot' => $result['snapshot'],
 		]);
+	}
+
+	/**
+	 * Status read only. One retry on a transient connect failure.
+	 *
+	 * @return array<string, mixed>|null
+	 */
+	private function fetchGuardStatus(string $url): ?array
+	{
+		$client = $this->clientService->newClient();
+		$options = [
+			'timeout' => MoonrakerHttp::PROBE_TIMEOUT_SECONDS,
+			'connect_timeout' => MoonrakerHttp::PROBE_CONNECT_SECONDS,
+			'nextcloud' => ['allow_local_address' => true],
+		];
+		$last = null;
+		for ($attempt = 1; $attempt <= MoonrakerHttp::PROBE_MAX_ATTEMPTS; $attempt++) {
+			try {
+				$resp = $client->get($url, $options);
+				$decoded = json_decode($resp->getBody(), true);
+				return is_array($decoded) ? $decoded : [];
+			} catch (\Throwable $e) {
+				$last = $e;
+				if ($attempt >= MoonrakerHttp::PROBE_MAX_ATTEMPTS || !MoonrakerHttp::throwableIsTransientConnect($e)) {
+					break;
+				}
+			}
+		}
+		$this->logger->warning('print guard moonraker fetch failed', ['exception' => $last]);
+		return null;
 	}
 }

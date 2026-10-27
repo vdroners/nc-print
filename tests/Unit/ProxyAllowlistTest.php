@@ -171,7 +171,7 @@ class ProxyAllowlistTest extends TestCase
 		$this->assertMatchesRegularExpression('/ALLOWED_POST_PREFIXES\s*=\s*\[/', $src);
 		$start = strpos($src, 'ALLOWED_GET_PREFIXES');
 		$this->assertNotFalse($start);
-		$end = strpos($src, 'private const CONNECT_TIMEOUT', $start);
+		$end = strpos($src, 'private const MAX_BODY_BYTES', $start);
 		$this->assertNotFalse($end);
 		$block = substr($src, $start, $end - $start);
 		$this->assertStringNotContainsString('printer/gcode/script', $block);

@@ -9,7 +9,8 @@
 | Slice ignores my settings | Fixed in v1.12.1 — rebuild the sidecar (`make slicer-up`); the `settings` SSE event reports what was applied |
 | "slicer busy" (503) | `MAX_CONCURRENT_SLICES` reached — retry, or raise the limit (see Admin) |
 | Mesh too large | Over `MAX_MESH_TRIANGLES` — decimate the model, or raise the limit |
-| Moonraker offline | `curl http://10.0.0.210:7125/server/info` |
+| Moonraker offline | `curl -m 15 http://10.0.0.210:7125/server/info` |
+| Moonraker offline, camera or stock UI still works | Weak Wi-Fi, not a bad URL — [notes/k1-max-wifi.md](notes/k1-max-wifi.md) |
 | Creality Print "unknown error" / timeout on Send, printer shows online | Printer Wi-Fi link, not the app — [troubleshooting/k1-max-wifi-send-timeouts.md](troubleshooting/k1-max-wifi-send-timeouts.md) |
 | "unknown error" popup on the K1 Max LCD at print start | Klipper `key61` unknown command — [troubleshooting/printer-unknown-error-key61.md](troubleshooting/printer-unknown-error-key61.md) |
 | Red health banner | `curl -s https://<cloud>/apps/nc_print/api/status` — check `slicer_ok` / `moonraker_ok` |

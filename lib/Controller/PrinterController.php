@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Service\MoonrakerHttp;
 use OCA\NcPrint\Service\MultipartBuilder;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -18,8 +19,6 @@ use Psr\Log\LoggerInterface;
 
 class PrinterController extends Controller
 {
-	private const CONNECT_TIMEOUT_SECONDS = 5;
-	private const DEFAULT_TIMEOUT_SECONDS = 60;
 	private const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
 	private const NOZZLE_TEMP_MIN = 0;
@@ -115,7 +114,7 @@ class PrinterController extends Controller
 			],
 		], JSON_THROW_ON_ERROR);
 
-		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $this->request->getParam('printer_id'));
+		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $this->request->getParam('printer_id'), 'read');
 		if ($resolveErr = $this->consumeResolveError()) {
 			return $resolveErr;
 		}
@@ -151,7 +150,7 @@ class PrinterController extends Controller
 		$objectsPayload = json_encode([
 			'objects' => ['toolhead' => null, 'configfile' => null],
 		], JSON_THROW_ON_ERROR);
-		$objects = $this->moonrakerPost('printer/objects/query', $objectsPayload, 'application/json', $printerId);
+		$objects = $this->moonrakerPost('printer/objects/query', $objectsPayload, 'application/json', $printerId, 'read');
 		if ($resolveErr = $this->consumeResolveError()) {
 			return $resolveErr;
 		}
@@ -423,7 +422,7 @@ class PrinterController extends Controller
 		$start = in_array(strtolower($startRaw), ['1', 'true', 'yes', 'on'], true);
 
 		$built = MultipartBuilder::buildMoonrakerUpload($binary, $filename, $start);
-		$result = $this->moonrakerPost('server/files/upload', $built['body'], $built['contentType'], $this->request->getParam('printer_id'));
+		$result = $this->moonrakerPost('server/files/upload', $built['body'], $built['contentType'], $this->request->getParam('printer_id'), 'upload');
 		if ($resolveErr = $this->consumeResolveError()) {
 			return $resolveErr;
 		}
@@ -614,7 +613,7 @@ class PrinterController extends Controller
 		$payload = json_encode([
 			'objects' => ['print_stats' => null],
 		], JSON_THROW_ON_ERROR);
-		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $printerId);
+		$result = $this->moonrakerPost('printer/objects/query', $payload, 'application/json', $printerId, 'read');
 		if ($result === null) {
 			return true;
 		}
@@ -834,8 +833,12 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
-	/** @return array<string, mixed>|null */
-	private function moonrakerPost(string $path, string $body, string $contentType, ?string $printerId = null): ?array
+	/**
+	 * @param string $profile `read` retries one transient connect failure.
+	 *                        `control` (pause/cancel/ESTOP/gcode) and `upload` do not.
+	 * @return array<string, mixed>|null
+	 */
+	private function moonrakerPost(string $path, string $body, string $contentType, ?string $printerId = null, string $profile = 'control'): ?array
 	{
 		$this->lastMoonrakerResolveError = null;
 		try {
@@ -845,19 +848,20 @@ class PrinterController extends Controller
 			return null;
 		}
 		$url = $base . '/' . ltrim($path, '/');
+		[$timeout, $connect, $retry] = MoonrakerHttp::curlBudget($profile);
 
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_POST, true);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, self::DEFAULT_TIMEOUT_SECONDS);
-		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+		MoonrakerHttp::applyTimeouts($ch, $timeout, $connect);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: ' . $contentType]);
 
-		$responseBody = curl_exec($ch);
-		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		$error = curl_error($ch);
+		$exec = MoonrakerHttp::exec($ch, $retry);
+		$responseBody = $exec['body'];
+		$httpCode = $exec['http'];
+		$error = $exec['error'];
 		curl_close($ch);
 
 		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {
@@ -891,15 +895,16 @@ class PrinterController extends Controller
 		}
 		$url = $base . '/' . ltrim($path, '/');
 
+		[$timeout, $connect, $retry] = MoonrakerHttp::curlBudget('read');
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, self::DEFAULT_TIMEOUT_SECONDS);
-		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+		MoonrakerHttp::applyTimeouts($ch, $timeout, $connect);
 
-		$responseBody = curl_exec($ch);
-		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		$error = curl_error($ch);
+		$exec = MoonrakerHttp::exec($ch, $retry);
+		$responseBody = $exec['body'];
+		$httpCode = $exec['http'];
+		$error = $exec['error'];
 		curl_close($ch);
 
 		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {

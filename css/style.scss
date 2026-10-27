@@ -38,6 +38,12 @@
 		background: color-mix(in srgb, var(--nc-gcs-danger) 20%, transparent);
 		color: var(--nc-gcs-danger-soft);
 	}
+
+	&--reconnecting,
+	&--link-lost {
+		background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 18%, transparent);
+		color: var(--nc-gcs-warning, #eab308);
+	}
 }
 
 /* ─── Status dot ────────────────────────────────────────────────── */
@@ -65,6 +71,12 @@
 	&--error {
 		background: var(--nc-gcs-danger-soft);
 		box-shadow: 0 0 6px var(--nc-gcs-danger-soft);
+	}
+
+	&--reconnecting,
+	&--link-lost {
+		background: var(--nc-gcs-warning, #eab308);
+		box-shadow: 0 0 6px var(--nc-gcs-warning, #eab308);
 	}
 
 	&--heating {

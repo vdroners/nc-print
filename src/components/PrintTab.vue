@@ -153,6 +153,23 @@ export default {
 			}
 			return (this.printStore.printerState.state || '').toLowerCase() !== 'reconnecting'
 		},
+		linkLoss() {
+			return this.printStore.linkLossView
+		},
+		staleEtaLabel() {
+			const loss = this.linkLoss
+			if (!loss?.estimated || loss.remainingS == null) {
+				return null
+			}
+			return `~${formatPrintTime(loss.remainingS)} remaining`
+		},
+		staleProgressLabel() {
+			const loss = this.linkLoss
+			if (!loss) {
+				return ''
+			}
+			return formatProgressPercent(loss.progress)
+		},
 		isReconnecting() {
 			return !this.printStore.printerState.connected
 				&& (this.printStore.printerState.state || '').toLowerCase() === 'reconnecting'
@@ -433,21 +450,56 @@ export default {
 			<p class="nc-print-banner__body">
 				Reconnecting to Moonraker…
 			</p>
+			<p v-if="linkLoss" class="nc-print-banner__body">
+				{{ linkLoss.lastSeenLabel }}
+			</p>
 		</div>
 
-		<div v-else-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
+		<div
+			v-else-if="isOffline"
+			class="nc-print-banner"
+			:class="linkLoss ? 'nc-print-banner--warn' : 'nc-print-banner--danger'"
+			role="alert">
 			<h2 class="nc-print-banner__title">
 				<span class="nc-print-card__title-row">
 					<NcPrintIcon name="alert" :size="18" />
-					Printer offline
+					{{ linkLoss ? 'Link lost' : 'Printer offline' }}
 				</span>
 			</h2>
-			<p class="nc-print-banner__body">
+			<p v-if="linkLoss" class="nc-print-banner__body">
+				Moonraker did not answer. {{ linkLoss.lastSeenLabel }}.
+				This is not a live reading.
+				The camera or stock UI can still respond on a weak Wi-Fi link.
+			</p>
+			<p v-else class="nc-print-banner__body">
 				Cannot reach Moonraker for the selected printer. Check power, network, and Admin settings.
 			</p>
 			<p v-if="printStore.printerState.lastError" class="nc-print-banner__error">
 				{{ printStore.printerState.lastError }}
 			</p>
+		</div>
+
+		<div v-if="linkLoss && linkLoss.active" class="nc-print-card nc-print-stale-job" data-stale-job>
+			<div class="nc-print-card__header">
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="printer" :size="18" />
+						{{ linkLoss.filename || 'Last print' }}
+					</span>
+				</h2>
+			</div>
+			<p class="nc-print-stale-job__label">{{ linkLoss.label }}</p>
+			<div class="nc-print-stat-grid">
+				<div class="nc-print-stat">
+					<span class="nc-print-stat__label">Progress</span>
+					<span class="nc-print-stat__value">{{ staleProgressLabel }}</span>
+				</div>
+				<div v-if="staleEtaLabel" class="nc-print-stat">
+					<span class="nc-print-stat__label">Remaining</span>
+					<span class="nc-print-stat__value">{{ staleEtaLabel }}</span>
+				</div>
+			</div>
+			<p class="nc-print-print-meta nc-print-print-meta--muted">{{ linkLoss.lastSeenLabel }}</p>
 		</div>
 
 		<PrintCompletionBanner @upload-last="onPrintAgainUpload" />
@@ -890,5 +942,16 @@ export default {
 
 .nc-print-camera-fullscreen__placeholder {
 	color: #fff;
+}
+
+.nc-print-stale-job {
+	border-left: 3px solid var(--nc-gcs-warning, #eab308);
+}
+
+.nc-print-stale-job__label {
+	color: var(--nc-gcs-warning, #eab308);
+	font-size: 0.85rem;
+	font-weight: 600;
+	margin: 0 0 8px;
 }
 </style>

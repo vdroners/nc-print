@@ -4,6 +4,8 @@ import { fetchState as httpFetchState } from './moonraker-api.js'
 
 const WS_RECONNECT_MS = 5000
 const WS_FALLBACK_POLL_MS = 3000
+/** Handshake budget. Was 4s; a weak hop can take ~3s just to answer HTTP. */
+const WS_OPEN_TIMEOUT_MS = 8000
 
 /**
  * Fetch a short-lived ws ticket from NC Print (session-bound).
@@ -187,7 +189,7 @@ export class MoonrakerWsClient {
 						ws.close()
 						finish(false)
 					}
-				}, 4000)
+				}, WS_OPEN_TIMEOUT_MS)
 
 				ws.onopen = () => {
 					clearTimeout(timeout)
@@ -244,10 +246,8 @@ export class MoonrakerWsClient {
 					this._ws = null
 					this._usingWs = false
 					if (!this._stopped) {
-						// Surface the drop so the UI stops showing stale live data
-						// as if still connected during the reconnect window. The
-						// store's mapPrinterState normalizes this to offline with
-						// cleared telemetry — same as the HTTP-poll failure path.
+						// Surface the drop so live controls stop. The store keeps
+						// lastContact and shows Link lost + last-seen age.
 						this.onState({
 							connected: false,
 							state: 'reconnecting',
@@ -266,10 +266,12 @@ export class MoonrakerWsClient {
 	}
 
 	_startHttpPolling() {
+		let inFlight = false
 		const poll = async () => {
-			if (this._stopped) {
+			if (this._stopped || inFlight) {
 				return
 			}
+			inFlight = true
 			try {
 				const data = await httpFetchState(this._printerId)
 				this.onState(data)
@@ -296,6 +298,8 @@ export class MoonrakerWsClient {
 					layerCount: null,
 					lastError: e?.message || 'Printer poll failed',
 				})
+			} finally {
+				inFlight = false
 			}
 		}
 		void poll()

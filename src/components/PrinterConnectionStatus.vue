@@ -54,6 +54,7 @@ export default {
 }
 
 .nc-print-printer-status__line.is-reconnecting,
+.nc-print-printer-status__line.is-link-lost,
 .nc-print-printer-status__line.is-error {
 	color: var(--nc-gcs-warning, var(--color-warning, #eab308));
 }

@@ -5,8 +5,12 @@
 		<template v-else>
 			<div class="nc-print-dash__row">
 				<span class="nc-print-dash__state" :class="stateClass">{{ stateLabel }}</span>
-				<span v-if="state.filename" class="nc-print-dash__file">{{ state.filename }}</span>
+				<span v-if="displayFilename" class="nc-print-dash__file">{{ displayFilename }}</span>
 			</div>
+			<p v-if="loss" class="nc-print-dash__stale">
+				{{ loss.lastSeenLabel }}
+				<span v-if="loss.active"> · {{ loss.label }} {{ lossPct }}%</span>
+			</p>
 			<div v-if="isPrinting" class="nc-print-dash__progress">
 				<div class="nc-print-dash__bar">
 					<div class="nc-print-dash__fill" :style="{ width: pct + '%' }" />
@@ -25,6 +29,7 @@
 <script>
 import axios from '@nextcloud/axios'
 import { generateUrl } from '@nextcloud/router'
+import { snapshotFromPrinterState, staleJobView } from '@/utils/link-loss.js'
 
 export default {
 	name: 'DashboardWidget',
@@ -34,15 +39,31 @@ export default {
 			error: '',
 			state: {},
 			timer: null,
+			lastContact: null,
 		}
 	},
 	computed: {
 		appUrl() {
 			return generateUrl('/apps/nc_print/')
 		},
+		loss() {
+			if (this.state.connected || !this.lastContact) {
+				return null
+			}
+			return staleJobView(this.lastContact, Date.now())
+		},
 		stateLabel() {
+			if (this.loss) {
+				return 'Link lost'
+			}
 			const s = (this.state.state || 'unknown').toLowerCase()
 			return s.charAt(0).toUpperCase() + s.slice(1)
+		},
+		displayFilename() {
+			return this.loss?.filename || this.state.filename || ''
+		},
+		lossPct() {
+			return Math.round((this.loss?.progress || 0) * 100)
 		},
 		stateClass() {
 			const s = (this.state.state || '').toLowerCase()
@@ -96,10 +117,25 @@ export default {
 		async refresh() {
 			try {
 				const { data } = await axios.get(generateUrl('/apps/nc_print/api/printer/state'))
-				this.state = data || {}
+				const next = data || {}
+				if (next.connected) {
+					this.lastContact = snapshotFromPrinterState({
+						connected: true,
+						state: next.state,
+						filename: next.filename,
+						progress: next.progress,
+						printDuration: next.print_duration ?? next.printDuration,
+					}, Date.now())
+				}
+				this.state = next
 				this.error = ''
 			} catch (e) {
-				this.error = 'Printer status unavailable'
+				if (this.lastContact) {
+					this.state = { ...this.state, connected: false, state: 'offline' }
+					this.error = ''
+				} else {
+					this.error = 'Printer status unavailable'
+				}
 			} finally {
 				this.loading = false
 			}
@@ -122,5 +158,6 @@ export default {
 .nc-print-dash__fill { height: 100%; background: var(--color-primary, #4c8eda); }
 .nc-print-dash__pct { font-size: 0.78rem; min-width: 34px; text-align: right; }
 .nc-print-dash__meta { display: flex; gap: 12px; font-size: 0.78rem; color: var(--color-text-maxcontrast, #8b949e); }
+.nc-print-dash__stale { margin: 0; font-size: 0.78rem; color: var(--color-warning, #eab308); }
 .nc-print-dash__link { font-size: 0.82rem; }
 </style>

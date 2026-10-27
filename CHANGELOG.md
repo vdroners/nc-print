@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.65.1] - 2026-10-27
+
+### Fixed
+- Moonraker status probes wait out a multi-second weak-Wi-Fi hop. Health, print-guard, and webcam-list calls use an 8s connect / 15s total budget (was 3s/5s, 3s/8s, and 3s/4s) and retry once on a transient connect failure. State and proxy reads keep a 60s total and raise connect from 5s to 10s, with the same single connect retry. Pause, cancel, emergency stop, gcode, and print start are not retried.
+
+### Changed
+- G-code upload timeout is 180s (was 60s) with a 10s connect timeout. LAN discovery waits up to 8s per host (was 0.9s), in parallel.
+- After a good Moonraker reading, a failed probe shows **Link lost** and last-seen age. A job that was printing keeps the last known progress, or an estimate labeled **Estimated from last contact** when Moonraker had already reported at least a minute of progress. The next successful answer is live again immediately.
+
+### Added
+- Operator note for the lab K1 Max: Offline while the camera or stock UI still works is weak Wi-Fi, not a bad `moonraker_internal_url` (`docs/notes/k1-max-wifi.md`).
+
 ## [1.65.0] - 2026-10-26
 
 ### Added
