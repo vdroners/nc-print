@@ -323,7 +323,7 @@ describe('link flap banner source', () => {
 		expect(banner).toContain('aria-live="polite"')
 		expect(banner).toContain('linkFlapDetail')
 		expect(banner).toContain('dismissLinkFlap')
-		expect(banner).toContain('>Dismiss<')
+		expect(banner).toMatch(/>\s*Dismiss\s*</)
 		expect(banner).toContain('nc-print-link-flap')
 		expect(banner).toContain('--nc-gcs-warning')
 		expect(banner).not.toContain('aria-modal')
