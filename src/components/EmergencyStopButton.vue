@@ -30,6 +30,10 @@ export default {
 		closeConfirm() {
 			this.confirmOpen = false
 		},
+		/**
+		 * Single-shot. A timeout can mean the halt already reached the printer,
+		 * so this never retries and never offers a Retry action.
+		 */
 		async confirmStop() {
 			this.confirmOpen = false
 			this.busy = true

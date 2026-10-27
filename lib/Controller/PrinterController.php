@@ -8,6 +8,7 @@ use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
 use OCA\NcPrint\Service\MoonrakerHttp;
+use OCA\NcPrint\Service\MoonrakerTransferFailure;
 use OCA\NcPrint\Service\MultipartBuilder;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -80,6 +81,14 @@ class PrinterController extends Controller
 	];
 
 	private ?string $lastMoonrakerResolveError = null;
+
+	/**
+	 * Last curl failure from moonrakerPost. Consumed by the upload path only.
+	 * Pause, cancel, and emergency stop do not read this and do not retry.
+	 *
+	 * @var array{errno: int, error: string, http: int}|null
+	 */
+	private ?array $lastMoonrakerTransportFailure = null;
 
 	public function __construct(
 		IRequest $request,
@@ -309,6 +318,10 @@ class PrinterController extends Controller
 		return new JSONResponse($result);
 	}
 
+	/**
+	 * Emergency stop. Single-shot — never retried. A lost response can still
+	 * mean Moonraker already halted the printer.
+	 */
 	#[NoAdminRequired]
 	public function emergencyStop(): JSONResponse
 	{
@@ -427,13 +440,38 @@ class PrinterController extends Controller
 			return $resolveErr;
 		}
 		if ($result === null) {
-			return new JSONResponse(
-				['error' => 'backend_unreachable', 'message' => 'Moonraker upload failed'],
-				Http::STATUS_BAD_GATEWAY,
-			);
+			return $this->uploadTransportFailureResponse($start);
 		}
 
 		return new JSONResponse($result);
+	}
+
+	/**
+	 * One classified body for a failed upload. Does not retry the POST.
+	 * When start was requested, warn that the printer may already be printing.
+	 */
+	private function uploadTransportFailureResponse(bool $start): JSONResponse
+	{
+		$transport = $this->lastMoonrakerTransportFailure ?? ['errno' => 0, 'error' => '', 'http' => 0];
+		$classified = MoonrakerTransferFailure::classify(
+			(int) ($transport['errno'] ?? 0),
+			(string) ($transport['error'] ?? ''),
+			(int) ($transport['http'] ?? 0),
+		);
+		$message = $classified['message'];
+		if ($start) {
+			$message .= ' If a print may already have started, check the printer before retrying so you do not start a second job.';
+		}
+
+		return new JSONResponse(
+			[
+				'error' => $classified['error'],
+				'message' => $message,
+				'failure' => $classified['failure'],
+				'retryable' => $classified['retryable'],
+			],
+			Http::STATUS_BAD_GATEWAY,
+		);
 	}
 
 	private function controlGate(): ?JSONResponse
@@ -474,6 +512,10 @@ class PrinterController extends Controller
 		return $params;
 	}
 
+	/**
+	 * Pause, resume, and cancel. Single-shot: a lost response is not retried,
+	 * because the printer may already have accepted the command.
+	 */
 	private function printAction(string $path): JSONResponse
 	{
 		if ($gate = $this->controlGate()) {
@@ -841,6 +883,7 @@ class PrinterController extends Controller
 	private function moonrakerPost(string $path, string $body, string $contentType, ?string $printerId = null, string $profile = 'control'): ?array
 	{
 		$this->lastMoonrakerResolveError = null;
+		$this->lastMoonrakerTransportFailure = null;
 		try {
 			$base = rtrim($this->config->resolveMoonrakerUrlOrFail($printerId), '/');
 		} catch (\InvalidArgumentException $e) {
@@ -862,12 +905,19 @@ class PrinterController extends Controller
 		$responseBody = $exec['body'];
 		$httpCode = $exec['http'];
 		$error = $exec['error'];
+		$errno = $exec['errno'];
 		curl_close($ch);
 
 		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {
+			$this->lastMoonrakerTransportFailure = [
+				'errno' => $errno,
+				'error' => $error,
+				'http' => $httpCode,
+			];
 			$this->logger->warning('PrinterController Moonraker request failed', [
 				'path' => $path,
 				'http' => $httpCode,
+				'errno' => $errno,
 				'error' => $error,
 			]);
 			return null;

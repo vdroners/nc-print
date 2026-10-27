@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.67.0] - 2026-10-27
+
+### Added
+- Failed G-code upload and send-to-printer hops show a timeout, unreachable, or other error and a manual Retry. Pause, resume, cancel, and emergency stop stay single-shot.
+
 ## [1.66.0] - 2026-10-27
 
 ### Added

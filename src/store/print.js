@@ -42,6 +42,7 @@ import { parsePrintableArea } from '@/utils/bed-shape.js'
 // at their call sites below so JSZip stays out of the startup bundle — they're
 // only needed on 3MF handling / server printability, not at app load.
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
+import { classifyGcodeTransferError, formatGcodeTransferFailure } from '@/utils/gcode-transfer-error.js'
 import {
 	previewBlocked,
 	printMonitorReachable,
@@ -526,6 +527,16 @@ export const usePrintStore = defineStore('print', {
 		// Shared busy flag for pause/resume/cancel so the Print-control card and
 		// the sticky status bar (and command palette) never fire concurrently.
 		printControlBusy: false,
+		// Last g-code upload or send. Retry is manual; payload is dropped after
+		// success. Pause / cancel / emergency stop do not use this.
+		gcodeTransfer: {
+			busy: false,
+			source: '',
+			filename: '',
+			start: false,
+			error: null,
+			payload: null,
+		},
 
 		// Print history + derived metrics/wear (v1.37). Loaded on demand by the
 		// History panel; capture happens server-side on the terminal transition.
@@ -2900,6 +2911,8 @@ export const usePrintStore = defineStore('print', {
 		/**
 		 * Run a print-control op against the active printer with a shared busy
 		 * flag + state refresh. Best-effort — errors toast, never throw.
+		 * Single-shot: pause, resume, and cancel are not retried. A lost
+		 * response may mean the printer already accepted the command.
 		 * @param {(printerId: string|undefined) => Promise<any>} fn
 		 * @param {string} failMsg
 		 */
@@ -3381,20 +3394,123 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
-		async sendGcodeToPrinter(gcodeBlob, filename, start = false) {
-			const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
-			await moonrakerUpload(gcodeBlob, filename, start, targetId)
-			const name = this.activeTargetPrinter?.name
-				|| this.appStatus.printer_display_name
-				|| this.config?.printer_display_name
-				|| 'printer'
-			this.sliceJob.sentTo = name
-			this.sliceJob.printing = start
-			toastSuccess(start ? `Print started on ${name}` : `G-code uploaded to ${name}`)
-			await this.refreshPrinterState()
-			if (start) {
-				this.activeTab = TABS.PRINT
+		/**
+		 * Remember the file for a later manual Retry. Does not POST.
+		 * @param {Blob|File} blob
+		 * @param {string} filename
+		 * @param {boolean} start
+		 * @param {'upload'|'send'} source
+		 * @param {boolean} keepError keep the previous banner up while Retry runs
+		 */
+		_beginGcodeTransfer(blob, filename, start, source, keepError = false) {
+			this.gcodeTransfer.payload = blob
+			this.gcodeTransfer.filename = filename || 'job.gcode'
+			this.gcodeTransfer.start = !!start
+			this.gcodeTransfer.source = source
+			if (!keepError) {
+				this.gcodeTransfer.error = null
 			}
+			this.gcodeTransfer.busy = true
+		},
+
+		_failGcodeTransfer(err, start) {
+			const classified = formatGcodeTransferFailure(classifyGcodeTransferError(err), { start: !!start })
+			this.gcodeTransfer.error = classified
+			toastError(start ? 'Send to printer failed' : 'Upload failed', {
+				response: { data: { message: classified.message } },
+			})
+			return false
+		},
+
+		_finishGcodeTransfer() {
+			this.gcodeTransfer.error = null
+			this.gcodeTransfer.payload = null
+			this.gcodeTransfer.busy = false
+		},
+
+		/**
+		 * Upload a local or queued .gcode file. One attempt; the Print tab Retry
+		 * button calls retryLastGcodeTransfer. Does not auto-retry.
+		 * @param {Blob|File} file
+		 * @param {boolean} [start]
+		 * @param {{ keepError?: boolean }} [opts]
+		 */
+		async uploadLocalGcode(file, start = false, { keepError = false } = {}) {
+			if (this.gcodeTransfer.busy) {
+				return false
+			}
+			const filename = file?.name || 'job.gcode'
+			this._beginGcodeTransfer(file, filename, start, 'upload', keepError)
+			try {
+				const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
+				await moonrakerUpload(file, filename, !!start, targetId)
+				if (this.pendingPrintUpload && this.pendingPrintUpload.filename === filename) {
+					this.pendingPrintUpload = null
+				}
+				toastSuccess(start ? 'Print started' : 'G-code uploaded')
+				await this.refreshPrinterState()
+				if (start) {
+					this.activeTab = TABS.PRINT
+				}
+				this._finishGcodeTransfer()
+				return true
+			} catch (e) {
+				return this._failGcodeTransfer(e, start)
+			} finally {
+				this.gcodeTransfer.busy = false
+			}
+		},
+
+		/**
+		 * Send the sliced G-code. One attempt. Returns false on failure instead
+		 * of throwing, so a flaky hop does not mark a finished slice as failed.
+		 * @param {Blob} gcodeBlob
+		 * @param {string} filename
+		 * @param {boolean} [start]
+		 * @param {{ keepError?: boolean }} [opts]
+		 */
+		async sendGcodeToPrinter(gcodeBlob, filename, start = false, { keepError = false } = {}) {
+			if (this.gcodeTransfer.busy) {
+				return false
+			}
+			this._beginGcodeTransfer(gcodeBlob, filename, start, 'send', keepError)
+			try {
+				const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
+				await moonrakerUpload(gcodeBlob, filename, !!start, targetId)
+				const name = this.activeTargetPrinter?.name
+					|| this.appStatus.printer_display_name
+					|| this.config?.printer_display_name
+					|| 'printer'
+				this.sliceJob.sentTo = name
+				this.sliceJob.printing = !!start
+				toastSuccess(start ? `Print started on ${name}` : `G-code uploaded to ${name}`)
+				await this.refreshPrinterState()
+				if (start) {
+					this.activeTab = TABS.PRINT
+				}
+				this._finishGcodeTransfer()
+				return true
+			} catch (e) {
+				return this._failGcodeTransfer(e, start)
+			} finally {
+				this.gcodeTransfer.busy = false
+			}
+		},
+
+		/**
+		 * Manual Retry for the last failed upload or send. Repeats that attempt
+		 * once, including whether start was requested. No-op while a transfer
+		 * is already in flight.
+		 */
+		async retryLastGcodeTransfer() {
+			if (this.gcodeTransfer.busy || !this.gcodeTransfer.payload) {
+				return false
+			}
+			const { payload, filename, start, source } = this.gcodeTransfer
+			if (source === 'upload') {
+				return this.uploadLocalGcode(payload, start, { keepError: true })
+			}
+			return this.sendGcodeToPrinter(payload, filename, start, { keepError: true })
 		},
 
 		async sliceOnly({ signal } = {}) {
@@ -3619,12 +3735,11 @@ export const usePrintStore = defineStore('print', {
 				toastError('Choose a target printer on Prepare first')
 				return false
 			}
-			await this.sendGcodeToPrinter(
+			return this.sendGcodeToPrinter(
 				this.sliceJob.gcodeBlob,
 				this.sliceJob.gcodeFilename || 'job.gcode',
 				start,
 			)
-			return true
 		},
 
 		clearPendingPrintUpload() {

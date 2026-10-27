@@ -3,6 +3,7 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
+import { gcodeTransferFailureTitle } from '@/utils/gcode-transfer-error.js'
 import SliceSummaryCard from './SliceSummaryCard.vue'
 import ProfileSummaryChip from './ProfileSummaryChip.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
@@ -41,6 +42,19 @@ export default {
 			const g = this.stats?.supportFilamentG
 			return g != null ? `${Math.round(g)} g` : null
 		},
+		sendFailure() {
+			const transfer = this.printStore.gcodeTransfer
+			return transfer.source === 'send' ? transfer.error : null
+		},
+		sendFailureTitle() {
+			if (!this.sendFailure) {
+				return ''
+			}
+			return gcodeTransferFailureTitle(this.sendFailure.kind, this.printStore.gcodeTransfer.start)
+		},
+		sendBusy() {
+			return this.printStore.gcodeTransfer.busy
+		},
 	},
 	methods: {
 		goPrint() {
@@ -59,6 +73,9 @@ export default {
 				return
 			}
 			await this.printStore.sendSliceGcodeToPrinter({ start: true })
+		},
+		retrySend() {
+			return this.printStore.retryLastGcodeTransfer()
 		},
 	},
 }
@@ -103,11 +120,31 @@ export default {
 					<dd><ProfileSummaryChip /></dd>
 				</div>
 			</dl>
+			<div
+				v-if="sendFailure"
+				class="nc-print-banner nc-print-banner--warn"
+				role="alert">
+				<h3 class="nc-print-banner__title">
+					{{ sendFailureTitle }}
+				</h3>
+				<p class="nc-print-banner__body">
+					{{ sendFailure.message }}
+				</p>
+				<div v-if="sendFailure.retryable !== false" class="nc-print-actions">
+					<button
+						type="button"
+						class="nc-print-btn nc-print-btn--primary"
+						:disabled="sendBusy"
+						@click="retrySend">
+						{{ sendBusy ? 'Retrying…' : 'Retry' }}
+					</button>
+				</div>
+			</div>
 			<div class="nc-print-actions">
-				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="sendAndStart">
+				<button type="button" class="nc-print-btn nc-print-btn--primary" :disabled="sendBusy" @click="sendAndStart">
 					Send and start print
 				</button>
-				<button type="button" class="nc-print-btn" @click="sendGcode">
+				<button type="button" class="nc-print-btn" :disabled="sendBusy" @click="sendGcode">
 					Send G-code only
 				</button>
 				<button type="button" class="nc-print-btn" @click="goPrint">

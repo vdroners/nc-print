@@ -2,12 +2,12 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
-import { uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
-import { toastError, toastSuccess } from '@/services/toast.js'
+import { toastError } from '@/services/toast.js'
+import { gcodeTransferFailureTitle } from '@/utils/gcode-transfer-error.js'
 import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
 import {
 	formatProgressPercent,
@@ -127,7 +127,6 @@ export default {
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
-			uploadBusy: false,
 			startAfterUpload: true,
 			cameraFullscreen: false,
 			pinned: loadPinned(),
@@ -140,6 +139,19 @@ export default {
 		...mapStores(usePrintStore),
 		printerId() {
 			return this.printStore.selectedPrinterId || undefined
+		},
+		transferFailure() {
+			return this.printStore.gcodeTransfer.error
+		},
+		transferBusy() {
+			return this.printStore.gcodeTransfer.busy
+		},
+		transferFailureTitle() {
+			const failure = this.transferFailure
+			if (!failure) {
+				return ''
+			}
+			return gcodeTransferFailureTitle(failure.kind, this.printStore.gcodeTransfer.start)
 		},
 		streamUrl() {
 			return cameraStreamUrl(this.printStore.config, this.printStore.selectedPrinterId)
@@ -398,18 +410,10 @@ export default {
 				toastError('Select a .gcode file')
 				return false
 			}
-			this.uploadBusy = true
-			try {
-				await uploadAndStart(file, file.name, startAfterUpload, this.printerId)
-				toastSuccess(startAfterUpload ? 'Print started' : 'G-code uploaded')
-				await this.printStore.refreshPrinterState()
-				return true
-			} catch (e) {
-				toastError('Upload failed', e)
-				return false
-			} finally {
-				this.uploadBusy = false
-			}
+			return this.printStore.uploadLocalGcode(file, startAfterUpload)
+		},
+		retryUpload() {
+			return this.printStore.retryLastGcodeTransfer()
 		},
 		async pickGcodeFromFiles() {
 			const picked = await pickFileFromNextcloud({
@@ -441,6 +445,24 @@ export default {
 <template>
 	<WorkspaceRail class="nc-print-print-tab">
 		<PrinterConnectionStatus />
+
+		<div v-if="transferFailure" class="nc-print-banner nc-print-banner--warn" role="alert">
+			<h2 class="nc-print-banner__title">
+				{{ transferFailureTitle }}
+			</h2>
+			<p class="nc-print-banner__body">
+				{{ transferFailure.message }}
+			</p>
+			<div v-if="transferFailure.retryable !== false" class="nc-print-actions">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:disabled="transferBusy"
+					@click="retryUpload">
+					{{ transferBusy ? 'Retrying…' : 'Retry' }}
+				</button>
+			</div>
+		</div>
 
 		<UpdateStatusBanner />
 		<UpdateControlPanel />
@@ -696,7 +718,7 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn"
-					:disabled="uploadBusy"
+					:disabled="transferBusy"
 					@click="pickGcodeFromFiles">
 					From Files
 				</button>
