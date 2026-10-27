@@ -17,6 +17,7 @@ import {
 	showLastJobCard,
 	showLivePrintControls,
 } from '@/utils/print-honesty.js'
+import CameraStaleBadge from './CameraStaleBadge.vue'
 import WorkspaceRail from './WorkspaceRail.vue'
 import PrintStatusBar from './PrintStatusBar.vue'
 import PrintPanel from './PrintPanel.vue'
@@ -98,6 +99,7 @@ const REPORTING_IDS = PANEL_ZONES.flatMap((z) => z.panels.filter((p) => p.report
 export default {
 	name: 'PrintTab',
 	components: {
+		CameraStaleBadge,
 		WorkspaceRail,
 		PrintStatusBar,
 		PrintPanel,
@@ -751,7 +753,9 @@ export default {
 						Expand
 					</button>
 				</div>
-				<div class="nc-print-camera-panel">
+				<div
+					class="nc-print-camera-panel"
+					:class="{ 'nc-print-camera-panel--stale': cameraStale }">
 					<img
 						v-if="cameraFrameUrl"
 						:class="{ 'nc-print-camera-panel__frame--pending': !cameraFrameReady || cameraError }"
@@ -760,6 +764,7 @@ export default {
 						@load="onCameraLoad"
 						@error="onCameraError"
 						@click="onCameraClick">
+					<CameraStaleBadge :stale="cameraStale" :age-label="cameraStaleAgeLabel" />
 					<div v-if="!cameraFrameReady || cameraError" class="nc-print-camera-placeholder">
 						<p>{{ cameraPlaceholderText }}</p>
 						<button v-if="cameraError && streamUrl" type="button" class="nc-print-btn" @click="retryCamera">
@@ -789,11 +794,16 @@ export default {
 					<NcPrintIcon name="close" :size="16" />
 					Close
 				</button>
-				<img
+				<div
 					v-if="cameraFrameReady && cameraFrameUrl && !cameraError"
-					:src="cameraFrameUrl"
-					alt="Printer camera stream (fullscreen)"
-					@error="onCameraError">
+					class="nc-print-camera-fullscreen__stage"
+					:class="{ 'nc-print-camera-panel--stale': cameraStale }">
+					<img
+						:src="cameraFrameUrl"
+						alt="Printer camera stream (fullscreen)"
+						@error="onCameraError">
+					<CameraStaleBadge :stale="cameraStale" :age-label="cameraStaleAgeLabel" />
+				</div>
 				<p v-else class="nc-print-camera-fullscreen__placeholder">{{ cameraPlaceholderText }}</p>
 			</div>
 		</teleport>
@@ -946,6 +956,15 @@ export default {
 	padding: 24px;
 	position: fixed;
 	z-index: 9999;
+}
+
+.nc-print-camera-fullscreen__stage {
+	align-items: center;
+	display: flex;
+	justify-content: center;
+	max-height: 100%;
+	max-width: 100%;
+	position: relative;
 }
 
 .nc-print-camera-fullscreen img {

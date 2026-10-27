@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.68.0] - 2026-10-27
+
+### Added
+- Camera stale indicator: when the webcam snapshot stops updating, the Print monitor (including fullscreen) and the pre-print preview keep the last frame and label it “Camera stale” with its age so a frozen picture is not treated as live.
+
 ## [1.67.0] - 2026-10-27
 
 ### Added

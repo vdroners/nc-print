@@ -4,11 +4,12 @@ import { usePrintStore } from '@/store/print.js'
 import { activateFocusTrap } from '@/composables/useFocusTrap.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
+import CameraStaleBadge from './CameraStaleBadge.vue'
 import TargetPrinterPicker from './TargetPrinterPicker.vue'
 
 export default {
 	name: 'PrePrintModal',
-	components: { TargetPrinterPicker },
+	components: { CameraStaleBadge, TargetPrinterPicker },
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
@@ -161,14 +162,18 @@ export default {
 					starting the print.
 				</p>
 				<TargetPrinterPicker variant="modal" :show-scan="false" select-id="nc-print-target-printer-modal" />
-				<div class="nc-print-preprint-modal__camera nc-print-camera-panel">
+				<div
+					class="nc-print-preprint-modal__camera nc-print-camera-panel"
+					:class="{ 'nc-print-camera-panel--stale': cameraStale }">
 					<img
 						v-if="cameraFrameUrl && !cameraError"
 						:src="cameraFrameUrl"
 						alt="Printer chamber preview"
 						loading="lazy"
+						@load="onCameraLoad"
 						@error="onCameraError">
-					<div v-else class="nc-print-camera-placeholder">
+					<CameraStaleBadge :stale="cameraStale" :age-label="cameraStaleAgeLabel" />
+					<div v-if="!cameraFrameUrl || cameraError" class="nc-print-camera-placeholder">
 						<p>{{ cameraPlaceholderText }}</p>
 						<button v-if="cameraError" type="button" class="nc-print-btn nc-print-btn--small" @click="retryCamera">
 							Retry
