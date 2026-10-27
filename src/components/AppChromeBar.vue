@@ -3,6 +3,7 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import PrintWorkflowBanner from './PrintWorkflowBanner.vue'
 import ServiceHealthBanner from './ServiceHealthBanner.vue'
+import LinkFlapBanner from './LinkFlapBanner.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
 import { TABS } from '@/constants/tabs.js'
 import {
@@ -15,7 +16,7 @@ import {
 
 export default {
 	name: 'AppChromeBar',
-	components: { PrintWorkflowBanner, ServiceHealthBanner, NcPrintIcon },
+	components: { PrintWorkflowBanner, ServiceHealthBanner, LinkFlapBanner, NcPrintIcon },
 	data() {
 		return {
 			notifPermission: typeof Notification !== 'undefined' ? Notification.permission : 'unsupported',
@@ -122,6 +123,7 @@ export default {
 				</button>
 			</div>
 		</div>
+		<LinkFlapBanner />
 		<ServiceHealthBanner />
 	</div>
 </template>

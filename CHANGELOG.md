@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.66.0] - 2026-10-27
+
+### Added
+- Weak-Wi-Fi link-flap banner. When Moonraker drops briefly at least twice in two minutes, the chrome shows a non-blocking amber “Printer Wi‑Fi weak — status may flap” notice so Offline reads as the hop, not a dead printer. Dismiss hides that episode for the page session. The banner also clears after 60 seconds continuously online, or when the drops age out of the two-minute window. A drop that stays down longer than 30 seconds counts as an outage, not a flap. Detection uses frontend online/offline transitions (builds on 1.65.1 last-seen).
+
 ## [1.65.1] - 2026-10-27
 
 ### Fixed

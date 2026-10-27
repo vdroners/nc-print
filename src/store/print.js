@@ -53,6 +53,7 @@ import {
 import { TABS } from '@/constants/tabs.js'
 import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
 import { snapshotFromPrinterState, staleJobView } from '@/utils/link-loss.js'
+import { createLinkFlapTracker, emptyLinkFlap } from '@/utils/link-flap.js'
 
 // Re-exported for backward compatibility; the source of truth is the leaf
 // module @/constants/tabs.js (see that file for why).
@@ -505,6 +506,8 @@ export const usePrintStore = defineStore('print', {
 		/** Last connected Moonraker reading. Kept across a flap. Cleared on printer change. */
 		lastContact: null,
 		_printerPollInFlight: false,
+		// Weak-Wi-Fi flap snapshot (tracker instance stays off state).
+		linkFlap: emptyLinkFlap(),
 		_lastNotifiedPrintState: '',
 		pendingPrintUpload: null,
 		prePrintModal: {
@@ -2096,6 +2099,7 @@ export const usePrintStore = defineStore('print', {
 
 		_resetPrinterState() {
 			this.lastContact = null
+			this._resetLinkFlap()
 			this.printerState = {
 				connected: false,
 				state: 'unknown',
@@ -2713,6 +2717,7 @@ export const usePrintStore = defineStore('print', {
 				this.printerState.connected = false
 				this.printerState.state = 'offline'
 				this.printerState.lastError = e?.message || 'Printer poll failed'
+				this._noteLinkSample(false)
 				console.debug('[nc_print] refreshPrinterState failed:', e?.message || e)
 			} finally {
 				this._printerPollInFlight = false
@@ -2728,7 +2733,44 @@ export const usePrintStore = defineStore('print', {
 				)
 			}
 			this.printerState = { ...this.printerState, ...next }
+			this._noteLinkSample(!!this.printerState.connected)
 			this._maybeNotifyPrintTransition(prevState, (next.state || '').toLowerCase())
+		},
+
+		_linkFlapApi() {
+			if (!this._linkFlapTracker) {
+				this._linkFlapTracker = createLinkFlapTracker()
+			}
+			return this._linkFlapTracker
+		},
+
+		_syncLinkFlap(snap) {
+			this.linkFlap = {
+				visible: !!snap.visible,
+				flapping: !!snap.flapping,
+				recentDisconnects: snap.recentDisconnects || 0,
+				lastSuccessAgeMs: snap.lastSuccessAgeMs ?? null,
+				episode: snap.episode || 0,
+			}
+		},
+
+		_noteLinkSample(connected, now = Date.now()) {
+			this._syncLinkFlap(this._linkFlapApi().note(!!connected, now))
+		},
+
+		_resetLinkFlap() {
+			if (this._linkFlapTracker) {
+				this._linkFlapTracker.reset()
+			}
+			this.linkFlap = emptyLinkFlap()
+		},
+
+		/** Hide the weak-Wi-Fi banner until this flap episode ends and another starts. */
+		dismissLinkFlap(now = Date.now()) {
+			if (!this._linkFlapTracker) {
+				return
+			}
+			this._syncLinkFlap(this._linkFlapTracker.dismiss(now))
 		},
 
 		async requestPrintNotifications() {
