@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Service\MoonrakerHttp;
 use OCA\NcPrint\Service\PathSanitizer;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
@@ -53,8 +54,6 @@ class MoonrakerProxyController extends Controller
 		'machine/device_power/',
 	];
 
-	private const CONNECT_TIMEOUT_SECONDS = 5;
-	private const DEFAULT_TIMEOUT_SECONDS = 60;
 	private const MAX_BODY_BYTES = 10 * 1024 * 1024;
 
 	public function __construct(
@@ -155,12 +154,16 @@ class MoonrakerProxyController extends Controller
 			}
 		}
 
+		// GET/HEAD are status and file reads (one connect retry). POST is
+		// job-queue / power and is not retried.
+		$profile = in_array($method, ['GET', 'HEAD'], true) ? 'read' : 'control';
+		[$timeout, $connect, $retry] = MoonrakerHttp::curlBudget($profile);
+
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $targetUrl);
 		curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, self::DEFAULT_TIMEOUT_SECONDS);
-		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+		MoonrakerHttp::applyTimeouts($ch, $timeout, $connect);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
 		curl_setopt($ch, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
 
@@ -173,9 +176,10 @@ class MoonrakerProxyController extends Controller
 			curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 		}
 
-		$responseBody = curl_exec($ch);
-		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		$error = curl_error($ch);
+		$exec = MoonrakerHttp::exec($ch, $retry);
+		$responseBody = $exec['body'];
+		$httpCode = $exec['http'];
+		$error = $exec['error'];
 		curl_close($ch);
 
 		if ($responseBody === false || $error !== '') {

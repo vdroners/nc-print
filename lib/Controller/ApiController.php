@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Service\MoonrakerHttp;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -78,6 +79,7 @@ class ApiController extends Controller
 			$moonrakerBase . '/server/info',
 			$this->configService->isMoonrakerEnabled(),
 			$moonrakerProbeConfigured,
+			'moonraker',
 		);
 
 		return new JSONResponse([
@@ -110,8 +112,12 @@ class ApiController extends Controller
 		]);
 	}
 
-	/** @return array{ok: bool, latency_ms: int|null, error: string|null, version?: string, upstream?: string, config_dir?: string} */
-	private function probeUrl(string $url, bool $enabled, bool $configured = true): array
+	/**
+	 * @param string $profile `moonraker` uses the weak-link probe budget and
+	 *                        one connect retry. The slicer probe stays at 5s/3s.
+	 * @return array{ok: bool, latency_ms: int|null, error: string|null, version?: string, upstream?: string, config_dir?: string}
+	 */
+	private function probeUrl(string $url, bool $enabled, bool $configured = true, string $profile = 'fast'): array
 	{
 		if (!$enabled) {
 			return ['ok' => false, 'latency_ms' => null, 'error' => 'disabled'];
@@ -124,12 +130,22 @@ class ApiController extends Controller
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, 5);
-		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
 		curl_setopt($ch, CURLOPT_FOLLOWLOCATION, false);
-		$body = curl_exec($ch);
-		$code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		$error = curl_error($ch);
+		if ($profile === 'moonraker') {
+			MoonrakerHttp::applyTimeouts(
+				$ch,
+				MoonrakerHttp::PROBE_TIMEOUT_SECONDS,
+				MoonrakerHttp::PROBE_CONNECT_SECONDS,
+			);
+			$exec = MoonrakerHttp::exec($ch, true);
+		} else {
+			curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 3);
+			$exec = MoonrakerHttp::exec($ch, false);
+		}
+		$body = $exec['body'];
+		$code = $exec['http'];
+		$error = $exec['error'];
 		curl_close($ch);
 
 		$latencyMs = (int) round((hrtime(true) - $started) / 1_000_000);

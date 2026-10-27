@@ -71,14 +71,19 @@ export function showIdlePrintGuide(printerState, controls) {
 
 /**
  * Print step subtitle. Machine state first — never the raw gcode name.
+ * A recent successful reading says Link lost instead of a cold Offline.
  * @param {object} printerState
+ * @param {{ atMs?: number }|null} [lastContact]
  * @returns {string}
  */
-export function printWorkflowSubtitle(printerState) {
+export function printWorkflowSubtitle(printerState, lastContact = null) {
 	const state = printerState || {}
 	const st = String(state.state || '').trim().toLowerCase()
 	if (!state.connected) {
-		return st === 'reconnecting' ? 'Reconnecting' : 'Offline'
+		if (st === 'reconnecting') {
+			return 'Reconnecting'
+		}
+		return lastContact?.atMs ? 'Link lost' : 'Offline'
 	}
 	if (st === 'printing') {
 		return `Printing ${formatProgressPercent(state.progress)}`

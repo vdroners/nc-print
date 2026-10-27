@@ -319,7 +319,7 @@ A → B → C. A is the safety issue (a paused-looking Cancel on a machine that 
 
 ## Footer (not in A/B/C)
 
-`App.vue` footer is still `NC 3D Print v{{ version }} · Moonraker + Forge Slicer`. The slicer on this app is the nc-print-slicer sidecar, not Forge Studio. Rename in a later docs/UI nit. It does not block A, B, or C, and it is not part of those PRs.
+`App.vue` footer says `NC 3D Print v{{ version }} · Moonraker + nc-print-slicer` (renamed in 1.64.0). No further footer change.
 
 ---
 

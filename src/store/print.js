@@ -42,6 +42,7 @@ import { parsePrintableArea } from '@/utils/bed-shape.js'
 // at their call sites below so JSZip stays out of the startup bundle — they're
 // only needed on 3MF handling / server printability, not at app load.
 import { toastError, toastSuccess, toastWarning, toastInfo } from '@/services/toast.js'
+import { classifyGcodeTransferError, formatGcodeTransferFailure } from '@/utils/gcode-transfer-error.js'
 import {
 	previewBlocked,
 	printMonitorReachable,
@@ -52,6 +53,8 @@ import {
 } from '@/utils/workflow-gates.js'
 import { TABS } from '@/constants/tabs.js'
 import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
+import { snapshotFromPrinterState, staleJobView } from '@/utils/link-loss.js'
+import { createLinkFlapTracker, emptyLinkFlap } from '@/utils/link-flap.js'
 
 // Re-exported for backward compatibility; the source of truth is the leaf
 // module @/constants/tabs.js (see that file for why).
@@ -501,6 +504,11 @@ export const usePrintStore = defineStore('print', {
 			layerCount: null,
 			lastError: '',
 		},
+		/** Last connected Moonraker reading. Kept across a flap. Cleared on printer change. */
+		lastContact: null,
+		_printerPollInFlight: false,
+		// Weak-Wi-Fi flap snapshot (tracker instance stays off state).
+		linkFlap: emptyLinkFlap(),
 		_lastNotifiedPrintState: '',
 		pendingPrintUpload: null,
 		prePrintModal: {
@@ -519,6 +527,16 @@ export const usePrintStore = defineStore('print', {
 		// Shared busy flag for pause/resume/cancel so the Print-control card and
 		// the sticky status bar (and command palette) never fire concurrently.
 		printControlBusy: false,
+		// Last g-code upload or send. Retry is manual; payload is dropped after
+		// success. Pause / cancel / emergency stop do not use this.
+		gcodeTransfer: {
+			busy: false,
+			source: '',
+			filename: '',
+			start: false,
+			error: null,
+			payload: null,
+		},
 
 		// Print history + derived metrics/wear (v1.37). Loaded on demand by the
 		// History panel; capture happens server-side on the terminal transition.
@@ -588,11 +606,20 @@ export const usePrintStore = defineStore('print', {
 				process: find(state.profiles.processes, state.selection.processId)?.name || '—',
 			}
 		},
+		linkLossView(state) {
+			if (state.printerState.connected || !state.lastContact) {
+				return null
+			}
+			return staleJobView(state.lastContact, Date.now())
+		},
 		printerStatusLabel(state) {
 			const st = (state.printerState.state || '').toLowerCase()
 			if (!state.printerState.connected) {
 				if (st === 'reconnecting') {
 					return 'Reconnecting'
+				}
+				if (state.lastContact) {
+					return 'Link lost'
 				}
 				return 'Offline'
 			}
@@ -616,6 +643,9 @@ export const usePrintStore = defineStore('print', {
 				if (st === 'reconnecting') {
 					return 'reconnecting'
 				}
+				if (state.lastContact) {
+					return 'link-lost'
+				}
 				return 'idle'
 			}
 			if (st.includes('print')) {
@@ -637,8 +667,18 @@ export const usePrintStore = defineStore('print', {
 			const failure = String(this.printerState.message || this.printerState.lastError || '').trim()
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
-				const status = st === 'reconnecting' ? 'reconnecting…' : 'offline'
-				return failure ? `${name} · ${status} · ${failure}` : `${name} · ${status}`
+				const status = st === 'reconnecting'
+					? 'reconnecting…'
+					: (this.lastContact ? 'link lost' : 'offline')
+				const parts = [name, status]
+				const age = this.linkLossView?.lastSeenLabel
+				if (age) {
+					parts.push(age)
+				}
+				if (failure) {
+					parts.push(failure)
+				}
+				return parts.join(' · ')
 			}
 			const stLabel = this.printerStatusLabel.toLowerCase()
 			const raw = (this.printerState.state || '').toLowerCase()
@@ -653,7 +693,10 @@ export const usePrintStore = defineStore('print', {
 			}
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
-				return st === 'reconnecting' ? 'is-reconnecting' : 'is-offline'
+				if (st === 'reconnecting') {
+					return 'is-reconnecting'
+				}
+				return this.lastContact ? 'is-link-lost' : 'is-offline'
 			}
 			if ((this.printerState.state || '').toLowerCase().includes('error')) {
 				return 'is-error'
@@ -955,7 +998,7 @@ export const usePrintStore = defineStore('print', {
 				}
 				if (stepId === TABS.PRINT) {
 					// Machine state before any leftover gcode filename.
-					return printWorkflowSubtitle(state.printerState)
+					return printWorkflowSubtitle(state.printerState, state.lastContact)
 				}
 				return ''
 			}
@@ -2066,6 +2109,8 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		_resetPrinterState() {
+			this.lastContact = null
+			this._resetLinkFlap()
 			this.printerState = {
 				connected: false,
 				state: 'unknown',
@@ -2658,10 +2703,14 @@ export const usePrintStore = defineStore('print', {
 		},
 
 		async refreshPrinterState() {
+			if (this._printerPollInFlight) {
+				return
+			}
 			if (!this.selectedPrinterId) {
 				this._resetPrinterState()
 				return
 			}
+			this._printerPollInFlight = true
 			try {
 				const data = await fetchState(this.selectedPrinterId)
 				this._applyPrinterState(mapPrinterState(data))
@@ -2679,14 +2728,60 @@ export const usePrintStore = defineStore('print', {
 				this.printerState.connected = false
 				this.printerState.state = 'offline'
 				this.printerState.lastError = e?.message || 'Printer poll failed'
+				this._noteLinkSample(false)
 				console.debug('[nc_print] refreshPrinterState failed:', e?.message || e)
+			} finally {
+				this._printerPollInFlight = false
 			}
 		},
 
 		_applyPrinterState(next) {
 			const prevState = (this.printerState.state || '').toLowerCase()
+			if (next.connected) {
+				this.lastContact = snapshotFromPrinterState(
+					{ ...this.printerState, ...next },
+					Date.now(),
+				)
+			}
 			this.printerState = { ...this.printerState, ...next }
+			this._noteLinkSample(!!this.printerState.connected)
 			this._maybeNotifyPrintTransition(prevState, (next.state || '').toLowerCase())
+		},
+
+		_linkFlapApi() {
+			if (!this._linkFlapTracker) {
+				this._linkFlapTracker = createLinkFlapTracker()
+			}
+			return this._linkFlapTracker
+		},
+
+		_syncLinkFlap(snap) {
+			this.linkFlap = {
+				visible: !!snap.visible,
+				flapping: !!snap.flapping,
+				recentDisconnects: snap.recentDisconnects || 0,
+				lastSuccessAgeMs: snap.lastSuccessAgeMs ?? null,
+				episode: snap.episode || 0,
+			}
+		},
+
+		_noteLinkSample(connected, now = Date.now()) {
+			this._syncLinkFlap(this._linkFlapApi().note(!!connected, now))
+		},
+
+		_resetLinkFlap() {
+			if (this._linkFlapTracker) {
+				this._linkFlapTracker.reset()
+			}
+			this.linkFlap = emptyLinkFlap()
+		},
+
+		/** Hide the weak-Wi-Fi banner until this flap episode ends and another starts. */
+		dismissLinkFlap(now = Date.now()) {
+			if (!this._linkFlapTracker) {
+				return
+			}
+			this._syncLinkFlap(this._linkFlapTracker.dismiss(now))
 		},
 
 		async requestPrintNotifications() {
@@ -2816,6 +2911,8 @@ export const usePrintStore = defineStore('print', {
 		/**
 		 * Run a print-control op against the active printer with a shared busy
 		 * flag + state refresh. Best-effort — errors toast, never throw.
+		 * Single-shot: pause, resume, and cancel are not retried. A lost
+		 * response may mean the printer already accepted the command.
 		 * @param {(printerId: string|undefined) => Promise<any>} fn
 		 * @param {string} failMsg
 		 */
@@ -3297,20 +3394,123 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 
-		async sendGcodeToPrinter(gcodeBlob, filename, start = false) {
-			const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
-			await moonrakerUpload(gcodeBlob, filename, start, targetId)
-			const name = this.activeTargetPrinter?.name
-				|| this.appStatus.printer_display_name
-				|| this.config?.printer_display_name
-				|| 'printer'
-			this.sliceJob.sentTo = name
-			this.sliceJob.printing = start
-			toastSuccess(start ? `Print started on ${name}` : `G-code uploaded to ${name}`)
-			await this.refreshPrinterState()
-			if (start) {
-				this.activeTab = TABS.PRINT
+		/**
+		 * Remember the file for a later manual Retry. Does not POST.
+		 * @param {Blob|File} blob
+		 * @param {string} filename
+		 * @param {boolean} start
+		 * @param {'upload'|'send'} source
+		 * @param {boolean} keepError keep the previous banner up while Retry runs
+		 */
+		_beginGcodeTransfer(blob, filename, start, source, keepError = false) {
+			this.gcodeTransfer.payload = blob
+			this.gcodeTransfer.filename = filename || 'job.gcode'
+			this.gcodeTransfer.start = !!start
+			this.gcodeTransfer.source = source
+			if (!keepError) {
+				this.gcodeTransfer.error = null
 			}
+			this.gcodeTransfer.busy = true
+		},
+
+		_failGcodeTransfer(err, start) {
+			const classified = formatGcodeTransferFailure(classifyGcodeTransferError(err), { start: !!start })
+			this.gcodeTransfer.error = classified
+			toastError(start ? 'Send to printer failed' : 'Upload failed', {
+				response: { data: { message: classified.message } },
+			})
+			return false
+		},
+
+		_finishGcodeTransfer() {
+			this.gcodeTransfer.error = null
+			this.gcodeTransfer.payload = null
+			this.gcodeTransfer.busy = false
+		},
+
+		/**
+		 * Upload a local or queued .gcode file. One attempt; the Print tab Retry
+		 * button calls retryLastGcodeTransfer. Does not auto-retry.
+		 * @param {Blob|File} file
+		 * @param {boolean} [start]
+		 * @param {{ keepError?: boolean }} [opts]
+		 */
+		async uploadLocalGcode(file, start = false, { keepError = false } = {}) {
+			if (this.gcodeTransfer.busy) {
+				return false
+			}
+			const filename = file?.name || 'job.gcode'
+			this._beginGcodeTransfer(file, filename, start, 'upload', keepError)
+			try {
+				const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
+				await moonrakerUpload(file, filename, !!start, targetId)
+				if (this.pendingPrintUpload && this.pendingPrintUpload.filename === filename) {
+					this.pendingPrintUpload = null
+				}
+				toastSuccess(start ? 'Print started' : 'G-code uploaded')
+				await this.refreshPrinterState()
+				if (start) {
+					this.activeTab = TABS.PRINT
+				}
+				this._finishGcodeTransfer()
+				return true
+			} catch (e) {
+				return this._failGcodeTransfer(e, start)
+			} finally {
+				this.gcodeTransfer.busy = false
+			}
+		},
+
+		/**
+		 * Send the sliced G-code. One attempt. Returns false on failure instead
+		 * of throwing, so a flaky hop does not mark a finished slice as failed.
+		 * @param {Blob} gcodeBlob
+		 * @param {string} filename
+		 * @param {boolean} [start]
+		 * @param {{ keepError?: boolean }} [opts]
+		 */
+		async sendGcodeToPrinter(gcodeBlob, filename, start = false, { keepError = false } = {}) {
+			if (this.gcodeTransfer.busy) {
+				return false
+			}
+			this._beginGcodeTransfer(gcodeBlob, filename, start, 'send', keepError)
+			try {
+				const targetId = this.selectedPrinterId || this.activeTargetPrinter?.id
+				await moonrakerUpload(gcodeBlob, filename, !!start, targetId)
+				const name = this.activeTargetPrinter?.name
+					|| this.appStatus.printer_display_name
+					|| this.config?.printer_display_name
+					|| 'printer'
+				this.sliceJob.sentTo = name
+				this.sliceJob.printing = !!start
+				toastSuccess(start ? `Print started on ${name}` : `G-code uploaded to ${name}`)
+				await this.refreshPrinterState()
+				if (start) {
+					this.activeTab = TABS.PRINT
+				}
+				this._finishGcodeTransfer()
+				return true
+			} catch (e) {
+				return this._failGcodeTransfer(e, start)
+			} finally {
+				this.gcodeTransfer.busy = false
+			}
+		},
+
+		/**
+		 * Manual Retry for the last failed upload or send. Repeats that attempt
+		 * once, including whether start was requested. No-op while a transfer
+		 * is already in flight.
+		 */
+		async retryLastGcodeTransfer() {
+			if (this.gcodeTransfer.busy || !this.gcodeTransfer.payload) {
+				return false
+			}
+			const { payload, filename, start, source } = this.gcodeTransfer
+			if (source === 'upload') {
+				return this.uploadLocalGcode(payload, start, { keepError: true })
+			}
+			return this.sendGcodeToPrinter(payload, filename, start, { keepError: true })
 		},
 
 		async sliceOnly({ signal } = {}) {
@@ -3535,12 +3735,11 @@ export const usePrintStore = defineStore('print', {
 				toastError('Choose a target printer on Prepare first')
 				return false
 			}
-			await this.sendGcodeToPrinter(
+			return this.sendGcodeToPrinter(
 				this.sliceJob.gcodeBlob,
 				this.sliceJob.gcodeFilename || 'job.gcode',
 				start,
 			)
-			return true
 		},
 
 		clearPendingPrintUpload() {

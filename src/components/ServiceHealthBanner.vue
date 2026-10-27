@@ -56,7 +56,13 @@ export default {
 		},
 		// One-line summary for the collapsed chip: the fault labels joined.
 		chipSummary() {
-			const labels = this.recoveryCards.map(c => CHIP_LABELS[c.kind] || CHIP_LABELS.generic)
+			const loss = this.printStore.linkLossView
+			const labels = this.recoveryCards.map(c => {
+				if (c.kind === 'moonraker_offline' && loss) {
+					return `Link lost · ${loss.lastSeenLabel}`
+				}
+				return CHIP_LABELS[c.kind] || CHIP_LABELS.generic
+			})
 			if (labels.length <= 2) {
 				return labels.join(' · ')
 			}

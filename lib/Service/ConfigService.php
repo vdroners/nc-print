@@ -417,12 +417,29 @@ class ConfigService
 
 		try {
 			$client = $this->clientService->newClient();
-			$response = $client->get($base . '/server/webcams/list', [
-				'timeout' => 4,
-				'connect_timeout' => 3,
+			$options = [
+				'timeout' => MoonrakerHttp::PROBE_TIMEOUT_SECONDS,
+				'connect_timeout' => MoonrakerHttp::PROBE_CONNECT_SECONDS,
 				'nextcloud' => ['allow_local_address' => true],
-			]);
-			$data = json_decode((string) $response->getBody(), true);
+			];
+			$data = null;
+			$last = null;
+			for ($attempt = 1; $attempt <= MoonrakerHttp::PROBE_MAX_ATTEMPTS; $attempt++) {
+				try {
+					$response = $client->get($base . '/server/webcams/list', $options);
+					$data = json_decode((string) $response->getBody(), true);
+					$last = null;
+					break;
+				} catch (\Throwable $e) {
+					$last = $e;
+					if ($attempt >= MoonrakerHttp::PROBE_MAX_ATTEMPTS || !MoonrakerHttp::throwableIsTransientConnect($e)) {
+						break;
+					}
+				}
+			}
+			if ($last !== null) {
+				throw $last;
+			}
 		} catch (\Throwable $e) {
 			$this->logger->debug('Camera auto-discovery failed', ['exception' => $e->getMessage()]);
 			return '';

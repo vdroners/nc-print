@@ -2,12 +2,12 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
-import { uploadAndStart } from '@/services/moonraker-api.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
-import { toastError, toastSuccess } from '@/services/toast.js'
+import { toastError } from '@/services/toast.js'
+import { gcodeTransferFailureTitle } from '@/utils/gcode-transfer-error.js'
 import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
 import {
 	formatProgressPercent,
@@ -17,6 +17,7 @@ import {
 	showLastJobCard,
 	showLivePrintControls,
 } from '@/utils/print-honesty.js'
+import CameraStaleBadge from './CameraStaleBadge.vue'
 import WorkspaceRail from './WorkspaceRail.vue'
 import PrintStatusBar from './PrintStatusBar.vue'
 import PrintPanel from './PrintPanel.vue'
@@ -98,6 +99,7 @@ const REPORTING_IDS = PANEL_ZONES.flatMap((z) => z.panels.filter((p) => p.report
 export default {
 	name: 'PrintTab',
 	components: {
+		CameraStaleBadge,
 		WorkspaceRail,
 		PrintStatusBar,
 		PrintPanel,
@@ -127,7 +129,6 @@ export default {
 	mixins: [useCameraFrame('streamUrl')],
 	data() {
 		return {
-			uploadBusy: false,
 			startAfterUpload: true,
 			cameraFullscreen: false,
 			pinned: loadPinned(),
@@ -141,6 +142,19 @@ export default {
 		printerId() {
 			return this.printStore.selectedPrinterId || undefined
 		},
+		transferFailure() {
+			return this.printStore.gcodeTransfer.error
+		},
+		transferBusy() {
+			return this.printStore.gcodeTransfer.busy
+		},
+		transferFailureTitle() {
+			const failure = this.transferFailure
+			if (!failure) {
+				return ''
+			}
+			return gcodeTransferFailureTitle(failure.kind, this.printStore.gcodeTransfer.start)
+		},
 		streamUrl() {
 			return cameraStreamUrl(this.printStore.config, this.printStore.selectedPrinterId)
 		},
@@ -152,6 +166,23 @@ export default {
 				return false
 			}
 			return (this.printStore.printerState.state || '').toLowerCase() !== 'reconnecting'
+		},
+		linkLoss() {
+			return this.printStore.linkLossView
+		},
+		staleEtaLabel() {
+			const loss = this.linkLoss
+			if (!loss?.estimated || loss.remainingS == null) {
+				return null
+			}
+			return `~${formatPrintTime(loss.remainingS)} remaining`
+		},
+		staleProgressLabel() {
+			const loss = this.linkLoss
+			if (!loss) {
+				return ''
+			}
+			return formatProgressPercent(loss.progress)
 		},
 		isReconnecting() {
 			return !this.printStore.printerState.connected
@@ -381,18 +412,10 @@ export default {
 				toastError('Select a .gcode file')
 				return false
 			}
-			this.uploadBusy = true
-			try {
-				await uploadAndStart(file, file.name, startAfterUpload, this.printerId)
-				toastSuccess(startAfterUpload ? 'Print started' : 'G-code uploaded')
-				await this.printStore.refreshPrinterState()
-				return true
-			} catch (e) {
-				toastError('Upload failed', e)
-				return false
-			} finally {
-				this.uploadBusy = false
-			}
+			return this.printStore.uploadLocalGcode(file, startAfterUpload)
+		},
+		retryUpload() {
+			return this.printStore.retryLastGcodeTransfer()
 		},
 		async pickGcodeFromFiles() {
 			const picked = await pickFileFromNextcloud({
@@ -425,6 +448,24 @@ export default {
 	<WorkspaceRail class="nc-print-print-tab">
 		<PrinterConnectionStatus />
 
+		<div v-if="transferFailure" class="nc-print-banner nc-print-banner--warn" role="alert">
+			<h2 class="nc-print-banner__title">
+				{{ transferFailureTitle }}
+			</h2>
+			<p class="nc-print-banner__body">
+				{{ transferFailure.message }}
+			</p>
+			<div v-if="transferFailure.retryable !== false" class="nc-print-actions">
+				<button
+					type="button"
+					class="nc-print-btn nc-print-btn--primary"
+					:disabled="transferBusy"
+					@click="retryUpload">
+					{{ transferBusy ? 'Retrying…' : 'Retry' }}
+				</button>
+			</div>
+		</div>
+
 		<UpdateStatusBanner />
 		<UpdateControlPanel />
 		<AnnouncementsBanner />
@@ -433,21 +474,56 @@ export default {
 			<p class="nc-print-banner__body">
 				Reconnecting to Moonraker…
 			</p>
+			<p v-if="linkLoss" class="nc-print-banner__body">
+				{{ linkLoss.lastSeenLabel }}
+			</p>
 		</div>
 
-		<div v-else-if="isOffline" class="nc-print-banner nc-print-banner--danger" role="alert">
+		<div
+			v-else-if="isOffline"
+			class="nc-print-banner"
+			:class="linkLoss ? 'nc-print-banner--warn' : 'nc-print-banner--danger'"
+			role="alert">
 			<h2 class="nc-print-banner__title">
 				<span class="nc-print-card__title-row">
 					<NcPrintIcon name="alert" :size="18" />
-					Printer offline
+					{{ linkLoss ? 'Link lost' : 'Printer offline' }}
 				</span>
 			</h2>
-			<p class="nc-print-banner__body">
+			<p v-if="linkLoss" class="nc-print-banner__body">
+				Moonraker did not answer. {{ linkLoss.lastSeenLabel }}.
+				This is not a live reading.
+				The camera or stock UI can still respond on a weak Wi-Fi link.
+			</p>
+			<p v-else class="nc-print-banner__body">
 				Cannot reach Moonraker for the selected printer. Check power, network, and Admin settings.
 			</p>
 			<p v-if="printStore.printerState.lastError" class="nc-print-banner__error">
 				{{ printStore.printerState.lastError }}
 			</p>
+		</div>
+
+		<div v-if="linkLoss && linkLoss.active" class="nc-print-card nc-print-stale-job" data-stale-job>
+			<div class="nc-print-card__header">
+				<h2 class="nc-print-card__title">
+					<span class="nc-print-card__title-row">
+						<NcPrintIcon name="printer" :size="18" />
+						{{ linkLoss.filename || 'Last print' }}
+					</span>
+				</h2>
+			</div>
+			<p class="nc-print-stale-job__label">{{ linkLoss.label }}</p>
+			<div class="nc-print-stat-grid">
+				<div class="nc-print-stat">
+					<span class="nc-print-stat__label">Progress</span>
+					<span class="nc-print-stat__value">{{ staleProgressLabel }}</span>
+				</div>
+				<div v-if="staleEtaLabel" class="nc-print-stat">
+					<span class="nc-print-stat__label">Remaining</span>
+					<span class="nc-print-stat__value">{{ staleEtaLabel }}</span>
+				</div>
+			</div>
+			<p class="nc-print-print-meta nc-print-print-meta--muted">{{ linkLoss.lastSeenLabel }}</p>
 		</div>
 
 		<PrintCompletionBanner @upload-last="onPrintAgainUpload" />
@@ -644,7 +720,7 @@ export default {
 				<button
 					type="button"
 					class="nc-print-btn"
-					:disabled="uploadBusy"
+					:disabled="transferBusy"
 					@click="pickGcodeFromFiles">
 					From Files
 				</button>
@@ -677,7 +753,9 @@ export default {
 						Expand
 					</button>
 				</div>
-				<div class="nc-print-camera-panel">
+				<div
+					class="nc-print-camera-panel"
+					:class="{ 'nc-print-camera-panel--stale': cameraStale }">
 					<img
 						v-if="cameraFrameUrl"
 						:class="{ 'nc-print-camera-panel__frame--pending': !cameraFrameReady || cameraError }"
@@ -686,6 +764,7 @@ export default {
 						@load="onCameraLoad"
 						@error="onCameraError"
 						@click="onCameraClick">
+					<CameraStaleBadge :stale="cameraStale" :age-label="cameraStaleAgeLabel" />
 					<div v-if="!cameraFrameReady || cameraError" class="nc-print-camera-placeholder">
 						<p>{{ cameraPlaceholderText }}</p>
 						<button v-if="cameraError && streamUrl" type="button" class="nc-print-btn" @click="retryCamera">
@@ -715,11 +794,16 @@ export default {
 					<NcPrintIcon name="close" :size="16" />
 					Close
 				</button>
-				<img
+				<div
 					v-if="cameraFrameReady && cameraFrameUrl && !cameraError"
-					:src="cameraFrameUrl"
-					alt="Printer camera stream (fullscreen)"
-					@error="onCameraError">
+					class="nc-print-camera-fullscreen__stage"
+					:class="{ 'nc-print-camera-panel--stale': cameraStale }">
+					<img
+						:src="cameraFrameUrl"
+						alt="Printer camera stream (fullscreen)"
+						@error="onCameraError">
+					<CameraStaleBadge :stale="cameraStale" :age-label="cameraStaleAgeLabel" />
+				</div>
 				<p v-else class="nc-print-camera-fullscreen__placeholder">{{ cameraPlaceholderText }}</p>
 			</div>
 		</teleport>
@@ -874,6 +958,15 @@ export default {
 	z-index: 9999;
 }
 
+.nc-print-camera-fullscreen__stage {
+	align-items: center;
+	display: flex;
+	justify-content: center;
+	max-height: 100%;
+	max-width: 100%;
+	position: relative;
+}
+
 .nc-print-camera-fullscreen img {
 	cursor: zoom-out;
 	max-height: 100%;
@@ -890,5 +983,16 @@ export default {
 
 .nc-print-camera-fullscreen__placeholder {
 	color: #fff;
+}
+
+.nc-print-stale-job {
+	border-left: 3px solid var(--nc-gcs-warning, #eab308);
+}
+
+.nc-print-stale-job__label {
+	color: var(--nc-gcs-warning, #eab308);
+	font-size: 0.85rem;
+	font-weight: 600;
+	margin: 0 0 8px;
 }
 </style>

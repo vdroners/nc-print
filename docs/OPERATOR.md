@@ -7,6 +7,6 @@
 
 Deep link: open `/apps/nc_print/?fileId=<node_id>` to load a Files model automatically.
 
-Service health: a banner appears when the slicer or Moonraker is offline. See `docs/TROUBLESHOOTING.md`.
+Service health: a banner appears when the slicer or Moonraker is offline. A printer that answered recently shows **Link lost** and last-seen age instead of a cold offline. See `docs/TROUBLESHOOTING.md` and `docs/notes/k1-max-wifi.md`.
 
 Feature parity vs Forge Slicer Studio: `docs/FEATURE_PORT.md`.

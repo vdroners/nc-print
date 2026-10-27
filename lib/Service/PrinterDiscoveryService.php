@@ -106,8 +106,11 @@ class PrinterDiscoveryService
 			$url = "http://$h:$p/server/info";
 			$ch = curl_init($url);
 			curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 400);
-			curl_setopt($ch, CURLOPT_TIMEOUT_MS, 900);
+			// Parallel scan: wall-clock tracks the slowest host. Long enough
+			// for a multi-second Moonraker answer on a weak hop. No retry —
+			// a second pass would double every empty address.
+			curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, MoonrakerHttp::DISCOVERY_CONNECT_MS);
+			curl_setopt($ch, CURLOPT_TIMEOUT_MS, MoonrakerHttp::DISCOVERY_TIMEOUT_MS);
 			curl_setopt($ch, CURLOPT_NOSIGNAL, true);
 			$handles[$host] = ['ch' => $ch, 'url' => "http://$h:$p"];
 			curl_multi_add_handle($mh, $ch);

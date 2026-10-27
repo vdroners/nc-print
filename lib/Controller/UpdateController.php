@@ -7,6 +7,7 @@ namespace OCA\NcPrint\Controller;
 use OCA\NcPrint\AppInfo\Application;
 use OCA\NcPrint\Service\AccessService;
 use OCA\NcPrint\Service\ConfigService;
+use OCA\NcPrint\Service\MoonrakerHttp;
 use OCP\AppFramework\Controller;
 use OCP\AppFramework\Http;
 use OCP\AppFramework\Http\Attribute\NoAdminRequired;
@@ -25,9 +26,6 @@ use Psr\Log\LoggerInterface;
  */
 class UpdateController extends Controller
 {
-	private const CONNECT_TIMEOUT_SECONDS = 5;
-	private const UPDATE_TIMEOUT_SECONDS = 600;
-
 	/** Only these Moonraker update targets may be triggered. */
 	private const ALLOWED_TARGETS = ['klipper', 'moonraker', 'client', 'system', 'full'];
 
@@ -87,7 +85,7 @@ class UpdateController extends Controller
 			);
 		}
 
-		$result = $this->moonrakerPost('machine/update/' . $target, '', $printerId);
+		$result = $this->moonrakerPost('machine/update/' . $target, '', $printerId, 'update');
 		if ($result === null) {
 			return new JSONResponse(
 				['error' => 'update_failed', 'message' => 'Moonraker update request failed.'],
@@ -103,7 +101,7 @@ class UpdateController extends Controller
 	private function isPrinterBusy(?string $printerId): ?bool
 	{
 		$payload = json_encode(['objects' => ['print_stats' => null]], JSON_THROW_ON_ERROR);
-		$res = $this->moonrakerPost('printer/objects/query', $payload, $printerId);
+		$res = $this->moonrakerPost('printer/objects/query', $payload, $printerId, 'read');
 		if ($res === null) {
 			return null;
 		}
@@ -118,20 +116,21 @@ class UpdateController extends Controller
 		return in_array($state, self::BUSY_STATES, true);
 	}
 
-	private function moonrakerPost(string $path, string $body, ?string $printerId): ?array
+	private function moonrakerPost(string $path, string $body, ?string $printerId, string $profile = 'update'): ?array
 	{
 		$url = rtrim($this->config->resolveMoonrakerUrl($printerId), '/') . '/' . ltrim($path, '/');
+		[$timeout, $connect, $retry] = MoonrakerHttp::curlBudget($profile);
 		$ch = curl_init();
 		curl_setopt($ch, CURLOPT_URL, $url);
 		curl_setopt($ch, CURLOPT_POST, true);
 		curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
 		curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-		curl_setopt($ch, CURLOPT_TIMEOUT, self::UPDATE_TIMEOUT_SECONDS);
-		curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, self::CONNECT_TIMEOUT_SECONDS);
+		MoonrakerHttp::applyTimeouts($ch, $timeout, $connect);
 		curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-		$responseBody = curl_exec($ch);
-		$httpCode = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-		$error = curl_error($ch);
+		$exec = MoonrakerHttp::exec($ch, $retry);
+		$responseBody = $exec['body'];
+		$httpCode = $exec['http'];
+		$error = $exec['error'];
 		curl_close($ch);
 		if ($responseBody === false || $error !== '' || $httpCode < 200 || $httpCode >= 300) {
 			$this->logger->warning('UpdateController Moonraker request failed', [
