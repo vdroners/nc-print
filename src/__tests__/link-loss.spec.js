@@ -95,6 +95,7 @@ describe('last-seen labels', () => {
 describe('print store keeps last contact across a flap', () => {
 	beforeEach(() => {
 		localStorage.clear()
+		sessionStorage.clear()
 		setActivePinia(createPinia())
 		fetchState.mockReset()
 	})
@@ -148,7 +149,7 @@ describe('print store keeps last contact across a flap', () => {
 		expect(store.printerStatusLabel).toBe('Printing')
 	})
 
-	it('stays a cold Offline when Moonraker has never answered', () => {
+	it('stays Checking on the first missed probe and Offline only after another', () => {
 		const store = usePrintStore()
 		store._applyPrinterState({
 			connected: false,
@@ -159,8 +160,50 @@ describe('print store keeps last contact across a flap', () => {
 			lastError: '',
 		})
 		expect(store.lastContact).toBeNull()
+		expect(store.probeMisses).toBe(1)
+		expect(store.printerState.state).toBe('checking')
+		expect(store.printerStatusLabel).toBe('Checking…')
+		expect(store.printerStatusClass).toBe('checking')
+		expect(store.linkLossView).toBeNull()
+
+		store._applyPrinterState({
+			connected: false,
+			state: 'offline',
+			message: 'Moonraker unreachable',
+			lastError: '',
+		})
+		expect(store.probeMisses).toBe(2)
+		expect(store.printerState.state).toBe('offline')
 		expect(store.printerStatusLabel).toBe('Offline')
 		expect(store.linkLossView).toBeNull()
+	})
+
+	it('does not paint Offline before any probe, and keeps a stored job while checking', () => {
+		const store = usePrintStore()
+		expect(store.printerState.state).toBe('checking')
+		expect(store.printerStatusLabel).toBe('Checking…')
+
+		store.selectedPrinterId = 'k1'
+		const at = Date.now() - 4000
+		sessionStorage.setItem('nc_print_last_contact', JSON.stringify({
+			byId: {
+				k1: {
+					atMs: at,
+					state: 'printing',
+					filename: 'cone.gcode',
+					progress: 0.33,
+					printDurationS: 120,
+					active: true,
+					rateReliable: true,
+				},
+			},
+		}))
+		store._hydrateLastContact()
+		expect(store.printerStatusLabel).toBe('Checking…')
+		expect(store.linkLossView.filename).toBe('cone.gcode')
+		expect(store.linkLossView.active).toBe(true)
+		expect(store.targetConnectionLabel).toMatch(/checking…/)
+		expect(store.targetConnectionLabel).not.toMatch(/offline/)
 	})
 
 	it('clears last contact when the target printer changes', () => {

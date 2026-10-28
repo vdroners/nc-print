@@ -3,6 +3,8 @@ import {
 	parseHistoryTotals,
 	parseHistoryList,
 	historyStatusBreakdown,
+	historyStatusLabel,
+	historyStatusTone,
 	bestThumbnail,
 	thumbnailSrc,
 	thumbnailFromMetadata,
@@ -49,6 +51,18 @@ describe('WS15: history + thumbnails', () => {
 		expect(rows.map(r => r.jobId)).toEqual(['b', 'a'])
 		expect(rows[1].printDurationS).toBe(60)
 		expect(rows[1].filamentMm).toBe(500)
+	})
+
+	it('labels history statuses for a dark surface', () => {
+		expect(historyStatusLabel('in_progress')).toBe('In progress')
+		expect(historyStatusLabel('klippy_shutdown')).toBe('Klippy shutdown')
+		expect(historyStatusLabel('cancelled')).toBe('Cancelled')
+		expect(historyStatusLabel('completed')).toBe('Completed')
+		expect(historyStatusLabel('mystery_state')).toBe('Mystery State')
+		expect(historyStatusTone('in_progress')).toBe('info')
+		expect(historyStatusTone('klippy_shutdown')).toBe('danger')
+		expect(historyStatusTone('completed')).toBe('ok')
+		expect(historyStatusTone('interrupted')).toBe('warn')
 	})
 
 	it('computes success/fail breakdown', () => {

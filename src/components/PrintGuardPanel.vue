@@ -1,5 +1,8 @@
 <script>
+import { mapStores } from 'pinia'
+import { usePrintStore } from '@/store/print.js'
 import { checkPrintGuard } from '@/services/print-guard-api.js'
+import { formatProgressPercent } from '@/utils/print-honesty.js'
 
 export default {
 	name: 'PrintGuardPanel',
@@ -11,6 +14,32 @@ export default {
 			error: '',
 			timer: null,
 		}
+	},
+	computed: {
+		...mapStores(usePrintStore),
+		/**
+		 * Same progress the Print tab shows. The guard snapshot is only a
+		 * fallback before the printer poll has connected, and it now uses
+		 * virtual_sdcard (0–100) rather than display_status.
+		 */
+		progressLabel() {
+			const live = this.printStore.printerState
+			if (live?.connected) {
+				return formatProgressPercent(live.progress)
+			}
+			const raw = Number(this.snapshot?.progress)
+			if (!Number.isFinite(raw)) {
+				return ''
+			}
+			return `${Math.round(raw)}%`
+		},
+		stateLabel() {
+			const live = this.printStore.printerState
+			if (live?.connected && live.state) {
+				return live.state
+			}
+			return this.snapshot?.state || ''
+		},
 	},
 	async mounted() {
 		await this.refresh(false)
@@ -25,6 +54,7 @@ export default {
 			this.error = ''
 			try {
 				const data = await checkPrintGuard({
+					printerId: this.printStore.selectedPrinterId || '',
 					prev: this.snapshot,
 					notify: !!notify && (this.alerts?.length >= 0),
 				})
@@ -59,8 +89,8 @@ export default {
 			</li>
 		</ul>
 		<p v-else class="nc-print-guard__ok">No active guard alerts.</p>
-		<p v-if="snapshot" class="nc-print-guard__meta">
-			State: {{ snapshot.state }} · progress: {{ snapshot.progress != null ? Math.round(snapshot.progress) + '%' : '—' }}
+		<p v-if="stateLabel || progressLabel" class="nc-print-guard__meta">
+			State: {{ stateLabel || '—' }} · progress: {{ progressLabel || '—' }}
 		</p>
 	</div>
 </template>

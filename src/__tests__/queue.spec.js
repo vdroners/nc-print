@@ -5,6 +5,8 @@ import {
 	addToQueueModel,
 	removeFromQueueModel,
 	parseExcludeObjects,
+	formatJobQueueLabel,
+	objectShortLabel,
 } from '@/utils/queue.js'
 
 describe('WS13: queue + exclude-object', () => {
@@ -23,6 +25,22 @@ describe('WS13: queue + exclude-object', () => {
 		expect(q.jobs).toHaveLength(2)
 		expect(q.jobs[0].jobId).toBe('1')
 		expect(q.jobs[1].filename).toBe('b.gcode')
+	})
+
+	it('does not call an empty queue paused', () => {
+		expect(formatJobQueueLabel('paused', 0)).toBe('Job queue')
+		expect(formatJobQueueLabel('ready', 0)).toBe('Job queue')
+		expect(formatJobQueueLabel('paused', 2)).toBe('Job queue (paused)')
+		expect(formatJobQueueLabel('loading', 1)).toBe('Job queue (loading)')
+		expect(formatJobQueueLabel('ready', 3)).toBe('Job queue')
+	})
+
+	it('shortens an object name for cancel aria without dropping the row text', () => {
+		expect(objectShortLabel('part_1')).toBe('part_1')
+		expect(objectShortLabel('')).toBe('object')
+		const long = 'REAR_CONE_V4_-_REAR_CONE_1_.STEP_B_ID_1_COPY_0'
+		expect(objectShortLabel(long).length).toBeLessThan(long.length)
+		expect(objectShortLabel(long).endsWith('…')).toBe(true)
 	})
 
 	it('reorders queue ids purely', () => {

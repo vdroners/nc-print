@@ -3,7 +3,7 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet, moonrakerProxyPost, excludeObject } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
-import { parseJobQueue, reorderQueueIds, parseExcludeObjects } from '@/utils/queue.js'
+import { parseJobQueue, reorderQueueIds, parseExcludeObjects, formatJobQueueLabel, objectShortLabel } from '@/utils/queue.js'
 import { layoutExcludeBed } from '@/utils/exclude-bed.js'
 import { panelVisibility } from '@/mixins/panelVisibility.js'
 import ExcludeObjectBed from './ExcludeObjectBed.vue'
@@ -42,6 +42,9 @@ export default {
 		},
 		hasExcludeObjects() {
 			return this.exclude.objects.length > 0
+		},
+		queueLabel() {
+			return formatJobQueueLabel(this.queue.state, this.queue.jobs.length)
 		},
 		panelVisible() {
 			return this.connected && (this.queueSupported || this.hasExcludeObjects)
@@ -148,6 +151,9 @@ export default {
 			const byId = new Map(this.queue.jobs.map(j => [j.jobId, j]))
 			this.queue = { ...this.queue, jobs: next.map(id => byId.get(id)) }
 		},
+		objectLabel(name) {
+			return objectShortLabel(name)
+		},
 		async onExclude(name) {
 			this.selectedName = name
 			if (!window.confirm(`Cancel object "${name}"? The rest of the print continues.`)) {
@@ -173,7 +179,7 @@ export default {
 		<p v-if="loadError" class="nc-print-queue__msg">{{ loadError }}</p>
 
 		<template v-if="queueSupported">
-			<p class="nc-print-section-label">Job queue ({{ queue.state }})</p>
+			<p class="nc-print-section-label">{{ queueLabel }}</p>
 			<ul v-if="queue.jobs.length" class="nc-print-queue__list">
 				<li v-for="(job, i) in queue.jobs" :key="job.jobId" class="nc-print-queue__item">
 					<span class="nc-print-queue__name">{{ job.filename }}</span>
@@ -231,12 +237,18 @@ export default {
 								{{ obj.name }}
 							</span>
 							<span v-if="obj.shortLabel !== obj.marker && obj.shortLabel !== obj.name" class="nc-print-queue__short">{{ obj.shortLabel }}</span>
-							<span v-if="obj.status === 'printing'" class="nc-print-badge nc-print-badge--info">printing</span>
+							<span
+								v-if="obj.status === 'printing'"
+								class="nc-print-badge nc-print-badge--info nc-print-queue__badge">
+								printing
+							</span>
 						</button>
 						<button
 							type="button"
 							class="nc-print-btn nc-print-btn--sm nc-print-btn--danger nc-print-queue__cancel"
 							:disabled="obj.excluded || busy || !printing"
+							:title="obj.excluded ? `${objectLabel(obj.name)} already excluded` : `Cancel object ${objectLabel(obj.name)}`"
+							:aria-label="obj.excluded ? `${objectLabel(obj.name)} excluded` : `Cancel object ${objectLabel(obj.name)}`"
 							@click="onExclude(obj.name)">
 							{{ obj.excluded ? 'Excluded' : 'Cancel object' }}
 						</button>
@@ -273,6 +285,12 @@ export default {
 	white-space: nowrap;
 }
 
+.nc-print-queue__badge,
+.nc-print-queue__cancel,
+.nc-print-queue__controls {
+	flex-shrink: 0;
+}
+
 .nc-print-queue__name--excluded {
 	color: var(--nc-gcs-text-muted);
 	text-decoration: line-through;
@@ -280,7 +298,6 @@ export default {
 
 .nc-print-queue__controls {
 	display: flex;
-	flex-shrink: 0;
 	gap: 4px;
 }
 

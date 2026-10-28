@@ -54,6 +54,15 @@ import {
 import { TABS } from '@/constants/tabs.js'
 import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
 import { snapshotFromPrinterState, staleJobView } from '@/utils/link-loss.js'
+import {
+	disconnectedConnectionClass,
+	disconnectedConnectionWord,
+	disconnectedStatusClass,
+	disconnectedStatusLabel,
+	readStoredLastContact,
+	softenUnconfirmedOffline,
+	writeStoredLastContact,
+} from '@/utils/printer-contact.js'
 import { createLinkFlapTracker, emptyLinkFlap } from '@/utils/link-flap.js'
 import {
 	estimateSecondsFromMetadata,
@@ -489,7 +498,7 @@ export const usePrintStore = defineStore('print', {
 		etaPrediction: null,
 		printerState: {
 			connected: false,
-			state: 'unknown',
+			state: 'checking',
 			message: '',
 			progress: 0,
 			extruderTemp: null,
@@ -511,6 +520,8 @@ export const usePrintStore = defineStore('print', {
 		},
 		/** Last connected Moonraker reading. Kept across a flap. Cleared on printer change. */
 		lastContact: null,
+		/** Completed probes that missed, with no successful sample yet. */
+		probeMisses: 0,
 		_printerPollInFlight: false,
 		// Weak-Wi-Fi flap snapshot (tracker instance stays off state).
 		linkFlap: emptyLinkFlap(),
@@ -624,13 +635,7 @@ export const usePrintStore = defineStore('print', {
 		printerStatusLabel(state) {
 			const st = (state.printerState.state || '').toLowerCase()
 			if (!state.printerState.connected) {
-				if (st === 'reconnecting') {
-					return 'Reconnecting'
-				}
-				if (state.lastContact) {
-					return 'Link lost'
-				}
-				return 'Offline'
+				return disconnectedStatusLabel(st, state.lastContact)
 			}
 			if (st.includes('print')) {
 				return 'Printing'
@@ -649,13 +654,7 @@ export const usePrintStore = defineStore('print', {
 		printerStatusClass(state) {
 			const st = (state.printerState.state || '').toLowerCase()
 			if (!state.printerState.connected) {
-				if (st === 'reconnecting') {
-					return 'reconnecting'
-				}
-				if (state.lastContact) {
-					return 'link-lost'
-				}
-				return 'idle'
+				return disconnectedStatusClass(st, state.lastContact)
 			}
 			if (st.includes('print')) {
 				return 'printing'
@@ -676,15 +675,14 @@ export const usePrintStore = defineStore('print', {
 			const failure = String(this.printerState.message || this.printerState.lastError || '').trim()
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
-				const status = st === 'reconnecting'
-					? 'reconnecting…'
-					: (this.lastContact ? 'link lost' : 'offline')
+				const status = disconnectedConnectionWord(st, this.lastContact)
 				const parts = [name, status]
 				const age = this.linkLossView?.lastSeenLabel
 				if (age) {
 					parts.push(age)
 				}
-				if (failure) {
+				// A poll error during the first contact is not a diagnosis yet.
+				if (failure && st !== 'checking') {
 					parts.push(failure)
 				}
 				return parts.join(' · ')
@@ -704,10 +702,7 @@ export const usePrintStore = defineStore('print', {
 			}
 			if (!this.printerState.connected) {
 				const st = (this.printerState.state || '').toLowerCase()
-				if (st === 'reconnecting') {
-					return 'is-reconnecting'
-				}
-				return this.lastContact ? 'is-link-lost' : 'is-offline'
+				return disconnectedConnectionClass(st, this.lastContact)
 			}
 			if ((this.printerState.state || '').toLowerCase().includes('error')) {
 				return 'is-error'
@@ -1999,6 +1994,7 @@ export const usePrintStore = defineStore('print', {
 					this.selectedPrinterId = def.id
 				}
 				this._validateSelectedPrinterId()
+				this._hydrateLastContact()
 			} catch (e) {
 				console.warn('[nc_print] config load failed:', e?.message || e)
 				this.configLoadError = e?.message || 'Config load failed'
@@ -2139,12 +2135,13 @@ export const usePrintStore = defineStore('print', {
 
 		_resetPrinterState() {
 			this.lastContact = null
+			this.probeMisses = 0
 			this.fileEstimateS = null
 			this.fileEstimateFor = ''
 			this._resetLinkFlap()
 			this.printerState = {
 				connected: false,
-				state: 'unknown',
+				state: 'checking',
 				message: '',
 				progress: 0,
 				filename: '',
@@ -2156,7 +2153,31 @@ export const usePrintStore = defineStore('print', {
 				bedTarget: null,
 				printDuration: null,
 				remainingTime: null,
+				lastError: '',
 			}
+			this._hydrateLastContact()
+		},
+
+		/**
+		 * Restore this tab's last good reading for the selected printer.
+		 * Only while we are still in the initial checking window — a confirmed
+		 * offline or a live sample is not overwritten.
+		 */
+		_hydrateLastContact() {
+			if (!this.selectedPrinterId || this.printerState.connected || this.probeMisses > 0) {
+				return
+			}
+			if ((this.printerState.state || '').toLowerCase() !== 'checking') {
+				return
+			}
+			const snap = readStoredLastContact(this.selectedPrinterId)
+			if (!snap) {
+				return
+			}
+			if (this.lastContact && Number(this.lastContact.atMs) >= Number(snap.atMs)) {
+				return
+			}
+			this.lastContact = snap
 		},
 
 		_validateSelectedPrinterId() {
@@ -2610,6 +2631,7 @@ export const usePrintStore = defineStore('print', {
 				this.selectedPrinterId = prefs.selectedPrinterId
 			}
 			this._validateSelectedPrinterId()
+			this._hydrateLastContact()
 			if (typeof prefs.overridesCollapsed === 'boolean') {
 				this.overridesCollapsed = prefs.overridesCollapsed
 			}
@@ -2756,9 +2778,16 @@ export const usePrintStore = defineStore('print', {
 					console.debug('[nc_print] refreshPrinterState: cleared stale printer id')
 					return
 				}
-				this.printerState.connected = false
-				this.printerState.state = 'offline'
-				this.printerState.lastError = e?.message || 'Printer poll failed'
+				const softened = softenUnconfirmedOffline({
+					connected: false,
+					state: 'offline',
+					lastError: e?.message || 'Printer poll failed',
+				}, {
+					lastContact: this.lastContact,
+					probeMisses: this.probeMisses,
+				})
+				this.probeMisses = softened.probeMisses
+				this.printerState = { ...this.printerState, ...softened.incoming }
 				this._noteLinkSample(false)
 				console.debug('[nc_print] refreshPrinterState failed:', e?.message || e)
 			} finally {
@@ -2768,15 +2797,24 @@ export const usePrintStore = defineStore('print', {
 
 		_applyPrinterState(next) {
 			const prevState = (this.printerState.state || '').toLowerCase()
-			if (next.connected) {
+			const softened = softenUnconfirmedOffline(next, {
+				lastContact: this.lastContact,
+				probeMisses: this.probeMisses,
+			})
+			this.probeMisses = softened.probeMisses
+			const incoming = softened.incoming
+			if (incoming.connected) {
 				this.lastContact = snapshotFromPrinterState(
-					{ ...this.printerState, ...next },
+					{ ...this.printerState, ...incoming },
 					Date.now(),
 				)
+				if (this.selectedPrinterId && this.lastContact) {
+					writeStoredLastContact(this.selectedPrinterId, this.lastContact)
+				}
 			}
-			this.printerState = { ...this.printerState, ...next }
+			this.printerState = { ...this.printerState, ...incoming }
 			this._noteLinkSample(!!this.printerState.connected)
-			this._maybeNotifyPrintTransition(prevState, (next.state || '').toLowerCase())
+			this._maybeNotifyPrintTransition(prevState, (incoming.state || '').toLowerCase())
 			const filename = String(this.printerState.filename || '').replace(/^\/+/, '')
 			if (!filename) {
 				this.fileEstimateS = null

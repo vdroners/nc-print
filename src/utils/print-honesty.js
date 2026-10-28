@@ -4,6 +4,8 @@
  * Resume / Cancel follow printerControls.isActive (printing | paused) only.
  */
 
+import { disconnectedStatusLabel } from '@/utils/printer-contact.js'
+
 /** Panels that stay collapsed on an idle machine, even if saved open. */
 export const IDLE_COLLAPSED_PANEL_IDS = ['temperature', 'motion', 'bedmesh']
 
@@ -83,10 +85,7 @@ export function printWorkflowSubtitle(printerState, lastContact = null) {
 	const state = printerState || {}
 	const st = String(state.state || '').trim().toLowerCase()
 	if (!state.connected) {
-		if (st === 'reconnecting') {
-			return 'Reconnecting'
-		}
-		return lastContact?.atMs ? 'Link lost' : 'Offline'
+		return disconnectedStatusLabel(st, lastContact?.atMs ? lastContact : null)
 	}
 	// Printing / paused percent lives on the header chip and the sticky job
 	// line. Repeating it on the workflow step buried Link lost.
@@ -133,6 +132,22 @@ export function resolvePanelOpen(savedOpen, forceCollapsed) {
 		return false
 	}
 	return !!savedOpen
+}
+
+/**
+ * Do not arm "start print after upload" while a job is on the machine.
+ * A reload that is still checking keeps the block when the last-seen
+ * snapshot was an active print.
+ * @param {object} printerState
+ * @param {{ active?: boolean }|null} [lastContact]
+ * @returns {boolean}
+ */
+export function blockAutoStartAfterUpload(printerState, lastContact = null) {
+	const st = String(printerState?.state || '').trim().toLowerCase()
+	if (st === 'printing' || st === 'paused') {
+		return true
+	}
+	return !printerState?.connected && !!lastContact?.active
 }
 
 /**

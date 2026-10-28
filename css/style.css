@@ -35,7 +35,7 @@
   background: color-mix(in srgb, var(--nc-gcs-danger) 20%, transparent);
   color: var(--nc-gcs-danger-soft);
 }
-.nc-print-status-chip--reconnecting, .nc-print-status-chip--link-lost {
+.nc-print-status-chip--reconnecting, .nc-print-status-chip--checking, .nc-print-status-chip--link-lost {
   background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 18%, transparent);
   color: var(--nc-gcs-warning, #eab308);
 }
@@ -63,7 +63,7 @@
   background: var(--nc-gcs-danger-soft);
   box-shadow: 0 0 6px var(--nc-gcs-danger-soft);
 }
-.nc-print-dot--reconnecting, .nc-print-dot--link-lost {
+.nc-print-dot--reconnecting, .nc-print-dot--checking, .nc-print-dot--link-lost {
   background: var(--nc-gcs-warning, #eab308);
   box-shadow: 0 0 6px var(--nc-gcs-warning, #eab308);
 }

@@ -94,7 +94,9 @@ export default {
 		stays alive underneath. When `when` is false the body is force-shown inside
 		the hidden container so the panel keeps rendering (and thus reporting).
 	-->
-	<div class="nc-print-panel" :class="{ 'nc-print-panel--hidden': !when }">
+	<div
+		class="nc-print-panel"
+		:class="{ 'nc-print-panel--hidden': !when, 'nc-print-panel--open': open && when }">
 		<div v-if="when" class="nc-print-panel__strip">
 			<button
 				type="button"
@@ -146,29 +148,55 @@ export default {
 	align-items: center;
 	display: flex;
 	gap: 4px;
+	width: 100%;
 }
 
-.nc-print-panel__btn {
+.nc-print-panel__btn,
+.nc-print-panel__btn:hover,
+.nc-print-panel__btn:focus,
+.nc-print-panel__btn:focus-visible,
+.nc-print-panel__btn:active {
 	align-items: center;
 	appearance: none;
-	background: none;
+	background: transparent;
+	background-color: transparent;
 	border: none;
+	border-radius: 0;
+	box-shadow: none;
 	color: var(--nc-gcs-text-muted);
 	cursor: pointer;
 	display: flex;
-	flex: 1;
+	flex: 1 1 auto;
 	font: inherit;
 	font-size: 11px;
 	font-weight: 700;
 	gap: 6px;
+	justify-content: flex-start;
 	letter-spacing: 0.05em;
+	min-width: 0;
 	padding: 2px;
+	text-align: left;
 	text-transform: uppercase;
+	width: auto;
+}
 
-	&:focus-visible {
-		outline: 2px solid var(--nc-app-accent);
-		outline-offset: 2px;
-	}
+.nc-print-panel__btn:focus-visible {
+	outline: 2px solid var(--nc-app-accent);
+	outline-offset: 2px;
+}
+
+.nc-print-panel--open .nc-print-panel__btn,
+.nc-print-panel--open .nc-print-panel__btn:hover,
+.nc-print-panel--open .nc-print-panel__btn:focus,
+.nc-print-panel--open .nc-print-panel__btn:focus-visible,
+.nc-print-panel--open .nc-print-panel__btn:active,
+.nc-print-panel__btn[aria-expanded='true'],
+.nc-print-panel__btn[aria-expanded='true']:hover,
+.nc-print-panel__btn[aria-expanded='true']:focus,
+.nc-print-panel__btn[aria-expanded='true']:active {
+	background: transparent;
+	background-color: transparent;
+	color: var(--nc-gcs-text-primary);
 }
 
 .nc-print-panel__title {
@@ -186,15 +214,21 @@ export default {
 	transform: rotate(180deg);
 }
 
-.nc-print-panel__pin {
+.nc-print-panel__pin,
+.nc-print-panel__pin:hover,
+.nc-print-panel__pin:focus,
+.nc-print-panel__pin:active {
 	appearance: none;
-	background: none;
+	background: transparent;
+	background-color: transparent;
 	border: none;
 	border-radius: 4px;
+	box-shadow: none;
 	color: var(--nc-gcs-text-muted);
 	cursor: pointer;
+	flex: 0 0 auto;
 	line-height: 0;
-	opacity: 0.35;
+	opacity: 0.55;
 	padding: 4px;
 	transition: opacity 0.15s, color 0.15s;
 

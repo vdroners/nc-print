@@ -8,6 +8,8 @@ import {
 	parseHistoryTotals,
 	parseHistoryList,
 	historyStatusBreakdown,
+	historyStatusLabel,
+	historyStatusTone,
 } from '@/utils/history.js'
 
 export default {
@@ -82,15 +84,11 @@ export default {
 				return '—'
 			}
 		},
+		statusLabel(status) {
+			return historyStatusLabel(status)
+		},
 		statusClass(status) {
-			const s = String(status).toLowerCase()
-			if (s === 'completed') {
-				return 'nc-print-badge--ok'
-			}
-			if (s === 'in_progress' || s === 'printing') {
-				return 'nc-print-badge--info'
-			}
-			return 'nc-print-badge--warn'
+			return `nc-print-history-badge--${historyStatusTone(status)}`
 		},
 	},
 }
@@ -148,7 +146,7 @@ export default {
 							<td>{{ when(job.startTime) }}</td>
 							<td>{{ job.printDurationS ? formatPrintTime(job.printDurationS) : '—' }}</td>
 							<td>
-								<span class="nc-print-badge" :class="statusClass(job.status)">{{ job.status }}</span>
+								<span class="nc-print-history-badge" :class="statusClass(job.status)">{{ statusLabel(job.status) }}</span>
 							</td>
 						</tr>
 					</tbody>
@@ -206,5 +204,40 @@ export default {
 .nc-print-history__empty {
 	color: var(--nc-gcs-text-muted);
 	font-size: var(--nc-gcs-text-sm);
+}
+
+.nc-print-history-badge {
+	border-radius: 10px;
+	display: inline-block;
+	font-size: 11px;
+	font-weight: 600;
+	line-height: 1.3;
+	padding: 2px 8px;
+	white-space: nowrap;
+}
+
+.nc-print-history-badge--ok {
+	background: var(--nc-gcs-success-tint, rgba(76, 175, 80, 0.22));
+	color: var(--nc-gcs-success, #4caf50);
+}
+
+.nc-print-history-badge--info {
+	background: color-mix(in srgb, var(--nc-gcs-info, #00bcd4) 22%, transparent);
+	color: var(--nc-gcs-info-soft, #22d3ee);
+}
+
+.nc-print-history-badge--warn {
+	background: var(--nc-gcs-warning-tint, rgba(255, 152, 0, 0.22));
+	color: var(--nc-gcs-warning, #ff9800);
+}
+
+.nc-print-history-badge--danger {
+	background: var(--nc-gcs-danger-tint, rgba(244, 67, 54, 0.22));
+	color: var(--nc-gcs-danger-soft, #ef4444);
+}
+
+.nc-print-history-badge--muted {
+	background: color-mix(in srgb, var(--nc-gcs-text-muted) 22%, transparent);
+	color: var(--nc-gcs-text-primary);
 }
 </style>

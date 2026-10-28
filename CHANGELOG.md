@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.72.0] - 2026-10-28
+
+### Fixed
+- First contact with Moonraker says Checking… instead of Printer offline. One slow or missed probe is not a confirmed offline printer. A reload during a job keeps the last-seen print (Link lost / last known) until Moonraker answers. E-STOP stays available while that check is in progress.
+- The job queue header says “(paused)” only when the queue is paused and it holds jobs. An empty queue is no longer “JOB QUEUE (PAUSED)” during a print.
+- Open Print-tab panel headers (Queue & objects and the other Media & queue sections) keep theme text on a transparent bar. They no longer turn into a pale-green half-width button.
+- Object rows keep the printing badge and Cancel button when the name is long. Cancel’s title and aria-label name that object.
+- “Start print after upload” turns off and disables while a job is printing or paused, including a checking reload that still has an active last-seen job.
+- Print Guard progress follows the same live printer poll as the Print tab (virtual_sdcard ahead of display_status).
+- History status pills use readable theme colors and human labels (In progress, Klippy shutdown) instead of raw dark-on-dark strings.
+
+### Changed
+- Overview Cameras no longer says the Print tab is showing a stream. Print stays on No stream until a frame loads.
+
 ## [1.71.0] - 2026-10-28
 
 ### Added

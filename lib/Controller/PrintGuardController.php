@@ -51,7 +51,7 @@ class PrintGuardController extends Controller
 			return new JSONResponse(['ok' => false, 'error' => $e->getMessage()], Http::STATUS_BAD_REQUEST);
 		}
 
-		$url = rtrim($base, '/') . '/printer/objects/query?print_stats&display_status&extruder&heater_bed&filament_switch_sensor';
+		$url = rtrim($base, '/') . '/printer/objects/query?print_stats&display_status&virtual_sdcard&extruder&heater_bed&filament_switch_sensor';
 		$body = $this->fetchGuardStatus($url);
 		if ($body === null) {
 			return new JSONResponse(['ok' => false, 'error' => 'moonraker_unreachable'], Http::STATUS_BAD_GATEWAY);
