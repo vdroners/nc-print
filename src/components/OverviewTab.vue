@@ -13,7 +13,10 @@ import WebcamListPanel from './WebcamListPanel.vue'
 import PartsLibraryPanel from './PartsLibraryPanel.vue'
 import ModelForgePanel from './ModelForgePanel.vue'
 import PrintGuardPanel from './PrintGuardPanel.vue'
-import { consumePendingOverviewSection, OVERVIEW_FOCUS_EVENT } from '@/utils/overview-nav.js'
+import { mapStores } from 'pinia'
+import { usePrintStore } from '@/store/print.js'
+import { TABS } from '@/constants/tabs.js'
+import { consumeOverviewReturn, consumePendingOverviewSection, OVERVIEW_FOCUS_EVENT } from '@/utils/overview-nav.js'
 
 /**
  * The management console — everything that isn't the current print project:
@@ -42,8 +45,17 @@ export default {
 		ModelForgePanel,
 		PrintGuardPanel,
 	},
+	data() {
+		return {
+			returnLabel: '',
+		}
+	},
+	computed: {
+		...mapStores(usePrintStore),
+	},
 	mounted() {
 		window.addEventListener(OVERVIEW_FOCUS_EVENT, this.onFocusOverview)
+		this.applyReturn(consumeOverviewReturn())
 		this.focusSection(consumePendingOverviewSection())
 	},
 	beforeDestroy() {
@@ -54,7 +66,20 @@ export default {
 			// This instance is already on screen, so drop the token a later
 			// mount would otherwise scroll to.
 			consumePendingOverviewSection()
+			const label = consumeOverviewReturn()
+			if (e?.detail?.fromPrepare) {
+				this.applyReturn(e.detail.returnLabel || label)
+			}
 			this.focusSection(e?.detail?.id)
+		},
+		applyReturn(label) {
+			if (label) {
+				this.returnLabel = label
+			}
+		},
+		backToPrepare() {
+			this.returnLabel = ''
+			this.printStore.setActiveTab(TABS.PREPARE)
 		},
 		focusSection(id) {
 			if (!id) {
@@ -74,6 +99,14 @@ export default {
 
 <template>
 	<div class="nc-print-overview">
+			<div v-if="returnLabel" class="nc-print-overview-return" role="status">
+				<p class="nc-print-overview-return__text">
+					{{ returnLabel }} opened from Prepare. The model stays on Prepare.
+				</p>
+				<button type="button" class="nc-print-btn nc-print-btn--primary" @click="backToPrepare">
+					Back to Prepare
+				</button>
+			</div>
 			<NcPrintCollapsible id="overview-printers" title="Printer fleet" icon="printer">
 				<div class="nc-print-card">
 					<TargetPrinterPicker variant="print" />
@@ -115,7 +148,7 @@ export default {
 				</div>
 			</NcPrintCollapsible>
 
-			<NcPrintCollapsible id="overview-library" ref="overview-library" title="Parts library" icon="folder" :default-open="false">
+			<NcPrintCollapsible id="overview-library" ref="overview-library" title="Parts Library" icon="folder" :default-open="false">
 				<div class="nc-print-card">
 					<PartsLibraryPanel />
 				</div>
@@ -134,7 +167,9 @@ export default {
 			</NcPrintCollapsible>
 
 			<NcPrintCollapsible id="overview-cameras" title="Cameras" icon="camera" :default-open="false">
-				<WebcamListPanel />
+				<div class="nc-print-card">
+					<WebcamListPanel show-empty />
+				</div>
 			</NcPrintCollapsible>
 	</div>
 </template>
@@ -144,6 +179,24 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: var(--nc-gcs-space-md);
+}
+
+.nc-print-overview-return {
+	align-items: center;
+	background: color-mix(in srgb, var(--nc-app-accent) 12%, var(--nc-gcs-bg-surface));
+	border: 1px solid color-mix(in srgb, var(--nc-app-accent) 40%, var(--nc-gcs-border));
+	border-radius: var(--nc-gcs-radius, 8px);
+	display: flex;
+	flex-wrap: wrap;
+	gap: 12px;
+	grid-column: 1 / -1;
+	justify-content: space-between;
+	padding: 10px 12px;
+}
+
+.nc-print-overview-return__text {
+	color: var(--nc-gcs-text-primary);
+	margin: 0;
 }
 
 @media (min-width: 1600px) {

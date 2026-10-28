@@ -130,11 +130,16 @@ export function remainingFromEstimate(estimatedS, elapsedS) {
 /**
  * One line under the job name. A zero or missing estimate never produces a
  * "+overrun" against the clock.
+ *
+ * While the job is still running, the clock is elapsed time. A negative delta
+ * then reads like the print finished early, so it is omitted. The signed
+ * delta is only for a completed job.
  * @param {unknown} estimatedS
  * @param {unknown} actualS
+ * @param {{ complete?: boolean }} [opts]
  * @returns {string|null}
  */
-export function formatEstimateActualLine(estimatedS, actualS) {
+export function formatEstimateActualLine(estimatedS, actualS, opts = {}) {
 	const est = positiveSeconds(estimatedS)
 	// Number(null) is 0. A missing clock is not "0 min".
 	const hasActual = actualS != null && actualS !== '' && Number.isFinite(Number(actualS)) && Number(actualS) >= 0
@@ -145,6 +150,9 @@ export function formatEstimateActualLine(estimatedS, actualS) {
 	const estLabel = formatPrintTime(est)
 	if (!hasActual) {
 		return `Estimated ${estLabel}`
+	}
+	if (!opts.complete) {
+		return `Estimated ${estLabel} · Elapsed ${formatPrintTime(actual)}`
 	}
 	const delta = actual - est
 	const sign = delta >= 0 ? '+' : '−'

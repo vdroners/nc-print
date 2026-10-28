@@ -875,6 +875,8 @@ export const usePrintStore = defineStore('print', {
 			}
 		},
 		prepareChecklist(state) {
+			const machine = (state.printerState.state || '').toLowerCase()
+			const sendBusy = machine === 'printing' || machine === 'paused'
 			const rows = [
 				{
 					id: 'model',
@@ -959,10 +961,13 @@ export const usePrintStore = defineStore('print', {
 				},
 				{
 					id: 'target_online',
-					label: 'Send-to printer online',
+					label: sendBusy ? 'Send-to printer busy with a job' : 'Send-to printer online',
 					advisory: true,
-					ok: !state.selectedPrinterId || !!state.printerState.connected,
-					hint: state.printerState.message || 'Printer unreachable — check network or selection',
+					// Connected is not "ready to send" while a job owns the machine.
+					ok: !state.selectedPrinterId || (!!state.printerState.connected && !sendBusy),
+					hint: sendBusy
+						? 'Connected, but printing or paused — wait before sending another file'
+						: (state.printerState.message || 'Printer unreachable — check network or selection'),
 					action: 'target',
 				},
 			]

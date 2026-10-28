@@ -61,11 +61,11 @@ export function buildCommands(store, cb = {}) {
 	})
 	cmds.push({
 		id: 'nav-library', title: 'Open Parts Library', group: 'Navigation', enabled: true,
-		run: () => openOverviewSection(store, OVERVIEW_LIBRARY_ID),
+		run: () => openOverviewSection(store, OVERVIEW_LIBRARY_ID, { fromPrepare: true }),
 	})
 	cmds.push({
 		id: 'nav-modelforge', title: 'Open Model Forge', group: 'Navigation', enabled: true,
-		run: () => openOverviewSection(store, OVERVIEW_FORGE_ID),
+		run: () => openOverviewSection(store, OVERVIEW_FORGE_ID, { fromPrepare: true }),
 	})
 	cmds.push({
 		id: 'nav-overview', title: 'Go to Overview', group: 'Navigation', enabled: true,

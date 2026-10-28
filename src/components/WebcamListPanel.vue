@@ -16,6 +16,10 @@ import { panelVisibility } from '@/mixins/panelVisibility.js'
 export default {
 	name: 'WebcamListPanel',
 	mixins: [panelVisibility],
+	props: {
+		/** Overview keeps the section and explains an empty list. Print hides the card. */
+		showEmpty: { type: Boolean, default: false },
+	},
 	data() {
 		return {
 			webcams: [],
@@ -39,6 +43,22 @@ export default {
 		},
 		panelVisible() {
 			return this.show
+		},
+		emptyMessage() {
+			if (!this.connected) {
+				return 'Connect a printer to list its cameras.'
+			}
+			if (this.loadError) {
+				return this.loadError
+			}
+			if (!this.supported) {
+				return 'This printer did not report a camera list. The Print tab still uses the camera from Admin settings.'
+			}
+			if (this.webcams.length === 1) {
+				const name = this.webcams[0].name || this.webcams[0].uid || 'camera'
+				return `Only “${name}” is reported. The Print tab shows that stream.`
+			}
+			return 'No cameras reported. The Print tab uses the camera from Admin settings.'
 		},
 	},
 	watch: {
@@ -72,9 +92,10 @@ export default {
 </script>
 
 <template>
-	<div v-if="panelVisible" class="nc-print-webcams">
-		<p v-if="loadError" class="nc-print-webcams__error">{{ loadError }}</p>
-		<div class="nc-print-webcams__list">
+	<div v-if="show || showEmpty" class="nc-print-webcams">
+		<p v-if="loadError && show" class="nc-print-webcams__error">{{ loadError }}</p>
+		<p v-if="!show && showEmpty" class="nc-print-webcams__empty">{{ emptyMessage }}</p>
+		<div v-if="show" class="nc-print-webcams__list">
 			<label
 				v-for="cam in webcams"
 				:key="cam.name || cam.uid"
@@ -88,7 +109,7 @@ export default {
 				<span v-if="cam.service" class="nc-print-webcams__meta">{{ cam.service }}</span>
 			</label>
 		</div>
-		<p class="nc-print-webcams__hint">
+		<p v-if="show" class="nc-print-webcams__hint">
 			Live view uses the admin-configured camera. Configure per-camera
 			streaming in Settings → NC 3D Print.
 		</p>
@@ -102,4 +123,10 @@ export default {
 .nc-print-webcams__item { display: flex; align-items: center; gap: 8px; font-size: 0.84rem; cursor: pointer; }
 .nc-print-webcams__meta { font-size: 0.72rem; color: var(--color-text-maxcontrast, #8b949e); }
 .nc-print-webcams__hint { font-size: 0.72rem; color: var(--color-text-maxcontrast, #8b949e); margin: 4px 0 0; }
+.nc-print-webcams__empty {
+	color: var(--nc-gcs-text-primary, var(--color-main-text, #e6edf3));
+	font-size: var(--nc-gcs-text-base, 1rem);
+	line-height: 1.5;
+	margin: 0;
+}
 </style>

@@ -83,6 +83,7 @@ export default {
 			Open recent
 			<NcPrintIcon v-if="!inline" name="chevron-down" :size="14" />
 		</button>
+		<p v-if="!hasItems" class="nc-print-reopen__reason">No recent projects yet</p>
 		<ul v-if="open && hasItems" class="nc-print-reopen__menu" role="menu">
 			<li v-for="item in items" :key="item.key" role="none">
 				<button
@@ -106,6 +107,12 @@ export default {
 
 .nc-print-reopen--inline .nc-print-btn {
 	width: 100%;
+}
+
+.nc-print-reopen__reason {
+	color: var(--nc-gcs-text-primary, var(--color-main-text, #e6edf3));
+	font-size: var(--nc-gcs-text-sm);
+	margin: 4px 0 0;
 }
 
 .nc-print-reopen__menu {

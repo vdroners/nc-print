@@ -16,22 +16,45 @@ export const OVERVIEW_FORGE_ID = 'overview-modelforge'
 export const OVERVIEW_FOCUS_EVENT = 'nc-print-focus-overview'
 
 let pendingSectionId = null
+/** Section title when the operator arrived from Prepare. Null for a plain Overview visit. */
+let pendingReturnLabel = null
+
+/**
+ * @param {string} sectionId
+ * @returns {string}
+ */
+function returnLabelFor(sectionId) {
+	return sectionId === OVERVIEW_FORGE_ID ? 'Model Forge' : 'Parts Library'
+}
 
 /**
  * Switch to Overview and expand one section.
+ * `fromPrepare` asks Overview to show Back to Prepare. The chrome Overview
+ * button does not set it.
  * @param {{ setActiveTab?: (tab: string) => void }} store
  * @param {string} sectionId `overview-library` or `overview-modelforge`
+ * @param {{ fromPrepare?: boolean }} [opts]
  */
-export function openOverviewSection(store, sectionId) {
+export function openOverviewSection(store, sectionId, opts = {}) {
+	const fromPrepare = !!opts.fromPrepare
 	if (sectionId) {
 		saveCollapsibleState(sectionId, true)
 		pendingSectionId = sectionId
+	}
+	if (fromPrepare) {
+		pendingReturnLabel = returnLabelFor(sectionId)
 	}
 	if (store && typeof store.setActiveTab === 'function') {
 		store.setActiveTab(TABS.OVERVIEW)
 	}
 	if (typeof window !== 'undefined' && sectionId) {
-		window.dispatchEvent(new CustomEvent(OVERVIEW_FOCUS_EVENT, { detail: { id: sectionId } }))
+		window.dispatchEvent(new CustomEvent(OVERVIEW_FOCUS_EVENT, {
+			detail: {
+				id: sectionId,
+				fromPrepare,
+				returnLabel: fromPrepare ? pendingReturnLabel : '',
+			},
+		}))
 	}
 }
 
@@ -43,4 +66,14 @@ export function consumePendingOverviewSection() {
 	const id = pendingSectionId
 	pendingSectionId = null
 	return id
+}
+
+/**
+ * Read and clear the Back to Prepare label waiting for Overview.
+ * @returns {string|null}
+ */
+export function consumeOverviewReturn() {
+	const label = pendingReturnLabel
+	pendingReturnLabel = null
+	return label
 }

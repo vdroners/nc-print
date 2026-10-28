@@ -135,6 +135,48 @@ describe('Prepare cold start', () => {
 		expect(online.hint).toMatch(/unreachable/)
 	})
 
+	it('a connected printer that is printing is advisory, not ready to send', () => {
+		const store = usePrintStore()
+		readyProfiles(store)
+		store.model.file = {}
+		store.model.name = 'bracket.stl'
+		store.config = { multi_printers: [{ id: 'k1', name: '3D Printer' }] }
+		store.selectedPrinterId = 'k1'
+		store.printerState.connected = true
+		store.printerState.state = 'printing'
+		store.appStatus = {
+			...store.appStatus,
+			loaded: true,
+			slicer_enabled: true,
+			slicer_ok: true,
+		}
+
+		const online = store.prepareChecklist.find((row) => row.id === 'target_online')
+		expect(online.ok).toBe(false)
+		expect(online.advisory).toBe(true)
+		expect(online.label).toMatch(/busy/)
+		expect(online.hint).toMatch(/printing or paused/)
+		expect(checklistRowTone(online)).toBe('advisory')
+		expect(checklistRowMark(online)).toBe('!')
+		expect(isPrepareComplete({
+			model: { file: {} },
+			selection: { printerId: 'p', filamentId: 'f', processId: 'q' },
+			appStatus: { loaded: true, slicer_enabled: true, slicer_ok: true },
+			printerState: { connected: true, state: 'printing' },
+		})).toBe(true)
+
+		store.printerState.state = 'paused'
+		const paused = store.prepareChecklist.find((row) => row.id === 'target_online')
+		expect(paused.ok).toBe(false)
+		expect(checklistRowTone(paused)).toBe('advisory')
+
+		store.printerState.state = 'standby'
+		const idle = store.prepareChecklist.find((row) => row.id === 'target_online')
+		expect(idle.ok).toBe(true)
+		expect(idle.label).toBe('Send-to printer online')
+		expect(checklistRowTone(idle)).toBe('ok')
+	})
+
 	it('a loaded non-watertight mesh stays advisory and does not block slice', () => {
 		const store = usePrintStore()
 		readyProfiles(store)

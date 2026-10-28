@@ -74,12 +74,18 @@ export default {
 	margin: 0;
 }
 
-.nc-print-collapsible__btn {
+.nc-print-collapsible__btn,
+.nc-print-collapsible__btn:hover,
+.nc-print-collapsible__btn:focus,
+.nc-print-collapsible__btn:focus-visible,
+.nc-print-collapsible__btn:active {
 	align-items: center;
 	appearance: none;
-	background: none;
+	background: transparent;
+	background-color: transparent;
 	border: none;
 	border-bottom: 1px solid var(--nc-gcs-border);
+	box-shadow: none;
 	color: var(--nc-gcs-text-muted);
 	cursor: pointer;
 	display: flex;
@@ -91,11 +97,19 @@ export default {
 	padding: 0 2px 6px;
 	text-transform: uppercase;
 	width: 100%;
+}
 
-	&:focus-visible {
-		outline: 2px solid var(--nc-app-accent);
-		outline-offset: 2px;
-	}
+.nc-print-collapsible__btn:focus-visible {
+	outline: 2px solid var(--nc-app-accent);
+	outline-offset: 2px;
+}
+
+.nc-print-collapsible--open .nc-print-collapsible__btn,
+.nc-print-collapsible--open .nc-print-collapsible__btn:hover,
+.nc-print-collapsible--open .nc-print-collapsible__btn:focus,
+.nc-print-collapsible--open .nc-print-collapsible__btn:active {
+	background-color: transparent;
+	color: var(--nc-gcs-text-primary);
 }
 
 .nc-print-collapsible__title {

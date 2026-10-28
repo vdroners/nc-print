@@ -854,14 +854,15 @@ export default {
 		</div>
 		<div v-if="showEmptyDrop" class="nc-print-viewport-empty">
 			<div class="nc-print-viewport-empty__icon" aria-hidden="true">📐</div>
-			Drop or import a model file<br>
+			Drop a model file here<br>
 			<small>STL · 3MF · OBJ</small>
 			<button
 				type="button"
-				class="nc-print-btn nc-print-btn--primary nc-print-viewport-empty__import"
+				class="nc-print-btn nc-print-viewport-empty__import"
 				@click="$emit('import-model')">
-				Import STL/3MF/OBJ
+				Choose a file
 			</button>
+			<p class="nc-print-viewport-empty__hint">Same picker as Import in the left panel.</p>
 		</div>
 		<div v-if="showLoading" class="nc-print-viewport-empty">
 			Loading preview…
@@ -942,6 +943,12 @@ export default {
 	display: block;
 	margin: 10px auto 0;
 	pointer-events: auto;
+}
+
+.nc-print-viewport-empty__hint {
+	color: var(--nc-gcs-text-primary, var(--color-main-text, #e6edf3));
+	font-size: var(--nc-gcs-text-sm);
+	margin: 8px 0 0;
 }
 
 .nc-print-viewport-info {

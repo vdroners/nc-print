@@ -3,6 +3,7 @@ import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
 import { toastInfo } from '@/services/toast.js'
+import { printWorkflowMark } from '@/utils/print-honesty.js'
 
 const STEPS = [
 	{ id: TABS.PREPARE, label: 'Prepare' },
@@ -44,8 +45,13 @@ export default {
 			if (stepId === TABS.SLICE && this.printStore.sliceComplete) {
 				classes.push('nc-print-workflow__step--done')
 			}
-			if (stepId === TABS.PRINT && this.printStore.printerControls.isActive) {
-				classes.push('nc-print-workflow__step--done')
+			if (stepId === TABS.PRINT) {
+				const mark = printWorkflowMark(this.printStore.printerControls)
+				if (mark === 'done') {
+					classes.push('nc-print-workflow__step--done')
+				} else if (mark === 'busy') {
+					classes.push('nc-print-workflow__step--busy')
+				}
 			}
 			if (!this.isEnabled(stepId)) {
 				classes.push('nc-print-workflow__step--disabled')
@@ -59,7 +65,7 @@ export default {
 			if (step.id === TABS.SLICE && this.printStore.sliceComplete) {
 				return '✓'
 			}
-			if (step.id === TABS.PRINT && this.printStore.printerControls.isActive) {
+			if (step.id === TABS.PRINT && printWorkflowMark(this.printStore.printerControls) === 'done') {
 				return '✓'
 			}
 			return String(index + 1)

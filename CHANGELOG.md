@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.70.0] - 2026-10-28
+
+### Fixed
+- Parts Library filenames use theme foreground text. Nextcloud’s dark-green button color no longer sits on the near-black rows.
+- The Ctrl+K selected row keeps theme text on a dark tint. A disabled first command is no longer a pale bar with invisible text.
+- The Print workflow step shows a check only when the job is complete. Printing or paused stays the current step.
+- Prepare “Send-to printer online” warns while that printer is printing or paused. Connected is not treated as ready to send. Slicing is unchanged.
+- Camera Expand starts below the Nextcloud header and stacks above the contacts menu, so Close can be clicked. Escape still closes it.
+- Overview Cameras explains an empty or single-camera list instead of a blank body. Collapsible headers stay on the dark theme when focused or open.
+- While a job is running, the time line says Elapsed and omits the early-finish delta. After complete, the card shows Actual and the signed delta. Filename, metadata, and slicer estimate resolution from 1.69.0 is unchanged.
+- Nozzle and bed target fields follow the live Moonraker targets until the operator types, and start empty. They no longer look prefilled with PLA 210/60. At wide widths the live Nozzle and Bed labels sit on one row under the section heading.
+
+### Changed
+- Parts Library and Model Forge still open those Overview sections, and now show Back to Prepare.
+- Empty Prepare keeps one primary Import in the left panel. The bed says Choose a file and uses the same picker. Open recent shows “No recent projects yet” when the list is empty.
+- The density button reads Ultrawide or Comfortable, matching its aria-label. The import control says Parts Library. The library footer does not show the host path.
+
 ## [1.69.0] - 2026-10-28
 
 ### Fixed

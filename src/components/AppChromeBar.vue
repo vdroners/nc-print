@@ -62,7 +62,7 @@ export default {
 			return `Density: ${densityLabel(this.density)} (click for ${next})`
 		},
 		densityShort() {
-			return this.density === DENSITY_COMFORTABLE ? '1680' : 'Wide'
+			return densityLabel(this.density)
 		},
 		notifSupported() {
 			return this.notifPermission !== 'unsupported'

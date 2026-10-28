@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
 	TEMP_PRESETS,
+	followLiveTarget,
 	presetToTargets,
 	sensorLabel,
 	isHeaterKey,
@@ -19,6 +20,16 @@ describe('WS10: temperature graph helpers', () => {
 		expect(presetToTargets('off')).toEqual({ nozzle: 0, bed: 0 })
 		expect(presetToTargets('nope')).toBeNull()
 		expect(TEMP_PRESETS.pla.label).toBe('PLA')
+	})
+
+	it('follows a live heater target and does not invent PLA defaults', () => {
+		expect(followLiveTarget('', 275, false)).toBe('275')
+		expect(followLiveTarget('', 64.6, false)).toBe('65')
+		expect(followLiveTarget('', null, false)).toBe('')
+		expect(followLiveTarget('', 0, false)).toBe('')
+		expect(followLiveTarget('200', 275, true)).toBe('200')
+		expect(followLiveTarget('', undefined, false)).not.toBe('210')
+		expect(followLiveTarget('', undefined, false)).not.toBe('60')
 	})
 
 	it('labels sensors readably', () => {

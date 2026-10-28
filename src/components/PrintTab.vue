@@ -228,7 +228,9 @@ export default {
 			if (!row) {
 				return null
 			}
-			return formatEstimateActualLine(row.estimatedS, row.actualS)
+			return formatEstimateActualLine(row.estimatedS, row.actualS, {
+				complete: this.printStore.printerControls.isComplete,
+			})
 		},
 		progressSourceLabel() {
 			// The old source word read as a stuck state. While Moonraker is
@@ -964,11 +966,16 @@ export default {
 	align-items: center;
 	background: rgba(0, 0, 0, 0.88);
 	display: flex;
-	inset: 0;
+	/* Start below the Nextcloud header. Close at top:16 used to sit in that
+	   ~50px band, where #header / the contacts menu took the click. */
+	top: var(--header-height, 50px);
+	right: 0;
+	bottom: 0;
+	left: 0;
 	justify-content: center;
 	padding: 24px;
 	position: fixed;
-	z-index: 9999;
+	z-index: 100000;
 }
 
 .nc-print-camera-fullscreen__stage {
@@ -990,8 +997,8 @@ export default {
 .nc-print-camera-fullscreen__close {
 	position: absolute;
 	right: 16px;
-	top: 16px;
-	z-index: 1;
+	top: 12px;
+	z-index: 2;
 }
 
 .nc-print-camera-fullscreen__placeholder {

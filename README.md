@@ -1,6 +1,6 @@
 # NC 3D Print
 
-**Version 1.69.0** · Nextcloud 28–35 · PHP 8.1+ · License AGPL-3.0-or-later
+**Version 1.70.0** · Nextcloud 28–35 · PHP 8.1+ · License AGPL-3.0-or-later
 
 A standalone Nextcloud app for the full **prepare → slice → print** workflow. It
 **ships and owns its own headless slicing engine** (an OrcaSlicer fork, run as
@@ -20,6 +20,7 @@ external slicer service** and no NC-GCS dependency.
 - **Weak Wi-Fi banner 1.66.0:** amber “Printer Wi‑Fi weak — status may flap” when Moonraker drops briefly and repeatedly. Dismiss hides the episode; 60s of a stable link clears it.
 - **Camera stale 1.68.0:** Print and pre-print camera panels label a snapshot that stops updating as “Camera stale” with its age, and keep the last frame on screen
 - **Print tab 1.69.0:** honest time estimates (no fake overrun when the slicer time is missing), quiet thumbnail and timelapse failures, one Printing chip plus the sticky job line, and a tighter monitor column
+- **Prepare / Overview 1.70.0:** readable Parts Library names, Back to Prepare from Library and Model Forge, a print step that stays in progress while a job runs, a mid-print Elapsed line, camera Close below the Nextcloud header, and temperature fields that follow the live targets
 - **3DPrintForge Studio retired** (lab 2026-10-26): use NC Print only; engine source remains under `/media/4TB/3dprintforge/slicer/` for `make slicer-fetch` — see `docs/STACK_MAP.md`
 
 **Prepare**
