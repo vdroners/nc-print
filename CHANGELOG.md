@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.69.0] - 2026-10-28
+
+### Fixed
+- Print time no longer treats Moonraker `total_duration` (elapsed wall clock) or a missing slicer estimate as a real estimate. A zero estimate does not show a "+overrun". The card says "Estimate unavailable", or uses file metadata, the matching slicer result, or a duration token in the gcode filename (`10h12m12s`). Remaining time comes from that estimate.
+- A gcode thumbnail that fails to load (Moonraker 412 on `.thumbs/…png`) stays a quiet empty frame. The broken-image glyph is not shown.
+- `server/files/list?root=timelapse` 400/404 is an empty list. The client accepts that status so it is not logged as a failed request.
+
+### Changed
+- Progress source says "Updating live" while the printer is connected.
+- Printing status stays on the header chip and the sticky job line. The connection line drops a healthy "· printing", the print-control card drops its status badge, and the workflow step drops "Printing N%" so Link lost and last-seen stand out.
+- The sticky filename has a native tooltip and shrinks inside the monitor column. That column no longer grows a horizontal scrollbar under the camera and E-STOP.
+- "Change printer" replaces "Change in Overview", larger and in primary text.
+- Live tuning and Temperature share a row height at wide widths. The temperature plot is taller, and Nozzle/Bed labels use primary text. The fan slider shows its percent beside the track.
+- Workflow step text and the app footer use a text color one step above muted.
+
 ## [1.68.0] - 2026-10-27
 
 ### Added

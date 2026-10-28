@@ -55,6 +55,11 @@ import { TABS } from '@/constants/tabs.js'
 import { printWorkflowSubtitle } from '@/utils/print-honesty.js'
 import { snapshotFromPrinterState, staleJobView } from '@/utils/link-loss.js'
 import { createLinkFlapTracker, emptyLinkFlap } from '@/utils/link-flap.js'
+import {
+	estimateSecondsFromMetadata,
+	remainingFromEstimate,
+	resolvePrintEstimateSeconds,
+} from '@/utils/print-estimate.js'
 
 // Re-exported for backward compatibility; the source of truth is the leaf
 // module @/constants/tabs.js (see that file for why).
@@ -522,6 +527,10 @@ export const usePrintStore = defineStore('print', {
 		_statusTimer: null,
 		_wsClient: null,
 		printerProgressSource: 'poll',
+		// Moonraker file metadata `estimated_time` for the current filename.
+		// Null until fetched; a missing file is not a zero estimate.
+		fileEstimateS: null,
+		fileEstimateFor: '',
 		// WS11: G-code console scrollback (capped ring buffer).
 		consoleLog: [],
 		// Shared busy flag for pause/resume/cancel so the Print-control card and
@@ -682,10 +691,12 @@ export const usePrintStore = defineStore('print', {
 			}
 			const stLabel = this.printerStatusLabel.toLowerCase()
 			const raw = (this.printerState.state || '').toLowerCase()
-			if (raw.includes('error') && failure) {
-				return `${name} · ${stLabel} · ${failure}`
+			if (raw.includes('error')) {
+				return failure ? `${name} · ${stLabel} · ${failure}` : `${name} · ${stLabel}`
 			}
-			return `${name} · ${stLabel}`
+			// Healthy link: the header chip owns Printing / Paused / Ready.
+			// Repeating it here buried Link lost and last-seen.
+			return name
 		},
 		targetConnectionClass() {
 			if (!this.selectedPrinterId) {
@@ -716,13 +727,21 @@ export const usePrintStore = defineStore('print', {
 				canCancel: st === 'printing' || st === 'paused',
 			}
 		},
-		remainingPrintSeconds(state) {
-			const total = state.printerState.totalDuration
-			const elapsed = state.printerState.printDuration
-			if (total == null || elapsed == null || !Number.isFinite(total) || !Number.isFinite(elapsed)) {
-				return null
-			}
-			return Math.max(0, total - elapsed)
+		/**
+		 * Slicer / metadata / filename estimate for the file on the printer.
+		 * `total_duration` is elapsed wall clock and is intentionally unused.
+		 */
+		resolvedPrintEstimate(state) {
+			return resolvePrintEstimateSeconds({
+				metadataEstimateS: state.fileEstimateS,
+				slicerEstimateS: state.sliceJob.estimatedTimeS,
+				slicerFilename: state.sliceJob.gcodeFilename,
+				filename: state.printerState.filename,
+			})
+		},
+		remainingPrintSeconds() {
+			const est = this.resolvedPrintEstimate
+			return remainingFromEstimate(est?.seconds, this.printerState.printDuration)
 		},
 		isExtruderHeating(state) {
 			const { extruderTemp, extruderTarget, extruderPower } = state.printerState
@@ -1087,13 +1106,18 @@ export const usePrintStore = defineStore('print', {
 		sliceStageLabel(state) {
 			return mapSliceStageLabel(state.sliceJob.stage)
 		},
-		estimateVsActual(state) {
-			const est = state.sliceJob.estimatedTimeS
-			const act = state.printerState.printDuration
-			if (!est && act == null) {
+		estimateVsActual() {
+			const est = this.resolvedPrintEstimate
+			const act = this.printerState.printDuration
+			const actualS = act == null || Number.isNaN(Number(act)) ? null : Number(act)
+			if (!est && actualS == null) {
 				return null
 			}
-			return { estimatedS: est || 0, actualS: act ?? null }
+			return {
+				estimatedS: est?.seconds ?? null,
+				actualS,
+				source: est?.source ?? null,
+			}
 		},
 		has3mfError(state) {
 			return !!state.model.name?.toLowerCase().endsWith('.3mf') && !!state.model.convertError
@@ -2110,6 +2134,8 @@ export const usePrintStore = defineStore('print', {
 
 		_resetPrinterState() {
 			this.lastContact = null
+			this.fileEstimateS = null
+			this.fileEstimateFor = ''
 			this._resetLinkFlap()
 			this.printerState = {
 				connected: false,
@@ -2746,6 +2772,48 @@ export const usePrintStore = defineStore('print', {
 			this.printerState = { ...this.printerState, ...next }
 			this._noteLinkSample(!!this.printerState.connected)
 			this._maybeNotifyPrintTransition(prevState, (next.state || '').toLowerCase())
+			const filename = String(this.printerState.filename || '').replace(/^\/+/, '')
+			if (!filename) {
+				this.fileEstimateS = null
+				this.fileEstimateFor = ''
+			} else if (this.fileEstimateFor !== filename) {
+				// Drop the previous file's metadata so it cannot pair with this name.
+				this.fileEstimateS = null
+				void this._refreshFileEstimate(filename)
+			}
+		},
+
+		/**
+		 * Moonraker metadata estimate for the file now printing. A 400/404 or a
+		 * missing `estimated_time` leaves the filename/slicer fallback in place.
+		 * Failures stay quiet — this is an optional number, not an operator error.
+		 */
+		async _refreshFileEstimate(filename) {
+			const name = String(filename || '').replace(/^\/+/, '')
+			if (!name) {
+				return
+			}
+			this.fileEstimateFor = name
+			try {
+				const { moonrakerGet } = await import('@/services/moonraker-api.js')
+				if (typeof moonrakerGet !== 'function') {
+					return
+				}
+				const meta = await moonrakerGet(
+					'server/files/metadata',
+					{ filename: name },
+					this.selectedPrinterId || undefined,
+					{ acceptErrorStatuses: [400, 404] },
+				)
+				if (this.fileEstimateFor !== name) {
+					return
+				}
+				this.fileEstimateS = estimateSecondsFromMetadata(meta)
+			} catch {
+				if (this.fileEstimateFor === name) {
+					this.fileEstimateS = null
+				}
+			}
 		},
 
 		_linkFlapApi() {

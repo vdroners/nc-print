@@ -71,6 +71,9 @@ export function showIdlePrintGuide(printerState, controls) {
 
 /**
  * Print step subtitle. Machine state first — never the raw gcode name.
+ * An active print leaves this blank: the header chip and sticky job line
+ * already say Printing and the percent. Link lost, Offline, Error, and Idle
+ * stay so a dead link is not another "Printing" chip.
  * A recent successful reading says Link lost instead of a cold Offline.
  * @param {object} printerState
  * @param {{ atMs?: number }|null} [lastContact]
@@ -85,11 +88,10 @@ export function printWorkflowSubtitle(printerState, lastContact = null) {
 		}
 		return lastContact?.atMs ? 'Link lost' : 'Offline'
 	}
-	if (st === 'printing') {
-		return `Printing ${formatProgressPercent(state.progress)}`
-	}
-	if (st === 'paused') {
-		return `Paused ${formatProgressPercent(state.progress)}`
+	// Printing / paused percent lives on the header chip and the sticky job
+	// line. Repeating it on the workflow step buried Link lost.
+	if (st === 'printing' || st === 'paused') {
+		return ''
 	}
 	if (st === 'error') {
 		return 'Error'

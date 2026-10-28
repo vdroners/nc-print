@@ -40,12 +40,13 @@ describe('print workflow subtitle', () => {
 
 	it('prefers machine state over a leftover gcode filename', () => {
 		const filename = 'Door_PA-CF.gcode'
+		// Active progress stays on the header chip and the sticky job line.
 		expect(printWorkflowSubtitle(state({
 			state: 'printing', filename, progress: 0.89,
-		}))).toBe('Printing 89%')
+		}))).toBe('')
 		expect(printWorkflowSubtitle(state({
 			state: 'paused', filename, progress: 0.89,
-		}))).toBe('Paused 89%')
+		}))).toBe('')
 		expect(printWorkflowSubtitle(state({
 			state: 'error', filename, progress: 0.4,
 		}))).toBe('Error')

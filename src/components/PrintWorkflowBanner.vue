@@ -112,7 +112,10 @@ export default {
 						<span class="nc-print-workflow__num">{{ stepDisplay(step, index) }}</span>
 						<span class="nc-print-workflow__text">
 							<span class="nc-print-workflow__label">{{ step.label }}</span>
-							<span class="nc-print-workflow__sub" :title="stepSubtitle(step.id)">{{ stepSubtitle(step.id) }}</span>
+							<span
+								v-if="stepSubtitle(step.id)"
+								class="nc-print-workflow__sub"
+								:title="stepSubtitle(step.id)">{{ stepSubtitle(step.id) }}</span>
 						</span>
 					</button>
 				</li>

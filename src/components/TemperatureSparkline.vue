@@ -10,7 +10,7 @@ export default {
 		},
 		color: { type: String, default: '#22c55e' },
 		label: { type: String, default: '' },
-		height: { type: Number, default: 48 },
+		height: { type: Number, default: 120 },
 	},
 	watch: {
 		samples: {
@@ -58,8 +58,8 @@ export default {
 				ctx.lineTo(width, height / 2)
 				ctx.stroke()
 				ctx.setLineDash([])
-				ctx.fillStyle = 'rgba(148, 163, 184, 0.7)'
-				ctx.font = '11px sans-serif'
+				ctx.fillStyle = 'rgba(203, 213, 225, 0.95)'
+				ctx.font = '13px sans-serif'
 				ctx.textAlign = 'center'
 				ctx.textBaseline = 'middle'
 				ctx.fillText('Collecting…', width / 2, height / 2 - 8)
@@ -104,8 +104,9 @@ export default {
 }
 
 .nc-print-temp-sparkline__label {
-	color: var(--nc-gcs-text-muted);
-	font-size: 11px;
+	color: var(--nc-gcs-text-primary, #e6edf3);
+	font-size: 13px;
+	font-weight: 600;
 }
 
 .nc-print-temp-sparkline__canvas {

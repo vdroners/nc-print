@@ -94,7 +94,7 @@ describe('Prepare cold start', () => {
 
 		store.printerState.state = 'printing'
 		store.printerState.message = 'Door PA-CF'
-		expect(store.targetConnectionLabel).toBe('3D Printer · printing')
+		expect(store.targetConnectionLabel).toBe('3D Printer')
 		expect(store.targetConnectionClass).toBe('is-online')
 	})
 

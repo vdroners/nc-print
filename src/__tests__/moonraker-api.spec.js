@@ -29,6 +29,21 @@ describe('moonraker-api additions (v1.27.0)', () => {
 		)
 	})
 
+	it('accepts a missing timelapse root without an axios rejection', async () => {
+		axios.get.mockResolvedValueOnce({ status: 400, data: { error: { message: 'Invalid root' } } })
+		await expect(moonrakerGet(
+			'server/files/list',
+			{ root: 'timelapse' },
+			'k1',
+			{ acceptErrorStatuses: [400, 404] },
+		)).rejects.toMatchObject({ status: 400, quiet: true })
+		const config = axios.get.mock.calls[0][1]
+		expect(config.params).toEqual({ root: 'timelapse', printer_id: 'k1' })
+		expect(config.validateStatus(400)).toBe(true)
+		expect(config.validateStatus(404)).toBe(true)
+		expect(config.validateStatus(500)).toBe(false)
+	})
+
 	it('moonrakerGet reads through the allowlisted proxy (power devices)', async () => {
 		axios.get.mockResolvedValueOnce({ data: { result: { devices: [] } } })
 		await moonrakerGet('machine/device_power/devices', {}, 'k1')

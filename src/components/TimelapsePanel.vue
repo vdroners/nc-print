@@ -4,7 +4,7 @@ import { generateUrl } from '@nextcloud/router'
 import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet } from '@/services/moonraker-api.js'
 import NcPrintIcon from './NcPrintIcon.vue'
-import { parseTimelapseList, timelapseSupported, formatBytes } from '@/utils/timelapse.js'
+import { parseTimelapseList, timelapseSupported, formatBytes, isMissingTimelapseRoot } from '@/utils/timelapse.js'
 import { panelVisibility } from '@/mixins/panelVisibility.js'
 
 export default {
@@ -58,13 +58,26 @@ export default {
 		},
 		async load() {
 			try {
-				const data = await moonrakerGet('server/files/list', { root: 'timelapse' }, this.printerId)
+				const data = await moonrakerGet(
+					'server/files/list',
+					{ root: 'timelapse' },
+					this.printerId,
+					{ acceptErrorStatuses: [400, 404] },
+				)
 				this.videos = parseTimelapseList(data)
 				this.loadError = ''
 				if (this.videos.length && !this.selected) {
 					this.selected = this.videos[0]
 				}
 			} catch (e) {
+				// A printer with no timelapse root answers 400. That is an empty
+				// list, not a console error and not a banner.
+				if (isMissingTimelapseRoot(e)) {
+					this.videos = []
+					this.selected = null
+					this.loadError = ''
+					return
+				}
 				this.loadError = e?.message || 'Timelapse unavailable'
 			} finally {
 				this.checked = true

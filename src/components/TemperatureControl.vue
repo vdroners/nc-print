@@ -152,7 +152,7 @@ export default {
 		<div class="nc-print-card--inset nc-print-temp-control__readouts">
 			<p class="nc-print-section-label">Live readouts</p>
 			<div class="nc-print-temp-control__row">
-				<span>Nozzle</span>
+				<span class="nc-print-temp-control__name">Nozzle</span>
 				<strong>{{ nozzleLabel }}</strong>
 				<span
 					v-if="printStore.isExtruderHeating"
@@ -161,7 +161,7 @@ export default {
 				</span>
 			</div>
 			<div class="nc-print-temp-control__row">
-				<span>Bed</span>
+				<span class="nc-print-temp-control__name">Bed</span>
 				<strong>{{ bedLabel }}</strong>
 				<span
 					v-if="printStore.isBedHeating"
@@ -172,8 +172,8 @@ export default {
 		</div>
 
 		<div class="nc-print-temp-control__sparklines">
-			<TemperatureSparkline label="Nozzle (5 min)" :samples="nozzleSamples" color="#f97316" />
-			<TemperatureSparkline label="Bed (5 min)" :samples="bedSamples" color="#3b82f6" />
+			<TemperatureSparkline label="Nozzle (5 min)" :samples="nozzleSamples" color="#f97316" :height="120" />
+			<TemperatureSparkline label="Bed (5 min)" :samples="bedSamples" color="#3b82f6" :height="120" />
 		</div>
 
 		<div class="nc-print-row nc-print-row--equal">
@@ -225,7 +225,28 @@ export default {
 
 <style scoped>
 .nc-print-temp-control {
+	display: flex;
+	flex-direction: column;
 	max-width: 720px;
+}
+
+.nc-print-temp-control__name {
+	color: var(--nc-gcs-text-primary, #e6edf3);
+	font-size: 14px;
+	font-weight: 600;
+	min-width: 4.5rem;
+}
+
+.nc-print-temp-control__row strong {
+	font-size: 16px;
+	font-variant-numeric: tabular-nums;
+}
+
+.nc-print-temp-control :deep(.nc-print-field label),
+.nc-print-temp-control .nc-print-field label {
+	color: var(--nc-gcs-text-primary, #e6edf3);
+	font-size: 13px;
+	font-weight: 600;
 }
 
 .nc-print-temp-control__readouts {
