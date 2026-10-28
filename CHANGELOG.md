@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.73.0] - 2026-10-28
+
+### Fixed
+- Prepare no longer stacks a page scrollbar on the left-panel scrollbar. The workspace card fills the app height (Nextcloud content does not scroll the card). Import / Profiles / Mesh & health scroll inside the left card, and the wheel does not chain into the page at the end of that card. Ready to slice uses the same inner scroll when its content is taller than the card.
+- Comfortable density no longer adds a horizontal scrollbar on the left card. Draft / Standard / Fine wrap inside the card.
+- The Prepare / Slice / Print bar is an opaque sticky slab with padding under the pill, so scrolled Print content (nozzle targets) and Prepare content (Change printer) do not show through it or tuck under it.
+
 ## [1.72.0] - 2026-10-28
 
 ### Fixed

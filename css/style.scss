@@ -2,10 +2,25 @@
  * pages — do not @import here or tokens re-declare on every stylesheet fetch. */
 
 #nc-print-root {
-	min-height: 60vh;
 	display: flex;
 	flex-direction: column;
+	/* Definite height so the shell can fill it. max-height: 100% shrinks this
+	   when #app-content is shorter than the viewport-below-header calc, which
+	   is what used to leave a ~100px page scrollbar under the Prepare card. */
 	height: calc(100vh - var(--header-height, 50px));
+	height: calc(100dvh - var(--header-height, 50px));
+	max-height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
+/* Nextcloud scrolls #app-content. This app fills that box; the shell body
+   scrolls Print/Overview, and the Prepare studio is sized to the free space
+   so the page never scrolls the workspace card. */
+body.app-nc_print #content,
+body.app-nc_print #app-content,
+body.app-nc_print #app-content-vue {
+	overflow: hidden;
 }
 
 /* ─── Tab bar (removed — workflow banner is primary nav) ────────── */
@@ -644,29 +659,39 @@
 	color: var(--nc-gcs-text-muted);
 }
 
-/* ─── App layout: single body scroll + sticky chrome ───────────── */
-/* The shell body (css/nc-print-theme.css) already owns the y-scroll via
- * `flex: 1; min-height: 0; overflow: auto`. We no longer clip it; the
- * chrome bar sticks to the top of that scrolling body. */
+/* ─── App layout: shell fills the content box; body scrolls long tabs ─ */
+/* The shell body (css/nc-print-theme.css) is the scroller for Print and
+ * Overview (`flex: 1; min-height: 0; overflow: auto`). Prepare's immersive
+ * studio is sized to the free space below this bar, so that tab does not
+ * move the page. The bar itself is an opaque slab: a negative top margin
+ * let scrolled content (Change printer, nozzle targets) tuck under the pill. */
+#nc-print-root > .nc-gcs-app-shell {
+	flex: 1 1 auto;
+	height: 100%;
+	min-height: 0;
+	overflow: hidden;
+}
+
 .nc-gcs-app-shell--nc_print .nc-gcs-app-shell__body {
 	--nc-print-chrome-h: 0px;
+	scroll-padding-top: var(--nc-print-chrome-h, 0px);
 }
 
 .nc-print-chrome {
 	position: sticky;
 	top: 0;
+	flex: 0 0 auto;
 	/* Above the immersive floating overlays (side cards + tool rail stack at
 	 * layer six) so the workflow bar never clips behind them while scrolling.
 	 * Stays well below modals. */
 	z-index: 20;
-	/* A thin sticky background so scrolled content doesn't show through — the
-	 * workflow banner keeps its own surface box, so this stays subtle. Tightened
-	 * vertical padding (space-sm top, 0 bottom → the banner's own margin spaces
-	 * it) so the bar sits high with minimal blank space. */
-	background: var(--nc-gcs-bg-app);
-	/* full-bleed across the body's --nc-gcs-space-lg padding */
-	margin: calc(-1 * var(--nc-gcs-space-lg)) calc(-1 * var(--nc-gcs-space-lg)) 0;
-	padding: var(--nc-gcs-space-sm) var(--nc-gcs-space-lg) 0;
+	/* Opaque slab in both themes. Padding below the pill is part of the
+	   sticky box so Print/Prepare content cannot show through the gap. */
+	background-color: var(--nc-gcs-bg-app, #0d1117);
+	/* full-bleed across the body's horizontal padding only */
+	margin: 0 calc(-1 * var(--nc-gcs-space-lg)) 0;
+	padding: var(--nc-gcs-space-sm) var(--nc-gcs-space-lg) var(--nc-gcs-space-md);
+	box-shadow: 0 1px 0 var(--nc-gcs-border, rgba(240, 246, 252, 0.12));
 }
 
 /* Chrome content shares the centered content cap so it aligns with the
@@ -682,12 +707,31 @@
 }
 
 .nc-print-tab-scroll {
-	/* plain content wrapper — body owns the scroll. Centered + capped so
-	 * 1920+ displays don't stretch the 3-column studio edge-to-edge. */
-	display: block;
+	/* Centered + capped so 1920+ displays don't stretch the studio
+	   edge-to-edge. Grows with Print/Overview so the shell body scrolls
+	   those tabs. Wide Prepare/Slice clamps this box (see below) so the
+	   page does not scroll the workspace card. */
+	display: flex;
+	flex: 1 0 auto;
+	flex-direction: column;
 	margin-inline: auto;
 	max-width: var(--nc-print-content-max, 1680px);
+	min-height: 0;
 	width: 100%;
+}
+
+@media (min-width: 1201px) {
+	/* Immersive Prepare/Slice fills the free space and scrolls inside its
+	   side cards. Clip a 1px measurement miss here instead of growing a
+	   second scrollbar on the page. */
+	.nc-print-tab-scroll:has(.nc-print-prepare-studio--immersive) {
+		flex: 1 1 auto;
+		/* height:0 + flex-grow gives a definite height so the studio's
+		   height:100% resolves, instead of a 100dvh box that overshoots. */
+		height: 0;
+		min-height: 0;
+		overflow: hidden;
+	}
 }
 
 #nc-print-root[data-density='comfortable'] {
