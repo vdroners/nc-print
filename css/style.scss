@@ -40,6 +40,7 @@
 	}
 
 	&--reconnecting,
+	&--checking,
 	&--link-lost {
 		background: color-mix(in srgb, var(--nc-gcs-warning, #eab308) 18%, transparent);
 		color: var(--nc-gcs-warning, #eab308);
@@ -74,6 +75,7 @@
 	}
 
 	&--reconnecting,
+	&--checking,
 	&--link-lost {
 		background: var(--nc-gcs-warning, #eab308);
 		box-shadow: 0 0 6px var(--nc-gcs-warning, #eab308);

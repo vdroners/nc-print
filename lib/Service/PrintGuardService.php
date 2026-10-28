@@ -27,17 +27,17 @@ class PrintGuardService
 		$ex = $moonrakerStatus['extruder'] ?? [];
 		$bed = $moonrakerStatus['heater_bed'] ?? [];
 		$ds = $moonrakerStatus['display_status'] ?? [];
+		$virtual = $moonrakerStatus['virtual_sdcard'] ?? [];
 		$fs = $moonrakerStatus['filament_switch_sensor'] ?? $moonrakerStatus['filament_sensor'] ?? null;
 
 		$state = strtolower((string) ($ps['state'] ?? 'standby'));
 		$printing = in_array($state, ['printing', 'paused'], true);
-		$progress = null;
-		if (isset($ds['progress'])) {
-			$progress = (float) $ds['progress'];
-			if ($progress <= 1.0) {
-				$progress *= 100.0;
-			}
-		}
+		// Same source order as PrinterController::normalizeProgress: file
+		// progress (virtual_sdcard) wins over display_status / M73.
+		$progress = self::progressPercent(
+			is_array($virtual) ? ($virtual['progress'] ?? null) : null,
+			is_array($ds) ? ($ds['progress'] ?? null) : null,
+		);
 		$filename = (string) ($ps['filename'] ?? '');
 
 		$snapshot = [
@@ -109,5 +109,27 @@ class PrintGuardService
 		}
 
 		return ['alerts' => $alerts, 'snapshot' => $snapshot];
+	}
+
+	/**
+	 * Percent 0–100, or null when neither source has a positive reading.
+	 * Values already above 1 are treated as percent (M73-style).
+	 */
+	public static function progressPercent(mixed $primary, mixed $fallback): ?float
+	{
+		foreach ([$primary, $fallback] as $value) {
+			if (!is_numeric($value)) {
+				continue;
+			}
+			$progress = (float) $value;
+			if ($progress <= 0.0) {
+				continue;
+			}
+			if ($progress <= 1.0) {
+				$progress *= 100.0;
+			}
+			return $progress;
+		}
+		return null;
 	}
 }

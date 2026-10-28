@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { emergencyStop } from '@/services/moonraker-api.js'
+import { emergencyStopDisabled } from '@/utils/printer-contact.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import NcPrintIcon from './NcPrintIcon.vue'
 
@@ -20,7 +21,11 @@ export default {
 			return this.printStore.selectedPrinterId || undefined
 		},
 		disabled() {
-			return this.busy || !this.printStore.printerState.connected
+			return emergencyStopDisabled({
+				busy: this.busy,
+				connected: this.printStore.printerState.connected,
+				state: this.printStore.printerState.state,
+			})
 		},
 	},
 	methods: {

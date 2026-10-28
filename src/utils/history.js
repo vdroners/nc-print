@@ -52,6 +52,65 @@ export function parseHistoryList(payload) {
  * @param {Array<{status: string}>} rows
  * @returns {{completed: number, cancelled: number, error: number, total: number, successRate: number}}
  */
+const HISTORY_STATUS_LABELS = {
+	completed: 'Completed',
+	cancelled: 'Cancelled',
+	canceled: 'Cancelled',
+	error: 'Error',
+	klippy_shutdown: 'Klippy shutdown',
+	interrupted: 'Interrupted',
+	in_progress: 'In progress',
+	printing: 'Printing',
+	paused: 'Paused',
+	standby: 'Standby',
+}
+
+/**
+ * Moonraker history status → operator label. Unknown snake_case is title-cased.
+ * @param {string} status
+ * @returns {string}
+ */
+export function historyStatusLabel(status) {
+	const s = String(status || '').trim().toLowerCase()
+	if (HISTORY_STATUS_LABELS[s]) {
+		return HISTORY_STATUS_LABELS[s]
+	}
+	if (!s || s === 'unknown') {
+		return 'Unknown'
+	}
+	return s
+		.replace(/[_-]+/g, ' ')
+		.replace(/\b\w/g, (ch) => ch.toUpperCase())
+}
+
+/**
+ * Badge tone for a history status. Mapped to theme tokens in HistoryPanel
+ * so the pill is readable on the dark surface.
+ * @param {string} status
+ * @returns {'ok'|'info'|'warn'|'danger'|'muted'}
+ */
+export function historyStatusTone(status) {
+	const s = String(status || '').trim().toLowerCase()
+	if (s === 'completed') {
+		return 'ok'
+	}
+	if (s === 'in_progress' || s === 'printing') {
+		return 'info'
+	}
+	if (s === 'error' || s === 'klippy_shutdown') {
+		return 'danger'
+	}
+	if (s === 'cancelled' || s === 'canceled' || s === 'interrupted' || s === 'paused') {
+		return 'warn'
+	}
+	return 'muted'
+}
+
+/**
+ * Success/fail counts from a parsed history list.
+ * @param {Array<{status: string}>} rows
+ * @returns {{completed: number, cancelled: number, error: number, total: number, successRate: number}}
+ */
 export function historyStatusBreakdown(rows) {
 	const out = { completed: 0, cancelled: 0, error: 0, total: rows.length, successRate: 0 }
 	for (const r of rows) {

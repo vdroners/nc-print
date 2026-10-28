@@ -52,13 +52,13 @@ export default {
 				return this.loadError
 			}
 			if (!this.supported) {
-				return 'This printer did not report a camera list. The Print tab still uses the camera from Admin settings.'
+				return 'This printer did not report a camera list. The Print tab says No stream until a frame loads from the webcam URL in NC Print settings.'
 			}
 			if (this.webcams.length === 1) {
 				const name = this.webcams[0].name || this.webcams[0].uid || 'camera'
-				return `Only “${name}” is reported. The Print tab shows that stream.`
+				return `Only “${name}” is reported. The Print tab says No stream until a frame from that camera actually loads.`
 			}
-			return 'No cameras reported. The Print tab uses the camera from Admin settings.'
+			return 'No cameras reported. The Print tab says No stream until a frame loads from the webcam URL in NC Print settings.'
 		},
 	},
 	watch: {

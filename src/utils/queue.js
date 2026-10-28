@@ -4,6 +4,44 @@
  */
 
 /**
+ * Header for the job queue. Moonraker's queue_state is often "paused" even
+ * when nothing is queued (the queue starts paused until the operator starts
+ * it). That is not a paused print. Say "paused" only when jobs are held.
+ * @param {string} state
+ * @param {number} jobCount
+ * @returns {string}
+ */
+export function formatJobQueueLabel(state, jobCount) {
+	const count = Number(jobCount) || 0
+	const s = String(state || 'ready').trim().toLowerCase()
+	if (count > 0 && s === 'paused') {
+		return 'Job queue (paused)'
+	}
+	if (count > 0 && (s === 'loading' || s === 'starting')) {
+		return `Job queue (${s})`
+	}
+	return 'Job queue'
+}
+
+/**
+ * Short name for titles and aria. The row still shows the full name,
+ * ellipsized, so a long uppercase object id cannot push the badge off.
+ * @param {string} name
+ * @param {number} [max]
+ * @returns {string}
+ */
+export function objectShortLabel(name, max = 28) {
+	const raw = String(name || '').trim()
+	if (!raw) {
+		return 'object'
+	}
+	if (raw.length <= max) {
+		return raw
+	}
+	return `${raw.slice(0, Math.max(1, max - 1))}…`
+}
+
+/**
  * Parse `server/job_queue/status` into a normalized queue model.
  * @param {object} payload
  * @returns {{state: string, jobs: Array<{jobId: string, filename: string, timeAdded: number}>}}

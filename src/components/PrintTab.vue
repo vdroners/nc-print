@@ -11,6 +11,7 @@ import { toastError } from '@/services/toast.js'
 import { gcodeTransferFailureTitle } from '@/utils/gcode-transfer-error.js'
 import { loadPinned, togglePinned } from '@/utils/panel-prefs.js'
 import {
+	blockAutoStartAfterUpload,
 	formatProgressPercent,
 	lastJobMessage,
 	panelForceCollapsed as panelShouldForceCollapse,
@@ -162,11 +163,18 @@ export default {
 		controls() {
 			return this.printStore.printerControls
 		},
+		isChecking() {
+			return !this.printStore.printerState.connected
+				&& (this.printStore.printerState.state || '').toLowerCase() === 'checking'
+		},
 		isOffline() {
-			if (this.printStore.printerState.connected) {
+			if (this.printStore.printerState.connected || this.isChecking) {
 				return false
 			}
 			return (this.printStore.printerState.state || '').toLowerCase() !== 'reconnecting'
+		},
+		blockAutoStart() {
+			return blockAutoStartAfterUpload(this.printStore.printerState, this.printStore.lastContact)
 		},
 		linkLoss() {
 			return this.printStore.linkLossView
@@ -355,6 +363,14 @@ export default {
 		'printStore.pendingPrintUpload'() {
 			void this.consumePendingPrintUpload()
 		},
+		blockAutoStart: {
+			immediate: true,
+			handler(blocked) {
+				if (blocked) {
+					this.startAfterUpload = false
+				}
+			},
+		},
 	},
 	methods: {
 		openCameraFullscreen() {
@@ -412,7 +428,8 @@ export default {
 				toastError('Select a .gcode file')
 				return false
 			}
-			return this.printStore.uploadLocalGcode(file, startAfterUpload)
+			const start = !!startAfterUpload && !this.blockAutoStart
+			return this.printStore.uploadLocalGcode(file, start)
 		},
 		retryUpload() {
 			return this.printStore.retryLastGcodeTransfer()
@@ -470,7 +487,22 @@ export default {
 		<UpdateControlPanel />
 		<AnnouncementsBanner />
 
-		<div v-if="isReconnecting" class="nc-print-banner nc-print-banner--warn" role="status">
+		<div v-if="isChecking" class="nc-print-banner nc-print-banner--info" role="status">
+			<h2 class="nc-print-banner__title">
+				<span class="nc-print-card__title-row">
+					<NcPrintIcon name="alert" :size="18" />
+					Checking printer
+				</span>
+			</h2>
+			<p class="nc-print-banner__body">
+				Still reaching Moonraker. A slow reply is not an offline printer.
+			</p>
+			<p v-if="linkLoss" class="nc-print-banner__body">
+				{{ linkLoss.lastSeenLabel }}. This is not a live reading.
+			</p>
+		</div>
+
+		<div v-else-if="isReconnecting" class="nc-print-banner nc-print-banner--warn" role="status">
 			<p class="nc-print-banner__body">
 				Reconnecting to Moonraker…
 			</p>
@@ -707,10 +739,13 @@ export default {
 				</span>
 			</h2>
 			<label class="nc-print-switch" style="margin-bottom: 12px;">
-				<input v-model="startAfterUpload" type="checkbox">
+				<input v-model="startAfterUpload" type="checkbox" :disabled="blockAutoStart">
 				<span class="nc-print-switch__slider" />
 				<span class="nc-print-switch__label">Start print after upload</span>
 			</label>
+			<p v-if="blockAutoStart" class="nc-print-print-meta nc-print-print-meta--muted">
+				A job is already active, so upload will not start another print.
+			</p>
 			<div class="nc-print-actions">
 				<label class="nc-print-btn">
 					Upload local file

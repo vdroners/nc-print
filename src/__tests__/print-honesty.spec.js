@@ -15,6 +15,7 @@ import {
 	showLastJobCard,
 	printWorkflowMark,
 	showLivePrintControls,
+	blockAutoStartAfterUpload,
 } from '@/utils/print-honesty.js'
 
 const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8')
@@ -78,6 +79,27 @@ describe('print workflow subtitle', () => {
 		expect(printWorkflowSubtitle(state({
 			connected: false, state: 'printing', filename: 'door.gcode', progress: 0.5,
 		}))).toBe('Offline')
+	})
+
+	it('says Checking while the first probe has not settled', () => {
+		expect(printWorkflowSubtitle(state({
+			connected: false, state: 'checking', filename: 'door.gcode', progress: 0.33,
+		}))).toBe('Checking…')
+		expect(printWorkflowSubtitle(state({
+			connected: false, state: 'checking',
+		}), { atMs: 1 })).toBe('Checking…')
+	})
+
+	it('blocks start-after-upload during an active job or a checking reload of one', () => {
+		expect(blockAutoStartAfterUpload(state({ state: 'printing' }))).toBe(true)
+		expect(blockAutoStartAfterUpload(state({ state: 'paused' }))).toBe(true)
+		expect(blockAutoStartAfterUpload(state({ state: 'standby' }))).toBe(false)
+		expect(blockAutoStartAfterUpload(state({
+			connected: false, state: 'checking',
+		}), { active: true })).toBe(true)
+		expect(blockAutoStartAfterUpload(state({
+			connected: false, state: 'checking',
+		}), { active: false })).toBe(false)
 	})
 
 	it('says Link lost when a last-contact snapshot exists', () => {
