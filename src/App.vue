@@ -11,6 +11,7 @@ import { saveCollapsibleState } from '@/utils/collapsible.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { modelFilePickerFilter, modelFilePickerCanPick } from '@/shared/modelFileNode.js'
 import { applyDensityToRoot, readDensityPref } from '@/utils/density-pref.js'
+import { prepareStageHeight } from '@/utils/prepare-stage.js'
 
 const PrepareTab = () => import(/* webpackChunkName: "nc-print-prepare" */ './components/PrepareTab.vue')
 const SliceTab = () => import(/* webpackChunkName: "nc-print-slice" */ './components/SliceTab.vue')
@@ -80,16 +81,45 @@ export default {
 		observeChromeHeight() {
 			const chrome = this.$el?.querySelector?.('.nc-print-chrome')
 			const body = this.$el?.querySelector?.('.nc-gcs-app-shell__body') || chrome?.parentElement
-			if (!chrome || !body) {
+			const shell = this.$el?.querySelector?.('.nc-gcs-app-shell') || body?.parentElement
+			if (!chrome || !body || !shell) {
 				return
 			}
 			const apply = () => {
-				body.style.setProperty('--nc-print-chrome-h', `${Math.round(chrome.offsetHeight)}px`)
+				const chromeH = Math.round(chrome.offsetHeight)
+				body.style.setProperty('--nc-print-chrome-h', `${chromeH}px`)
+				const cs = window.getComputedStyle(body)
+				const chromeCs = window.getComputedStyle(chrome)
+				const banner = shell.querySelector('.nc-gcs-app-shell__banner')
+				const footer = shell.querySelector('.nc-gcs-app-shell__footer')
+				const stage = prepareStageHeight({
+					shellHeight: shell.clientHeight,
+					bannerHeight: banner ? banner.offsetHeight : 0,
+					footerHeight: footer ? footer.offsetHeight : 0,
+					chromeHeight: chromeH,
+					padTop: parseFloat(cs.paddingTop) || 0,
+					padBottom: parseFloat(cs.paddingBottom) || 0,
+					chromeMarginTop: parseFloat(chromeCs.marginTop) || 0,
+					chromeMarginBottom: parseFloat(chromeCs.marginBottom) || 0,
+				})
+				// Leave the CSS fallback in place until the shell has laid out.
+				if (stage > 0) {
+					body.style.setProperty('--nc-print-stage-h', `${stage}px`)
+				}
 			}
 			apply()
 			if (typeof ResizeObserver !== 'undefined') {
 				this._chromeObserver = new ResizeObserver(apply)
 				this._chromeObserver.observe(chrome)
+				this._chromeObserver.observe(shell)
+				const banner = shell.querySelector('.nc-gcs-app-shell__banner')
+				const footer = shell.querySelector('.nc-gcs-app-shell__footer')
+				if (banner) {
+					this._chromeObserver.observe(banner)
+				}
+				if (footer) {
+					this._chromeObserver.observe(footer)
+				}
 			}
 		},
 		openHelp() {

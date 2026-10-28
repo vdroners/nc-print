@@ -54,10 +54,11 @@ export default {
 .nc-print-prepare-studio--immersive {
 	display: block;
 	position: relative;
-	/* Fill the visible studio area below the sticky chrome. dvh handles mobile
-	   browser chrome; the shell body still scrolls so overshoot is safe. */
-	height: calc(100dvh - var(--nc-print-chrome-h, 0px) - 2 * var(--nc-gcs-space-lg, 16px));
-	min-height: 520px;
+	/* Wide screens (min-width: 1201px below) give this a definite height equal
+	   to the shell's free space. A full-viewport height ignored the Nextcloud
+	   header, app banner, and footer, so the page scrolled the card ~100px. */
+	flex: 1 1 auto;
+	min-height: 0;
 }
 
 .nc-print-prepare-studio--immersive .nc-print-prepare-studio__center {
@@ -76,8 +77,13 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: var(--nc-gcs-space-md);
+	/* Vertical scroll stays inside the card. overflow-x stays hidden so a
+	   nowrap row (quality tiers) cannot grow a second, horizontal bar.
+	   contain: a wheel at the end of the card does not move the page. */
+	min-width: 0;
+	overflow-x: hidden;
 	overflow-y: auto;
-	overscroll-behavior: contain; /* don't chain wheel-scroll into the shell */
+	overscroll-behavior: contain;
 	padding: var(--nc-gcs-space-md);
 	border: 1px solid var(--nc-gcs-border);
 	border-radius: var(--nc-gcs-radius-md, 12px);
@@ -114,7 +120,9 @@ export default {
 		display: grid;
 		position: static;
 		height: auto;
+		max-height: none;
 		min-height: 0;
+		overflow: visible;
 	}
 
 	.nc-print-prepare-studio--immersive .nc-print-prepare-studio__center {
@@ -129,6 +137,7 @@ export default {
 		max-width: none;
 		inset: auto;
 		overflow: visible;
+		min-width: 0;
 		background: transparent;
 		backdrop-filter: none;
 		box-shadow: none;
@@ -145,6 +154,27 @@ export default {
 	.nc-print-prepare-studio__center {
 		grid-column: auto;
 		order: -1;
+	}
+}
+
+/* Wide screens: the studio IS the free space under the workflow bar.
+   --nc-print-stage-h is measured from the shell (App.vue). 100% covers the
+   first paint, before that measurement, when the tab-scroll has a height. */
+@media (min-width: 1201px) {
+	.nc-print-prepare-studio--immersive {
+		/* Measured shell free space when App.vue has written it. 100% fills
+		   the height:0 flex slot before that. max-height stops a long
+		   measurement from growing the page scrollbar back. */
+		height: var(--nc-print-stage-h, 100%);
+		max-height: 100%;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.nc-print-prepare-studio--immersive .nc-print-prepare-studio__left > :deep(*),
+	.nc-print-prepare-studio--immersive .nc-print-prepare-studio__right > :deep(*) {
+		max-width: 100%;
+		min-width: 0;
 	}
 }
 </style>

@@ -270,23 +270,33 @@ export default {
 	margin-bottom: 0;
 }
 
-/* Quality tier row */
+/* Quality tier row. Wrap inside the Prepare side card — a nowrap row of
+   Draft/Standard/Fine is wider than the card in Comfortable and was the
+   left panel's horizontal scrollbar. */
 .nc-print-quality-row {
 	align-items: center;
 	display: flex;
+	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm);
 	margin-bottom: var(--nc-gcs-space-sm);
 	padding-bottom: var(--nc-gcs-space-sm);
 	border-bottom: 1px solid var(--nc-gcs-border);
+	max-width: 100%;
+	min-width: 0;
 }
 .nc-print-quality-row__label {
 	color: var(--nc-gcs-text-muted);
+	flex: 0 0 auto;
 	font-size: var(--nc-gcs-text-sm);
 	font-weight: 600;
 }
 .nc-print-quality-row__tiers {
 	display: flex;
+	flex: 1 1 8rem;
+	flex-wrap: wrap;
 	gap: 4px;
+	max-width: 100%;
+	min-width: 0;
 }
 :deep(.nc-print-btn--active) {
 	background: color-mix(in srgb, var(--nc-app-accent) 15%, transparent);
