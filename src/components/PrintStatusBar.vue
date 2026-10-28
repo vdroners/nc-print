@@ -102,7 +102,7 @@ export default {
 
 <template>
 	<div v-if="visible" class="nc-print-statusbar" role="status" aria-live="polite">
-		<div class="nc-print-statusbar__info">
+		<div class="nc-print-statusbar__info" :title="filename">
 			<NcPrintIcon :name="paused ? 'pause' : 'printer'" :size="16" />
 			<span class="nc-print-statusbar__name" :title="filename">{{ filename }}</span>
 			<span class="nc-print-statusbar__pct">{{ pctLabel }}</span>
@@ -147,6 +147,8 @@ export default {
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--nc-gcs-space-sm, 8px);
+	max-width: 100%;
+	min-width: 0;
 	padding: 8px 12px;
 	/* Stickiness lives on the monitor cluster (WorkspaceRail), which already
 	   sits below the chrome bar. A sticky bar here would double-offset and
@@ -164,7 +166,9 @@ export default {
 }
 
 .nc-print-statusbar__name {
+	flex: 1 1 auto;
 	font-weight: 600;
+	min-width: 0;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;

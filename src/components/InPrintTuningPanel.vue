@@ -115,9 +115,20 @@ export default {
 
 			<div class="nc-print-card--inset">
 				<p class="nc-print-section-label">Cooling &amp; Z</p>
-				<div class="nc-print-tuning__slider">
-					<label>Fan {{ fan }}% <span v-if="fanPercent !== fan" class="nc-print-tuning__hint">(live {{ fanPercent }}%)</span></label>
-					<input v-model.number="fan" type="range" min="0" max="100" step="1" :disabled="busy" @change="onFanInput">
+				<div class="nc-print-tuning__slider nc-print-tuning__fan">
+					<label for="nc-print-fan">Fan</label>
+					<input
+						id="nc-print-fan"
+						v-model.number="fan"
+						type="range"
+						min="0"
+						max="100"
+						step="1"
+						:disabled="busy"
+						:aria-valuetext="fan + '%'"
+						@change="onFanInput">
+					<output class="nc-print-tuning__fan-value" for="nc-print-fan">{{ fan }}%</output>
+					<span v-if="fanPercent !== fan" class="nc-print-tuning__hint">Live {{ fanPercent }}%</span>
 				</div>
 				<div class="nc-print-tuning__babystep">
 					<span>Babystep Z</span>
@@ -176,8 +187,28 @@ export default {
 	justify-content: space-between;
 }
 
+.nc-print-tuning__fan {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
+	align-items: center;
+	gap: 8px;
+}
+
+.nc-print-tuning__fan-value {
+	color: var(--nc-gcs-text-primary, #e6edf3);
+	font-size: 14px;
+	font-variant-numeric: tabular-nums;
+	font-weight: 700;
+	min-width: 3.2em;
+	text-align: right;
+}
+
+.nc-print-tuning__fan .nc-print-tuning__hint {
+	grid-column: 1 / -1;
+}
+
 .nc-print-tuning__hint {
-	color: var(--nc-gcs-text-muted);
-	font-size: 11px;
+	color: var(--nc-print-text-raised, var(--nc-gcs-text-secondary));
+	font-size: 12px;
 }
 </style>

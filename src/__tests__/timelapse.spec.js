@@ -3,6 +3,7 @@ import {
 	parseTimelapseList,
 	timelapseSupported,
 	formatBytes,
+	isMissingTimelapseRoot,
 } from '@/utils/timelapse.js'
 
 describe('WS16: timelapse', () => {
@@ -38,6 +39,14 @@ describe('WS16: timelapse', () => {
 		expect(timelapseSupported({ timelapse: false })).toBe(false)
 		expect(timelapseSupported(null)).toBe(false)
 		expect(timelapseSupported(undefined)).toBe(false)
+	})
+
+	it('treats a missing timelapse root as empty, not a failure', () => {
+		expect(isMissingTimelapseRoot({ response: { status: 400 } })).toBe(true)
+		expect(isMissingTimelapseRoot({ status: 404, quiet: true })).toBe(true)
+		expect(isMissingTimelapseRoot({ response: { status: 502 } })).toBe(false)
+		expect(isMissingTimelapseRoot(new Error('network'))).toBe(false)
+		expect(isMissingTimelapseRoot(null)).toBe(false)
 	})
 
 	it('formats byte sizes', () => {

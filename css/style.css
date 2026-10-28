@@ -700,7 +700,7 @@ input:checked + .nc-print-switch__slider::before {
   background: transparent;
   border: none;
   border-radius: var(--nc-gcs-radius-sm);
-  color: var(--nc-gcs-text-muted);
+  color: var(--nc-print-text-raised, #b1bac4);
   cursor: pointer;
   display: flex;
   font-family: inherit;
@@ -735,10 +735,10 @@ input:checked + .nc-print-switch__slider::before {
 }
 
 .nc-print-workflow__sub {
-  color: var(--nc-gcs-text-muted);
+  color: var(--nc-print-text-raised, #b1bac4);
   display: -webkit-box;
-  font-size: 10px;
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   line-height: 1.3;
   /* Truncate within the (now shrinkable) step rather than hard-clipping past
      the container box. Line-clamp keeps it to a single line (see G37a). */

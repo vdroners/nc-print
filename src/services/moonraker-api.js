@@ -11,10 +11,24 @@ const proxyBase = () => generateUrl('/apps/nc_print/api/moonraker')
  * @param {string} [printerId]
  * @returns {Promise<object>}
  */
-export async function moonrakerGet(path, params = {}, printerId) {
+export async function moonrakerGet(path, params = {}, printerId, options = {}) {
 	const q = printerId ? { ...params, printer_id: printerId } : params
-	const { data } = await axios.get(`${proxyBase()}/${path}`, { params: q })
-	return data
+	const accept = Array.isArray(options.acceptErrorStatuses) ? options.acceptErrorStatuses : null
+	const config = { params: q }
+	// Accepting the status keeps axios (and its interceptors) from treating a
+	// known-empty Moonraker root as a failed request in the console.
+	if (accept) {
+		config.validateStatus = (code) => (code >= 200 && code < 300) || accept.includes(code)
+	}
+	const response = await axios.get(`${proxyBase()}/${path}`, config)
+	if (accept && accept.includes(response.status)) {
+		const err = new Error(`Moonraker HTTP ${response.status}`)
+		err.status = response.status
+		err.response = response
+		err.quiet = true
+		throw err
+	}
+	return response.data
 }
 
 /**

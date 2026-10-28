@@ -41,6 +41,17 @@ export function timelapseSupported(features) {
 }
 
 /**
+ * Moonraker returns 400 when `root=timelapse` does not exist, and 404 when the
+ * path is absent. Both mean "no videos", not an operator-facing failure.
+ * @param {object|null|undefined} error
+ * @returns {boolean}
+ */
+export function isMissingTimelapseRoot(error) {
+	const status = Number(error?.response?.status ?? error?.status)
+	return status === 400 || status === 404
+}
+
+/**
  * Human-readable file size.
  * @param {number} bytes
  * @returns {string}

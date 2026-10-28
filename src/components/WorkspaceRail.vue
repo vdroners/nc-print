@@ -54,13 +54,16 @@ export default {
 	flex-direction: column;
 	gap: var(--nc-gcs-space-md);
 	min-width: 0;
+	max-width: 100%;
 	align-self: start;
 	position: sticky;
 	/* Stick BELOW the chrome/workflow bar (sticky top:0 z-index:3). */
 	top: var(--nc-print-chrome-h, 0px);
 	max-height: calc(100vh - var(--nc-print-chrome-h, 0px) - 12px);
 	max-height: calc(100dvh - var(--nc-print-chrome-h, 0px) - 12px);
-	overflow: auto;
+	/* A long filename used to force a horizontal bar under the camera. */
+	overflow-x: hidden;
+	overflow-y: auto;
 	z-index: 2;
 }
 
@@ -68,6 +71,7 @@ export default {
 	display: flex;
 	flex-direction: column;
 	gap: var(--nc-gcs-space-md);
+	max-width: 100%;
 	min-width: 0;
 	/* Stay put while job history scrolls inside the side column. */
 	position: sticky;

@@ -33,8 +33,12 @@ export default {
 		<p class="nc-print-printer-status__line" :class="connectionClass" role="status">
 			{{ label }}
 		</p>
-		<button type="button" class="nc-print-printer-status__change" @click="openFleet">
-			Change in Overview
+		<button
+			type="button"
+			class="nc-print-printer-status__change"
+			title="Opens Overview to switch the send-to printer"
+			@click="openFleet">
+			Change printer
 		</button>
 	</div>
 </template>
@@ -67,13 +71,15 @@ export default {
 	appearance: none;
 	background: none;
 	border: none;
-	color: var(--nc-app-accent);
+	color: var(--nc-gcs-text-primary, #e6edf3);
 	cursor: pointer;
 	font: inherit;
-	font-size: 0.76rem;
-	margin-top: 4px;
+	font-size: 0.85rem;
+	font-weight: 600;
+	margin-top: 6px;
 	padding: 0;
 	text-decoration: underline;
+	text-underline-offset: 3px;
 }
 
 .nc-print-printer-status__change:focus-visible {

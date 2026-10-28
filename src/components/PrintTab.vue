@@ -4,6 +4,7 @@ import { usePrintStore } from '@/store/print.js'
 import { TABS } from '@/constants/tabs.js'
 import { cameraStreamUrl } from '@/services/moonraker-api.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
+import { formatEstimateActualLine } from '@/utils/print-estimate.js'
 import { useCameraFrame } from '@/composables/useCameraFrame.js'
 import { pickFileFromNextcloud } from '@/composables/useNextcloudFilePicker.js'
 import { toastError } from '@/services/toast.js'
@@ -227,18 +228,15 @@ export default {
 			if (!row) {
 				return null
 			}
-			const est = formatPrintTime(row.estimatedS)
-			if (row.actualS == null) {
-				return `Estimated ${est}`
-			}
-			const act = formatPrintTime(row.actualS)
-			const delta = row.actualS - row.estimatedS
-			const sign = delta >= 0 ? '+' : '−'
-			const deltaLabel = formatPrintTime(Math.abs(delta))
-			return `Estimated ${est} · Actual ${act} (${sign}${deltaLabel})`
+			return formatEstimateActualLine(row.estimatedS, row.actualS)
 		},
 		progressSourceLabel() {
-			return this.printStore.printerProgressSource === 'ws' ? 'Live (WebSocket)' : 'Polling'
+			// The old source word read as a stuck state. While Moonraker is
+			// connected the percent is a live reading, over HTTP or websocket.
+			if (!this.printStore.printerState.connected) {
+				return null
+			}
+			return 'Updating live'
 		},
 		progressPercentLabel() {
 			return formatProgressPercent(this.printStore.printerState.progress)
@@ -591,7 +589,6 @@ export default {
 						Print control
 					</span>
 				</h2>
-				<span class="nc-print-badge nc-print-badge--info">{{ printStore.printerStatusLabel }}</span>
 			</div>
 
 			<div v-if="printStore.printerState.filename" class="nc-print-print-jobhead">
@@ -616,7 +613,7 @@ export default {
 				<div v-if="printStore.printerState.progress > 0" class="nc-print-stat">
 					<span class="nc-print-stat__label">Progress</span>
 					<span class="nc-print-stat__value">{{ progressPercentLabel }}</span>
-					<span class="nc-print-stat__sub">{{ progressSourceLabel }}</span>
+					<span v-if="progressSourceLabel" class="nc-print-stat__sub">{{ progressSourceLabel }}</span>
 				</div>
 				<div v-if="layerStatValue" class="nc-print-stat">
 					<span class="nc-print-stat__label">Layer</span>
@@ -835,7 +832,23 @@ export default {
 	.nc-print-zone {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		align-items: start;
+		align-items: stretch;
+	}
+
+	.nc-print-zone :deep(.nc-print-panel) {
+		height: 100%;
+	}
+
+	.nc-print-zone :deep(.nc-print-panel__body) {
+		display: flex;
+		flex: 1 1 auto;
+		flex-direction: column;
+	}
+
+	.nc-print-zone :deep(.nc-print-tuning),
+	.nc-print-zone :deep(.nc-print-temp-control) {
+		flex: 1 1 auto;
+		height: 100%;
 	}
 
 	.nc-print-zone__label {

@@ -60,6 +60,8 @@
 	--nc-gcs-text-primary: #e6edf3;
 	--nc-gcs-text-secondary: #8b949e;
 	--nc-gcs-text-muted: #8b949e;
+	/* One step above muted, for stepper subtitles and the app footer. */
+	--nc-print-text-raised: #b1bac4;
 	--nc-gcs-text-on-accent: #ffffff;
 
 	/* ─── Borders ────────────────────────────────────────────────────── */
@@ -134,6 +136,7 @@
 		--nc-gcs-text-primary: #1a1a2e;
 		--nc-gcs-text-secondary: #333344;
 		--nc-gcs-text-muted: #666680;
+		--nc-print-text-raised: #3d3d4e;
 
 		--nc-gcs-border: #d0d0d8;
 		--nc-gcs-border-strong: #b0b0bc;
@@ -175,6 +178,7 @@ body.theme--light .nc-print-dash,
 	--nc-gcs-text-primary: #1a1a2e;
 	--nc-gcs-text-secondary: #333344;
 	--nc-gcs-text-muted: #666680;
+	--nc-print-text-raised: #3d3d4e;
 	--nc-gcs-border: #d0d0d8;
 	--nc-gcs-border-strong: #b0b0bc;
 	--nc-gcs-border-soft: #e0e0e8;
@@ -209,6 +213,7 @@ body.theme--dark .nc-gcs-app-shell,
 	--nc-gcs-text-primary: #e6edf3;
 	--nc-gcs-text-secondary: #8b949e;
 	--nc-gcs-text-muted: #8b949e;
+	--nc-print-text-raised: #b1bac4;
 	--nc-gcs-border: rgba(240, 246, 252, 0.1);
 	--nc-gcs-border-soft: rgba(240, 246, 252, 0.08);
 }
@@ -306,8 +311,8 @@ body.theme--dark .nc-gcs-app-shell,
 
 .nc-gcs-app-shell__footer {
 	padding: var(--nc-gcs-space-sm) var(--nc-gcs-space-lg);
-	font-size: var(--nc-gcs-text-xs);
-	color: var(--nc-gcs-text-muted);
+	font-size: var(--nc-gcs-text-sm);
+	color: var(--nc-print-text-raised, #b1bac4);
 	border-top: 1px solid var(--nc-gcs-border-soft);
 	display: flex;
 	gap: var(--nc-gcs-space-md);
