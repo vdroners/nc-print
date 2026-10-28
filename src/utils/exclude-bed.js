@@ -150,6 +150,27 @@ export function bedGlyph(shortLabel, marker) {
 }
 
 /**
+ * Text on the object row. Long gcode names share a prefix, so once the
+ * column ellipsizes, `REAR_CONE…` and `R…` cannot be told apart. The row
+ * shows the same short label as the bed (A, B, lid). The full name stays
+ * on the tooltip.
+ * @param {{shortLabel?: string, marker?: string, name?: string}} item
+ * @returns {string}
+ */
+export function visibleObjectLabel(item) {
+	const short = String(item?.shortLabel ?? '').trim()
+	if (short) {
+		return short
+	}
+	const marker = String(item?.marker ?? '').trim()
+	if (marker) {
+		return marker
+	}
+	const name = String(item?.name ?? '').trim()
+	return name || 'object'
+}
+
+/**
  * @param {unknown} value
  * @returns {number|null}
  */

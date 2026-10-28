@@ -190,19 +190,23 @@ export default {
 	border: 1px solid var(--nc-gcs-border);
 	border-radius: 12px;
 	box-shadow: 0 12px 48px rgba(0, 0, 0, 0.4);
+	box-sizing: border-box;
 	display: flex;
 	flex-direction: column;
-	max-height: 60vh;
-	max-width: 560px;
+	max-height: min(80vh, 760px);
+	max-width: 640px;
 	overflow: hidden;
-	width: 92%;
+	width: min(640px, 94vw);
 }
 
 .nc-print-cmdk__search {
 	align-items: center;
 	border-bottom: 1px solid var(--nc-gcs-border);
+	box-sizing: border-box;
 	display: flex;
+	flex: 0 0 auto;
 	gap: 8px;
+	min-width: 0;
 	padding: 12px 14px;
 }
 
@@ -212,12 +216,18 @@ export default {
 	color: var(--color-main-text);
 	flex: 1;
 	font-size: 1rem;
+	min-width: 0;
 	outline: none;
 }
 
 .nc-print-cmdk__list {
+	box-sizing: border-box;
+	flex: 1 1 auto;
+	min-height: 0;
+	overflow-x: hidden;
 	overflow-y: auto;
-	padding: 6px;
+	overscroll-behavior: contain;
+	padding: 6px 6px 10px;
 }
 
 .nc-print-cmdk__group {
@@ -235,13 +245,18 @@ export default {
 	background: none;
 	border: none;
 	border-radius: 8px;
+	box-sizing: border-box;
 	color: var(--color-main-text);
 	cursor: pointer;
 	display: flex;
-	gap: 8px;
+	flex-wrap: wrap;
+	gap: 2px 12px;
 	justify-content: space-between;
+	max-width: 100%;
+	min-width: 0;
 	padding: 8px 10px;
 	text-align: left;
+	white-space: normal;
 	width: 100%;
 }
 
@@ -273,15 +288,20 @@ export default {
 }
 
 .nc-print-cmdk__title {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
+	flex: 1 1 12rem;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	white-space: normal;
 }
 
 .nc-print-cmdk__hint {
 	color: var(--nc-gcs-text-muted);
-	flex: 0 0 auto;
+	flex: 1 1 8rem;
 	font-size: 12px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	text-align: right;
+	white-space: normal;
 }
 
 .nc-print-cmdk__empty {
@@ -292,8 +312,10 @@ export default {
 
 .nc-print-cmdk__footer {
 	border-top: 1px solid var(--nc-gcs-border);
+	box-sizing: border-box;
 	color: var(--nc-gcs-text-muted);
 	display: flex;
+	flex: 0 0 auto;
 	font-size: 11px;
 	gap: 16px;
 	justify-content: center;

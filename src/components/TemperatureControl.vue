@@ -1,8 +1,13 @@
 <script>
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
-import { setTemperature, cooldown } from '@/services/moonraker-api.js'
-import { followLiveTarget } from '@/utils/temperature.js'
+import { setTemperature, cooldown, moonrakerGet } from '@/services/moonraker-api.js'
+import {
+	appendTemperatureSample,
+	followLiveTarget,
+	parseTemperatureStore,
+	samplesFromTemperatureSeries,
+} from '@/utils/temperature.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import TemperatureSparkline from './TemperatureSparkline.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
@@ -12,6 +17,9 @@ const PRESETS = {
 	PETG: { nozzle: 240, bed: 80 },
 	ABS: { nozzle: 245, bed: 100 },
 }
+
+/** Same cadence as the temperature-history panel. */
+const SERIES_POLL_MS = 4000
 
 export default {
 	name: 'TemperatureControl',
@@ -25,8 +33,12 @@ export default {
 			busy: false,
 			nozzleSamples: [],
 			bedSamples: [],
-			_sampleTimer: null,
 		}
+	},
+	created() {
+		this._seriesSeq = 0
+		this._seriesTimer = null
+		this._seriesAlive = true
 	},
 	computed: {
 		...mapStores(usePrintStore),
@@ -74,36 +86,76 @@ export default {
 				this.bedInput = followLiveTarget(this.bedInput, val, this.bedTouched)
 			},
 		},
-		'printStore.printerState.extruderTemp'(val) {
-			if (typeof val === 'number') {
-				this._pushSample('nozzleSamples', val)
+		// A steady heater does not change extruderTemp, so watching the number
+		// leaves the 5-minute chart empty (one bump draws as a stray tick).
+		// Poll Moonraker's temperature store, and fall back to a timed sample.
+		'printStore.printerState.connected'(connected) {
+			if (connected) {
+				void this.refreshSeries()
 			}
 		},
-		'printStore.printerState.bedTemp'(val) {
-			if (typeof val === 'number') {
-				this._pushSample('bedSamples', val)
-			}
+		printerId() {
+			void this.refreshSeries()
 		},
 	},
 	mounted() {
-		this._sampleTimer = setInterval(() => this._trimSamples(), 15000)
+		void this.refreshSeries()
+		this._seriesTimer = setInterval(() => {
+			void this.refreshSeries()
+		}, SERIES_POLL_MS)
 	},
 	beforeDestroy() {
-		if (this._sampleTimer) {
-			clearInterval(this._sampleTimer)
+		this._seriesAlive = false
+		if (this._seriesTimer) {
+			clearInterval(this._seriesTimer)
+			this._seriesTimer = null
 		}
 	},
 	methods: {
-		_pushSample(key, value) {
-			const now = Date.now()
-			const rows = [...this[key], { t: now, value }]
-			const cutoff = now - 5 * 60 * 1000
-			this[key] = rows.filter(r => r.t >= cutoff)
+		_captureLive(key, value, now) {
+			this[key] = appendTemperatureSample(this[key], value, now)
 		},
-		_trimSamples() {
-			const cutoff = Date.now() - 5 * 60 * 1000
-			this.nozzleSamples = this.nozzleSamples.filter(r => r.t >= cutoff)
-			this.bedSamples = this.bedSamples.filter(r => r.t >= cutoff)
+		async refreshSeries() {
+			const seq = ++this._seriesSeq
+			const now = Date.now()
+			const stale = () => !this._seriesAlive || seq !== this._seriesSeq
+			if (this.printStore.printerState.connected) {
+				try {
+					const data = await moonrakerGet('server/temperature_store', {}, this.printerId)
+					if (stale()) {
+						return
+					}
+					const sensors = parseTemperatureStore(data)
+					const nozzle = sensors.find((s) => s.key === 'extruder')
+					const bed = sensors.find((s) => s.key === 'heater_bed')
+					const nozzleSamples = nozzle
+						? samplesFromTemperatureSeries(nozzle.temperatures, { now })
+						: []
+					const bedSamples = bed
+						? samplesFromTemperatureSeries(bed.temperatures, { now })
+						: []
+					if (nozzleSamples.length >= 2) {
+						this.nozzleSamples = nozzleSamples
+					} else {
+						this._captureLive('nozzleSamples', this.printStore.printerState.extruderTemp, now)
+					}
+					if (bedSamples.length >= 2) {
+						this.bedSamples = bedSamples
+					} else {
+						this._captureLive('bedSamples', this.printStore.printerState.bedTemp, now)
+					}
+					return
+				} catch {
+					if (stale()) {
+						return
+					}
+				}
+			}
+			if (stale()) {
+				return
+			}
+			this._captureLive('nozzleSamples', this.printStore.printerState.extruderTemp, now)
+			this._captureLive('bedSamples', this.printStore.printerState.bedTemp, now)
 		},
 		async withBusy(fn) {
 			this.busy = true

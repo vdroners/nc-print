@@ -9,6 +9,10 @@ import {
 	seriesToPoints,
 	decimate,
 	temperatureDomain,
+	SPARKLINE_WINDOW_MS,
+	samplesFromTemperatureSeries,
+	appendTemperatureSample,
+	sparklineGeometry,
 } from '@/utils/temperature.js'
 
 describe('WS10: temperature graph helpers', () => {
@@ -106,5 +110,49 @@ describe('WS10: temperature graph helpers', () => {
 		expect(out).toHaveLength(100)
 		expect(out[0]).toBe(0)
 		expect(out[out.length - 1]).toBe(999)
+	})
+})
+
+describe('5-minute sparkline while a heater is steady', () => {
+	const now = 1_700_000_000_000
+
+	it('anchors the temperature_store tail at now across the 5-minute window', () => {
+		const temperatures = Array.from({ length: 1200 }, (_, i) => 278)
+		const samples = samplesFromTemperatureSeries(temperatures, { now })
+		expect(samples.length).toBe(300)
+		expect(samples[0].t).toBe(now - 299_000)
+		expect(samples[samples.length - 1]).toEqual({ t: now, value: 278 })
+		expect(samples[0].t).toBeGreaterThanOrEqual(now - SPARKLINE_WINDOW_MS)
+	})
+
+	it('keeps a steady reading when the value does not change', () => {
+		let samples = appendTemperatureSample([], 65, now - 60_000)
+		samples = appendTemperatureSample(samples, 65, now)
+		expect(samples).toEqual([
+			{ t: now - 60_000, value: 65 },
+			{ t: now, value: 65 },
+		])
+		expect(appendTemperatureSample(samples, 'nope', now + 1000)).toEqual(samples)
+	})
+
+	it('draws a flat print temperature as a line across the plot, not a bottom tick', () => {
+		const samples = samplesFromTemperatureSeries(
+			Array.from({ length: 300 }, () => 278),
+			{ now },
+		)
+		const layout = sparklineGeometry(samples, { width: 240, height: 120, now })
+		expect(layout.ready).toBe(true)
+		expect(layout.commands[0].x).toBeLessThan(5)
+		expect(layout.commands[layout.commands.length - 1].x).toBe(240)
+		for (const point of layout.commands) {
+			expect(point.y).toBeCloseTo(60, 5)
+		}
+		// A 2° wobble stays in the plot instead of a 1px spike on the edge.
+		const wobble = samples.map((p, i) => ({ ...p, value: i % 2 ? 279 : 277 }))
+		const waved = sparklineGeometry(wobble, { width: 240, height: 120, now })
+		const ys = waved.commands.map((p) => p.y)
+		expect(Math.max(...ys) - Math.min(...ys)).toBeGreaterThan(20)
+		expect(Math.min(...ys)).toBeGreaterThan(6)
+		expect(Math.max(...ys)).toBeLessThan(114)
 	})
 })

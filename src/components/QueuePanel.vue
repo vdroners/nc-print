@@ -4,7 +4,7 @@ import { usePrintStore } from '@/store/print.js'
 import { moonrakerGet, moonrakerProxyPost, excludeObject } from '@/services/moonraker-api.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import { parseJobQueue, reorderQueueIds, parseExcludeObjects, formatJobQueueLabel, objectShortLabel } from '@/utils/queue.js'
-import { layoutExcludeBed } from '@/utils/exclude-bed.js'
+import { layoutExcludeBed, visibleObjectLabel } from '@/utils/exclude-bed.js'
 import { panelVisibility } from '@/mixins/panelVisibility.js'
 import ExcludeObjectBed from './ExcludeObjectBed.vue'
 
@@ -154,6 +154,9 @@ export default {
 		objectLabel(name) {
 			return objectShortLabel(name)
 		},
+		rowLabel(obj) {
+			return visibleObjectLabel(obj)
+		},
 		async onExclude(name) {
 			this.selectedName = name
 			if (!window.confirm(`Cancel object "${name}"? The rest of the print continues.`)) {
@@ -231,12 +234,11 @@ export default {
 									'nc-print-obj-marker--excluded': obj.status === 'excluded',
 								}">{{ obj.marker }}</span>
 							<span
-								class="nc-print-queue__name"
+								class="nc-print-queue__name nc-print-queue__name--label"
 								:class="{ 'nc-print-queue__name--excluded': obj.excluded }"
 								:title="obj.name">
-								{{ obj.name }}
+								{{ rowLabel(obj) }}
 							</span>
-							<span v-if="obj.shortLabel !== obj.marker && obj.shortLabel !== obj.name" class="nc-print-queue__short">{{ obj.shortLabel }}</span>
 							<span
 								v-if="obj.status === 'printing'"
 								class="nc-print-badge nc-print-badge--info nc-print-queue__badge">
@@ -277,12 +279,17 @@ export default {
 }
 
 .nc-print-queue__name {
-	flex: 1 1 auto;
+	flex: 0 1 auto;
 	font-size: var(--nc-gcs-text-sm);
-	min-width: 0;
+	max-width: 100%;
+	min-width: 1.25rem;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.nc-print-queue__name--label {
+	font-weight: 700;
 }
 
 .nc-print-queue__badge,
@@ -393,12 +400,6 @@ export default {
 
 .nc-print-obj-marker--excluded {
 	color: var(--nc-gcs-text-muted);
-}
-
-.nc-print-queue__short {
-	color: var(--nc-gcs-text-secondary);
-	flex-shrink: 0;
-	font-size: var(--nc-gcs-text-sm);
 }
 
 .nc-print-queue__cancel {

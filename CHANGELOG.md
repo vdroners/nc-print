@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.74.0] - 2026-10-28
+
+### Fixed
+- Nozzle (5 min) and Bed (5 min) charts follow Moonraker’s temperature store during a print. A steady heater draws a line across the window instead of an empty plot with a stray tick. If that history read fails, the live temperature is still sampled on a timer.
+- Ctrl+K fits its rows without a horizontal scrollbar. Titles and hints wrap, and the list scrolls vertically only when it is taller than the dialog, so the last row (Cancel print) is not cut off.
+- Object rows use the same short labels as the bed (A, B, …). The full gcode name is the tooltip. The printing badge and Cancel object stay on the row.
+
 ## [1.73.0] - 2026-10-28
 
 ### Fixed
