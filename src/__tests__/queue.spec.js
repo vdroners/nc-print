@@ -62,6 +62,8 @@ describe('WS13: queue + exclude-object', () => {
 		expect(eo.objects).toHaveLength(3)
 		expect(eo.objects.find(o => o.name === 'part_2').excluded).toBe(true)
 		expect(eo.objects.find(o => o.name === 'part_1').excluded).toBe(false)
+		expect(eo.objects.find(o => o.name === 'part_1').center).toEqual([10, 10])
+		expect(eo.objects.find(o => o.name === 'part_1').polygon).toBeNull()
 		expect(eo.currentObject).toBe('part_1')
 		expect(eo.excludedCount).toBe(1)
 	})
@@ -70,5 +72,56 @@ describe('WS13: queue + exclude-object', () => {
 		const eo = parseExcludeObjects({ status: {} })
 		expect(eo.objects).toEqual([])
 		expect(eo.currentObject).toBeNull()
+	})
+
+	it('keeps polygons and derives a center when Moonraker omits one', () => {
+		const eo = parseExcludeObjects({
+			result: {
+				status: {
+					exclude_object: {
+						objects: [
+							{
+								name: 'plate',
+								polygon: [[0, 0], [30, 0], [30, 12], [0, 12]],
+							},
+							{
+								name: 'peg',
+								center: '80, 40',
+								polygon: '[[70,30],[90,30],[90,50],[70,50]]',
+							},
+						],
+						excluded_objects: [],
+						current_object: '',
+					},
+				},
+			},
+		})
+		expect(eo.currentObject).toBeNull()
+		const plate = eo.objects[0]
+		expect(plate.polygon).toHaveLength(4)
+		expect(plate.center[0]).toBeCloseTo(15)
+		expect(plate.center[1]).toBeCloseTo(6)
+		expect(eo.objects[1].center).toEqual([80, 40])
+		expect(eo.objects[1].polygon[0]).toEqual([70, 30])
+	})
+
+	it('accepts a name map, flat polygons, and bare name strings', () => {
+		const eo = parseExcludeObjects({
+			exclude_object: {
+				objects: {
+					wing: { center: [1, 2, 0], polygon: [0, 0, 4, 0, 4, 2] },
+					tab: 'tab',
+				},
+				excluded_objects: ['tab'],
+				current_object: 'wing',
+			},
+		})
+		const wing = eo.objects.find(o => o.name === 'wing')
+		const tab = eo.objects.find(o => o.name === 'tab')
+		expect(wing.center).toEqual([1, 2])
+		expect(wing.polygon).toEqual([[0, 0], [4, 0], [4, 2]])
+		expect(tab.excluded).toBe(true)
+		expect(tab.polygon).toBeNull()
+		expect(eo.currentObject).toBe('wing')
 	})
 })

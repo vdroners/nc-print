@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.71.0] - 2026-10-28
+
+### Added
+- Queue & objects shows a top-down print bed next to the object list. Moonraker `exclude_object` polygons are drawn when the slicer sent them; otherwise each part is a labeled marker at its center on the configured bed (front at the bottom). Long gcode names collapse to short labels such as A and B, matching a badge on the row. Printing, waiting, and excluded look different. Highlighting the plate or the row selects the same part. Cancel object stays on the list and still asks before excluding.
+
 ## [1.70.0] - 2026-10-28
 
 ### Fixed
