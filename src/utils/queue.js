@@ -68,28 +68,158 @@ export function removeFromQueueModel(jobs, jobId) {
 	return (Array.isArray(jobs) ? jobs : []).filter((j) => j.jobId !== jobId)
 }
 
+function asFinite(value) {
+	const n = Number(value)
+	return Number.isFinite(n) ? n : null
+}
+
+/**
+ * @param {unknown} raw Moonraker center: [x, y], [x, y, z], or "x,y"
+ * @returns {[number, number]|null}
+ */
+function parseCenter(raw) {
+	if (typeof raw === 'string') {
+		raw = raw.split(/[,\s]+/).filter(Boolean)
+	}
+	if (!Array.isArray(raw) || raw.length < 2) {
+		return null
+	}
+	const x = asFinite(raw[0])
+	const y = asFinite(raw[1])
+	if (x == null || y == null) {
+		return null
+	}
+	return [x, y]
+}
+
+/**
+ * @param {Array<[number, number]>} points
+ * @returns {[number, number]}
+ */
+function centroid(points) {
+	let x = 0
+	let y = 0
+	for (const [px, py] of points) {
+		x += px
+		y += py
+	}
+	return [x / points.length, y / points.length]
+}
+
+/**
+ * Klipper POLYGON is usually [[x, y], ...]. Also accept {x,y} points,
+ * a flat [x, y, x, y, ...] list, or a JSON string of either.
+ * @param {unknown} raw
+ * @returns {Array<[number, number]>|null}
+ */
+function parsePolygon(raw) {
+	if (typeof raw === 'string') {
+		const trimmed = raw.trim()
+		if (!trimmed) {
+			return null
+		}
+		try {
+			raw = JSON.parse(trimmed)
+		} catch {
+			return null
+		}
+	}
+	if (!Array.isArray(raw) || raw.length === 0) {
+		return null
+	}
+	if (raw.every((n) => asFinite(n) != null)) {
+		if (raw.length < 6 || raw.length % 2 !== 0) {
+			return null
+		}
+		const flat = []
+		for (let i = 0; i < raw.length; i += 2) {
+			flat.push([asFinite(raw[i]), asFinite(raw[i + 1])])
+		}
+		return flat
+	}
+	const pts = []
+	for (const p of raw) {
+		if (Array.isArray(p) && p.length >= 2) {
+			const x = asFinite(p[0])
+			const y = asFinite(p[1])
+			if (x != null && y != null) {
+				pts.push([x, y])
+			}
+		} else if (p && typeof p === 'object') {
+			const x = asFinite(p.x ?? p.X)
+			const y = asFinite(p.y ?? p.Y)
+			if (x != null && y != null) {
+				pts.push([x, y])
+			}
+		}
+	}
+	return pts.length >= 3 ? pts : null
+}
+
+/**
+ * `objects` is a list of `{name, center, polygon}` (or plain names). A few
+ * payloads use a name-keyed map instead; normalize both.
+ * @param {unknown} raw
+ * @returns {unknown[]}
+ */
+function normalizeRawObjects(raw) {
+	if (Array.isArray(raw)) {
+		return raw
+	}
+	if (raw && typeof raw === 'object') {
+		return Object.entries(raw).map(([key, val]) => {
+			if (val && typeof val === 'object') {
+				return { name: val.name ?? key, ...val }
+			}
+			return { name: key }
+		})
+	}
+	return []
+}
+
+/**
+ * @param {unknown} entry
+ * @param {Set<string>} excluded
+ */
+function parseOneExcludeObject(entry, excluded) {
+	if (typeof entry === 'string' || typeof entry === 'number') {
+		const name = String(entry)
+		return { name, excluded: excluded.has(name), center: null, polygon: null }
+	}
+	const name = String(entry?.name ?? '')
+	const polygon = parsePolygon(entry?.polygon)
+	let center = parseCenter(entry?.center)
+	if (!center && polygon) {
+		center = centroid(polygon)
+	}
+	return {
+		name,
+		excluded: excluded.has(name),
+		center,
+		polygon,
+	}
+}
+
 /**
  * Parse the `exclude_object` printer object into a list of objects with
- * excluded state for the active print.
+ * excluded state and bed geometry for the active print.
+ *
+ * Moonraker/Klipper expose `objects[].center` and, when the slicer emitted
+ * EXCLUDE_OBJECT_DEFINE POLYGON, `objects[].polygon`. There is no separate
+ * gcode bounding-box feed in this app; the bed view uses this payload only.
+ *
  * @param {object} payload printer/objects/query response or bare exclude_object
- * @returns {{objects: Array<{name: string, excluded: boolean, center: number[]|null}>, currentObject: string|null, excludedCount: number}}
+ * @returns {{objects: Array<{name: string, excluded: boolean, center: [number, number]|null, polygon: Array<[number, number]>|null}>, currentObject: string|null, excludedCount: number}}
  */
 export function parseExcludeObjects(payload) {
 	const status = payload?.result?.status ?? payload?.status ?? payload ?? {}
 	const eo = status.exclude_object ?? status ?? {}
-	const rawObjects = Array.isArray(eo.objects) ? eo.objects : []
+	const rawObjects = normalizeRawObjects(eo.objects)
 	const excluded = new Set((Array.isArray(eo.excluded_objects) ? eo.excluded_objects : []).map(String))
-	const objects = rawObjects.map((o) => {
-		const name = String(o.name ?? '')
-		return {
-			name,
-			excluded: excluded.has(name),
-			center: Array.isArray(o.center) ? o.center.map(Number) : null,
-		}
-	})
+	const objects = rawObjects.map((o) => parseOneExcludeObject(o, excluded))
 	return {
 		objects,
-		currentObject: eo.current_object != null ? String(eo.current_object) : null,
+		currentObject: eo.current_object != null && eo.current_object !== '' ? String(eo.current_object) : null,
 		excludedCount: excluded.size,
 	}
 }
