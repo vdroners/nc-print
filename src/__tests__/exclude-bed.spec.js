@@ -5,6 +5,7 @@ import {
 	layoutExcludeBed,
 	objectMarker,
 	shortObjectLabel,
+	visibleObjectLabel,
 } from '@/utils/exclude-bed.js'
 
 const CONE_A = 'REAR_CONE_V4_-_REAR_CONE_1_.STEP_A_ID_0_COPY_0'
@@ -17,6 +18,8 @@ describe('exclude-object bed labels', () => {
 		expect(labeled.map((item) => item.shortLabel)).toEqual(['A', 'B'])
 		expect(bedGlyph(labeled[0].shortLabel, labeled[0].marker)).toBe('A')
 		expect(bedGlyph(labeled[1].shortLabel, labeled[1].marker)).toBe('B')
+		expect(labeled.map(visibleObjectLabel)).toEqual(['A', 'B'])
+		expect(visibleObjectLabel(labeled[0])).not.toContain('REAR_CONE')
 	})
 
 	it('keeps a readable tail when there is no single letter', () => {
