@@ -28,6 +28,26 @@ export function presetToTargets(key) {
 }
 
 /**
+ * Heater target field while a job may be running.
+ * Follow the live Moonraker target until the operator types.
+ * A missing or non-positive target stays blank — never a material default.
+ * @param {string} current
+ * @param {unknown} live
+ * @param {boolean} touched
+ * @returns {string}
+ */
+export function followLiveTarget(current, live, touched) {
+	if (touched) {
+		return current == null ? '' : String(current)
+	}
+	const n = Number(live)
+	if (!Number.isFinite(n) || n <= 0) {
+		return ''
+	}
+	return String(Math.round(n))
+}
+
+/**
  * Human label for a raw Moonraker sensor key.
  * @param {string} key e.g. 'extruder', 'heater_bed', 'temperature_sensor chamber'
  * @returns {string}

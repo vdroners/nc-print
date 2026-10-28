@@ -111,8 +111,11 @@ describe('Prepare controls overhaul (v1.54.0)', () => {
 		expect(prepare).toMatch(/Import STL\/3MF\/OBJ/)
 		// The old floating center import cluster is gone.
 		expect(prepare).not.toMatch(/nc-print-import-cluster/)
-		// Empty bed has the same primary Import control, wired to the rail picker.
-		expect(modelViewport).toMatch(/Import STL\/3MF\/OBJ/)
+		// One primary Import, in the left panel. The empty bed uses the same picker
+		// under a different label.
+		expect(modelViewport).toMatch(/Choose a file/)
+		expect(modelViewport).not.toMatch(/Import STL\/3MF\/OBJ/)
+		expect(modelViewport).not.toMatch(/nc-print-btn--primary nc-print-viewport-empty__import/)
 		expect(modelViewport).toMatch(/import-model/)
 		expect(modelViewport).toMatch(/pointer-events:\s*auto/)
 		expect(modelViewport).toMatch(/setModel\(file, 'drop'\)/)

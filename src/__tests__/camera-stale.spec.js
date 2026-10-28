@@ -227,6 +227,8 @@ describe('camera stale UI wiring', () => {
 		expect(fullscreen).toContain(':stale="cameraStale"')
 		expect(tab).toMatch(/cameraFrameReady && !cameraError/)
 		expect(tab).toContain('@load="onCameraLoad"')
+		expect(fullscreen).toMatch(/top:\s*var\(--header-height,\s*50px\)/)
+		expect(fullscreen).toMatch(/z-index:\s*100000/)
 	})
 
 	it('pre-print preview labels a stale frame', () => {

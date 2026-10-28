@@ -475,10 +475,10 @@ export default {
 			this.$refs.importInput?.click()
 		},
 		openPartsLibrary() {
-			openOverviewSection(this.printStore, OVERVIEW_LIBRARY_ID)
+			openOverviewSection(this.printStore, OVERVIEW_LIBRARY_ID, { fromPrepare: true })
 		},
 		openModelForge() {
-			openOverviewSection(this.printStore, OVERVIEW_FORGE_ID)
+			openOverviewSection(this.printStore, OVERVIEW_FORGE_ID, { fromPrepare: true })
 		},
 		onImportFile(e) {
 			const file = e.target.files?.[0]
@@ -579,7 +579,7 @@ export default {
 					aria-label="Parts Library"
 					title="Open a saved part in Parts Library"
 					@click="openPartsLibrary">
-					Library
+					Parts Library
 				</button>
 				<button
 					type="button"

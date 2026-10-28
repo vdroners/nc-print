@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { setTemperature, cooldown } from '@/services/moonraker-api.js'
+import { followLiveTarget } from '@/utils/temperature.js'
 import { toastError, toastSuccess } from '@/services/toast.js'
 import TemperatureSparkline from './TemperatureSparkline.vue'
 import NcPrintIcon from './NcPrintIcon.vue'
@@ -19,6 +20,8 @@ export default {
 		return {
 			nozzleInput: '',
 			bedInput: '',
+			nozzleTouched: false,
+			bedTouched: false,
 			busy: false,
 			nozzleSamples: [],
 			bedSamples: [],
@@ -59,6 +62,18 @@ export default {
 		},
 	},
 	watch: {
+		'printStore.printerState.extruderTarget': {
+			immediate: true,
+			handler(val) {
+				this.nozzleInput = followLiveTarget(this.nozzleInput, val, this.nozzleTouched)
+			},
+		},
+		'printStore.printerState.bedTarget': {
+			immediate: true,
+			handler(val) {
+				this.bedInput = followLiveTarget(this.bedInput, val, this.bedTouched)
+			},
+		},
 		'printStore.printerState.extruderTemp'(val) {
 			if (typeof val === 'number') {
 				this._pushSample('nozzleSamples', val)
@@ -123,6 +138,8 @@ export default {
 			}
 			this.nozzleInput = String(row.nozzle)
 			this.bedInput = String(row.bed)
+			this.nozzleTouched = true
+			this.bedTouched = true
 			const ok = await this.withBusy(() => setTemperature({ nozzle: row.nozzle, bed: row.bed }, this.printerId))
 			if (ok) {
 				toastSuccess(`${preset} preheat started`)
@@ -133,6 +150,8 @@ export default {
 			if (ok) {
 				this.nozzleInput = '0'
 				this.bedInput = '0'
+				this.nozzleTouched = true
+				this.bedTouched = true
 				toastSuccess('Cooling down')
 			}
 		},
@@ -187,7 +206,7 @@ export default {
 					max="300"
 					step="1"
 					:disabled="disabled"
-					placeholder="210">
+					@input="nozzleTouched = true">
 			</div>
 			<div class="nc-print-field">
 				<label for="nc-print-bed-temp">Bed target (°C)</label>
@@ -199,7 +218,7 @@ export default {
 					max="120"
 					step="1"
 					:disabled="disabled"
-					placeholder="60">
+					@input="bedTouched = true">
 			</div>
 		</div>
 
@@ -232,9 +251,9 @@ export default {
 
 .nc-print-temp-control__name {
 	color: var(--nc-gcs-text-primary, #e6edf3);
+	flex: 0 0 4.75rem;
 	font-size: 14px;
 	font-weight: 600;
-	min-width: 4.5rem;
 }
 
 .nc-print-temp-control__row strong {
@@ -276,6 +295,11 @@ export default {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
 		gap: 8px 16px;
+	}
+
+	/* The section label was a grid cell, so Nozzle landed in column 2. */
+	.nc-print-temp-control__readouts > .nc-print-section-label {
+		grid-column: 1 / -1;
 	}
 }
 </style>

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { buildCommands, PALETTE_PANELS } from '@/utils/commands.js'
 import { TABS } from '@/constants/tabs.js'
-import { consumePendingOverviewSection } from '@/utils/overview-nav.js'
+import { consumeOverviewReturn, consumePendingOverviewSection } from '@/utils/overview-nav.js'
 
 /** Minimal mock store; override per test. */
 function mockStore(over = {}) {
@@ -31,6 +31,7 @@ function byId(cmds, id) {
 describe('buildCommands', () => {
 	afterEach(() => {
 		consumePendingOverviewSection()
+		consumeOverviewReturn()
 		localStorage.removeItem('nc_print_collapsible_overview-library')
 		localStorage.removeItem('nc_print_collapsible_overview-modelforge')
 	})
@@ -85,6 +86,7 @@ describe('buildCommands', () => {
 			expect(store.setActiveTab).toHaveBeenCalledWith(TABS.OVERVIEW)
 			expect(localStorage.getItem('nc_print_collapsible_overview-library')).toBe('1')
 			expect(seen).toEqual(['overview-library'])
+			expect(consumeOverviewReturn()).toBe('Parts Library')
 			expect(consumePendingOverviewSection()).toBe('overview-library')
 
 			store.setActiveTab.mockClear()
@@ -92,6 +94,7 @@ describe('buildCommands', () => {
 			expect(store.setActiveTab).toHaveBeenCalledWith(TABS.OVERVIEW)
 			expect(localStorage.getItem('nc_print_collapsible_overview-modelforge')).toBe('1')
 			expect(seen).toEqual(['overview-library', 'overview-modelforge'])
+			expect(consumeOverviewReturn()).toBe('Model Forge')
 			expect(consumePendingOverviewSection()).toBe('overview-modelforge')
 		} finally {
 			window.removeEventListener('nc-print-focus-overview', onFocus)
@@ -110,6 +113,7 @@ describe('buildCommands', () => {
 			expect(localStorage.getItem('nc_print_collapsible_overview-modelforge')).toBeNull()
 			expect(seen).toEqual([])
 			expect(consumePendingOverviewSection()).toBeNull()
+			expect(consumeOverviewReturn()).toBeNull()
 		} finally {
 			window.removeEventListener('nc-print-focus-overview', onFocus)
 		}

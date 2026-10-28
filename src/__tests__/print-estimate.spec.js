@@ -102,10 +102,16 @@ describe('estimate labels', () => {
 		expect(formatEstimateActualLine(null, null)).toBeNull()
 	})
 
-	it('shows the real estimate and a signed delta only then', () => {
-		expect(formatEstimateActualLine(TEN_H, 180)).toBe('Estimated 10h 12m · Actual 3 min (−10h 9m)')
-		expect(formatEstimateActualLine(60, 180)).toBe('Estimated 1 min · Actual 3 min (+2 min)')
+	it('says Elapsed with no delta while the job is still running', () => {
+		expect(formatEstimateActualLine(TEN_H, 180)).toBe('Estimated 10h 12m · Elapsed 3 min')
+		expect(formatEstimateActualLine(60, 180)).toBe('Estimated 1 min · Elapsed 3 min')
+		expect(formatEstimateActualLine(TEN_H, 180)).not.toMatch(/[−+]/)
 		expect(formatEstimateActualLine(TEN_H, null)).toBe('Estimated 10h 12m')
+	})
+
+	it('shows Actual and the signed delta only after the job is complete', () => {
+		expect(formatEstimateActualLine(TEN_H, 180, { complete: true })).toBe('Estimated 10h 12m · Actual 3 min (−10h 9m)')
+		expect(formatEstimateActualLine(60, 180, { complete: true })).toBe('Estimated 1 min · Actual 3 min (+2 min)')
 	})
 
 	it('does not invent remaining time from elapsed wall clock', () => {
@@ -218,6 +224,10 @@ describe('print tab walkthrough source', () => {
 		expect(tab).toMatch(/align-items:\s*stretch/)
 		expect(temp).toContain(':height="120"')
 		expect(temp).toContain('nc-print-temp-control__name')
+		expect(temp).toContain('followLiveTarget')
+		expect(temp).not.toMatch(/placeholder="210"/)
+		expect(temp).not.toMatch(/placeholder="60"/)
+		expect(temp).toMatch(/grid-column:\s*1 \/ -1/)
 	})
 
 	it('raises stepper and footer text one step above muted', () => {

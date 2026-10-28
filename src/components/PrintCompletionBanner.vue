@@ -2,6 +2,7 @@
 import { mapStores } from 'pinia'
 import { usePrintStore } from '@/store/print.js'
 import { formatPrintTime } from '@/services/slicer-utils.js'
+import { formatEstimateActualLine } from '@/utils/print-estimate.js'
 
 export default {
 	name: 'PrintCompletionBanner',
@@ -18,12 +19,12 @@ export default {
 			}
 			return formatPrintTime(d)
 		},
-		estimateLabel() {
+		compareLabel() {
 			const row = this.printStore.estimateVsActual
 			if (!row?.estimatedS) {
 				return null
 			}
-			return formatPrintTime(row.estimatedS)
+			return formatEstimateActualLine(row.estimatedS, row.actualS, { complete: true })
 		},
 		// WS4: filament usage from the slice that produced this job (session only).
 		filamentLabel() {
@@ -63,8 +64,8 @@ export default {
 			<strong>{{ printStore.printerState.filename }}</strong>
 		</p>
 		<p style="margin: 0 0 8px; font-size: var(--nc-gcs-text-sm); color: var(--nc-gcs-text-secondary);">
-			<span v-if="durationLabel">Duration: {{ durationLabel }}</span>
-			<span v-if="estimateLabel"> · Estimated: {{ estimateLabel }}</span>
+			<span v-if="compareLabel">{{ compareLabel }}</span>
+			<span v-else-if="durationLabel">Duration: {{ durationLabel }}</span>
 			<span v-if="printStore.printerState.progress > 0">
 				· {{ Math.round(printStore.printerState.progress * 100) }}%
 			</span>

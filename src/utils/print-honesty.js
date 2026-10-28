@@ -134,3 +134,19 @@ export function resolvePanelOpen(savedOpen, forceCollapsed) {
 	}
 	return !!savedOpen
 }
+
+/**
+ * Print step on the workflow banner.
+ * A check means the job finished. Printing or paused is in progress.
+ * @param {{ isActive?: boolean, isComplete?: boolean }} controls
+ * @returns {'done'|'busy'|'idle'}
+ */
+export function printWorkflowMark(controls) {
+	if (controls?.isComplete) {
+		return 'done'
+	}
+	if (controls?.isActive) {
+		return 'busy'
+	}
+	return 'idle'
+}

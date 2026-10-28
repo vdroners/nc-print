@@ -245,13 +245,31 @@ export default {
 	width: 100%;
 }
 
-.nc-print-cmdk__item.is-active {
-	background: var(--color-primary-element-light, var(--color-background-hover));
+.nc-print-cmdk__item.is-active,
+.nc-print-cmdk__item.is-active:hover,
+.nc-print-cmdk__item.is-active:focus,
+.nc-print-cmdk__item.is-active:disabled {
+	/* primary-element-light is a pale wash on this theme and hides light text. */
+	background: color-mix(in srgb, var(--color-primary-element, #22c55e) 28%, var(--color-main-background, #111));
+	box-shadow: inset 0 0 0 1px var(--color-primary-element, #22c55e);
+	color: var(--color-main-text, #e6edf3);
+	opacity: 1;
 }
 
-.nc-print-cmdk__item.is-disabled {
+.nc-print-cmdk__item.is-active .nc-print-cmdk__title,
+.nc-print-cmdk__item.is-active .nc-print-cmdk__hint,
+.nc-print-cmdk__item.is-active:disabled .nc-print-cmdk__title,
+.nc-print-cmdk__item.is-active:disabled .nc-print-cmdk__hint {
+	color: var(--color-main-text, #e6edf3);
+}
+
+.nc-print-cmdk__item.is-disabled:not(.is-active) {
 	cursor: not-allowed;
-	opacity: 0.4;
+	opacity: 0.45;
+}
+
+.nc-print-cmdk__item.is-disabled.is-active {
+	cursor: not-allowed;
 }
 
 .nc-print-cmdk__title {

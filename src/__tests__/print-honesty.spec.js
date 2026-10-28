@@ -13,6 +13,7 @@ import {
 	resolvePanelOpen,
 	showIdlePrintGuide,
 	showLastJobCard,
+	printWorkflowMark,
 	showLivePrintControls,
 } from '@/utils/print-honesty.js'
 
@@ -158,6 +159,18 @@ describe('print tab source gates', () => {
 	const bar = read('../components/PrintStatusBar.vue')
 	const rail = read('../components/WorkspaceRail.vue')
 	const banner = read('../components/PrintCompletionBanner.vue')
+
+	it('checks the print step only when the job is complete', () => {
+		expect(printWorkflowMark({ isActive: true, isComplete: false })).toBe('busy')
+		expect(printWorkflowMark({ isActive: false, isComplete: true })).toBe('done')
+		expect(printWorkflowMark({ isActive: false, isComplete: false })).toBe('idle')
+		const workflow = read('../components/PrintWorkflowBanner.vue')
+		const style = read('../../css/style.scss')
+		expect(workflow).toMatch(/printWorkflowMark/)
+		expect(workflow).toMatch(/nc-print-workflow__step--busy/)
+		expect(workflow).not.toMatch(/isActive\) \{\s*return '✓'/)
+		expect(style).toMatch(/nc-print-workflow__step--busy \.nc-print-workflow__num/)
+	})
 
 	it('gates the live card and status bar on isActive, not filename', () => {
 		expect(tab).toMatch(/showPrintControl\(\) \{\s*return showLivePrintControls\(this\.controls\)/)

@@ -118,7 +118,7 @@ export default {
 			</li>
 		</ul>
 		<p v-if="!loading && !entries.length" class="nc-print-library__muted">No files here.</p>
-		<p class="nc-print-library__muted">{{ total }} item(s) · host path /media/4TB/3dprints</p>
+		<p class="nc-print-library__muted">{{ total }} item(s) · shared parts library</p>
 	</div>
 </template>
 
@@ -146,7 +146,10 @@ export default {
 	margin: 0;
 	padding: 0;
 }
-.nc-print-library__row {
+.nc-print-library__row,
+.nc-print-library__row:hover,
+.nc-print-library__row:focus,
+.nc-print-library__row:active {
 	display: flex;
 	width: 100%;
 	gap: 10px;
@@ -154,7 +157,10 @@ export default {
 	padding: 8px 10px;
 	border: 1px solid var(--color-border, #ddd);
 	border-radius: 6px;
-	background: var(--color-main-background, #fff);
+	background: var(--color-main-background, #111);
+	/* Nextcloud paints raw buttons with primary-element text (dark green on
+	   this theme). Name that color so filenames stay readable on dark rows. */
+	color: var(--nc-gcs-text-primary, var(--color-main-text, #e6edf3));
 	margin-bottom: 6px;
 	cursor: pointer;
 	text-align: left;
@@ -164,7 +170,8 @@ export default {
 	font-weight: 600;
 	overflow: hidden;
 	text-overflow: ellipsis;
-	white-space:nowrap;
+	white-space: nowrap;
+	color: inherit;
 }
 .nc-print-library__meta {
 	color: var(--color-text-maxcontrast, #666);
