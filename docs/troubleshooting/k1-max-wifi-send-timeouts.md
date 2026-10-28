@@ -46,7 +46,10 @@ Ruled out:
   unless a future Creality Print enforces validation.
 - **Klipper / Moonraker** — both healthy; this is a different "unknown error"
   from the `key61` popup in
-  [printer-unknown-error-key61.md](printer-unknown-error-key61.md).
+  [printer-unknown-error-key61.md](printer-unknown-error-key61.md). On
+  2026-10-28 Creality Print showed Unknown error, Klippy logged `key61`
+  (`BOX_ENABLE_CFS_PRINT` at send, `T0` at job start), and the job still
+  ran. A Wi-Fi send timeout never gets that far: the file does not land.
 
 ## Diagnose (read-only, safe during a print)
 

@@ -41,3 +41,6 @@ on that and does not change `DEFAULT_TIMEOUT_SECONDS`.
 - Raising the upload timeout (PR #11)
 - `make ship` / deploy
 - Auto-retry of any control-plane action
+- Creality Print **Unknown error** after the file has landed and the job still
+  runs — Klipper `key61`, not a transfer failure
+  ([printer-unknown-error-key61.md](../troubleshooting/printer-unknown-error-key61.md))

@@ -82,6 +82,7 @@ ssh k1-max 'pidof moonraker.py mjpg_streamer cam_app'
 | SSH | `ssh k1-max` (ECDSA; Dropbear) |
 | Persistence | `S54moonraker_conf_guard`, `S99z_mjpg_http` on printer |
 | NC Print config | `moonraker_internal_url`, camera URL, `discovery_subnet=10.0.0.`, enabled |
+| key61 "Unknown error" | `T0` and `BOX_ENABLE_CFS_PRINT` were missing from live `gcode_macro.cfg` on 2026-10-28. Copy [`troubleshooting/snippets/k1-max-key61-noop-macros.cfg`](troubleshooting/snippets/k1-max-key61-noop-macros.cfg) only while idle. See [printer-unknown-error-key61.md](troubleshooting/printer-unknown-error-key61.md). The repo does not write the printer. |
 
 ## Docs
 

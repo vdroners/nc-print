@@ -65,4 +65,7 @@ See [VERIFY.md](VERIFY.md) for the acceptance matrix.
 ## Troubleshooting
 
 - [K1 Max "unknown error" (key61)](troubleshooting/printer-unknown-error-key61.md) — Klipper
-  `Unknown command:T0` / `BOX_ENABLE_CFS_PRINT` popups on Creality K1 Max without CFS.
+  `Unknown command:T0` / `BOX_ENABLE_CFS_PRINT` on a Creality K1 Max without CFS.
+  Copy [troubleshooting/snippets/k1-max-key61-noop-macros.cfg](troubleshooting/snippets/k1-max-key61-noop-macros.cfg)
+  onto the printer only while it is idle. Confirmed missing on the lab K1 Max
+  2026-10-28. This repo does not push the file.

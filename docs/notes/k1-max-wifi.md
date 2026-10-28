@@ -63,3 +63,9 @@ an estimate labeled **Estimated from last contact** when Moonraker had
 already reported at least a minute of progress. The next successful
 answer switches back to live status immediately. A printer that has never
 answered still shows a hard **Printer offline**.
+
+Creality Print **Unknown error** while the job still runs is a different
+fault (Klipper `key61`). See
+[printer-unknown-error-key61.md](../troubleshooting/printer-unknown-error-key61.md).
+A send that never lands is
+[k1-max-wifi-send-timeouts.md](../troubleshooting/k1-max-wifi-send-timeouts.md).
